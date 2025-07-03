@@ -1,0 +1,132 @@
+import praw
+import csv
+import os
+from datetime import datetime, timezone
+from dotenv import load_dotenv
+
+load_dotenv()
+
+SEEN_FILE = 'seen_posts.txt'
+
+# Load seen post IDs from previous runs
+if os.path.exists(SEEN_FILE):
+    with open(SEEN_FILE, 'r') as f:
+        seen_ids = set(line.strip() for line in f)
+else:
+    seen_ids = set()
+
+
+# Reddit API credentials
+reddit = praw.Reddit(
+    client_id='OYJXrM0faienUqwBRQhzPQ',
+    client_secret='09m0h4C6uBnpZaWYZZaIIrJHVh2JUw',
+    user_agent='WeLeapBot/0.1 by YOUR_REDDIT_USERNAME'
+)
+
+
+# === Config ===
+subreddits = [
+    'personalfinance', 'financialindependence',
+    'college', 'gradadmissions', 'GenZ', 'CryptoCurrency', 
+    'careerquestions', 'jobs', 'financialplanning'
+]
+
+keywords = [
+    'starting job', 'budget', 'student loan', '401k',
+    'first paycheck', 'credit card', 'debt', 'crypto',
+    'roth ira', 'tax', 'new grad', 'salary', 'benefits'
+]
+
+output_file = 'matched_posts.csv'
+
+# === Prepare output file ===
+if not os.path.exists(output_file):
+    with open(output_file, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow(['Title', 'Subreddit', 'Author', 'Date', 'URL'])
+
+# === Search and collect matches ===
+print("🔍 Scanning posts...\n")
+match_count = 0
+
+for sub in subreddits:
+    try:
+        print(f"📡 Scanning r/{sub}...")
+        for post in reddit.subreddit(sub).new(limit=100):
+            text = (post.title + ' ' + post.selftext).lower()
+            if any(keyword.lower() in text for keyword in keywords):
+                
+                # ✅ SKIP if post already processed
+                if post.id in seen_ids:
+                    continue
+
+                # ✅ LOG to terminal
+                print(f"✅ New match in r/{sub}")
+                print(f"📌 Title: {post.title}")
+                print(f"👤 Author: {post.author}")
+                print(f"📅 Date: {datetime.fromtimestamp(post.created_utc, tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}")
+                print(f"🔗 URL: https://reddit.com{post.permalink}")
+                print('-' * 60)
+
+                # ✅ SAVE to CSV
+                with open(output_file, 'a', newline='', encoding='utf-8') as f:
+                    writer = csv.writer(f)
+                    writer.writerow([
+                        post.title,
+                        sub,
+                        str(post.author),
+                        datetime.fromtimestamp(post.created_utc, tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S'),
+                        f"https://reddit.com{post.permalink}"
+                    ])
+                # ✅ Count match for summary
+                match_count += 1   
+
+                # ✅ TRACK as seen
+                with open(SEEN_FILE, 'a') as f:
+                    f.write(post.id + '\n')
+
+                seen_ids.add(post.id)
+
+    except Exception as e:
+        print(f"⚠️ Error scanning r/{sub}: {e}")
+        continue
+
+print(f"\n✅ Done. {match_count} matching posts saved to '{output_file}'")
+
+# === Email summary ===
+
+import smtplib
+import csv
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+if match_count > 0:
+    # Read just the last `match_count` rows from CSV (skip header)
+    with open(output_file, 'r', encoding='utf-8') as f:
+        reader = list(csv.reader(f))
+        recent_rows = reader[1:][-match_count:]  # Skip header row
+
+    # Build summary body
+    body = "Here are today's matched Reddit posts:\n\n"
+    for row in recent_rows:
+        if len(row) >= 5:
+            title, subreddit, author, date, url = row[:5]
+            body += f"📌 {title} (r/{subreddit})\n👤 {author} on {date}\n🔗 {url}\n\n"
+
+    # Compose email
+    msg = MIMEMultipart()
+    msg['From'] = "vinod@weleap.ai"
+    msg['To'] = "vinod@weleap.ai"
+    msg['Subject'] = f"📰 WeLeap Daily Reddit Matches – {datetime.today().strftime('%Y-%m-%d')}"
+    msg.attach(MIMEText(body, 'plain'))
+
+    # Send the email
+    try:
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login("vinod.lakhani@gmail.com", os.environ["GMAIL_APP_PASSWORD"])
+            server.send_message(msg)
+        print(f"📬 Email sent to vinod@weleap.ai")
+    except Exception as e:
+        print(f"❌ Failed to send email: {e}")
+else:
+    print("📭 No matches today — email skipped.")
