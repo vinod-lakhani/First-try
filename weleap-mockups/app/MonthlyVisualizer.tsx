@@ -34,8 +34,8 @@ export default function MonthlyVisualizer() {
     }
   }, [paycheckCount]);
 
-  const getHeight = (amount, total) => `${(amount / total) * totalBarHeight}px`;
-  const getLabelStyle = (amount, total) => ({
+  const getHeight = (amount: number, total: number) => `${(amount / total) * totalBarHeight}px`;
+  const getLabelStyle = (amount: number, total: number) => ({
     height: getHeight(amount, total),
     display: 'flex',
     alignItems: 'center',
@@ -72,21 +72,6 @@ export default function MonthlyVisualizer() {
           This is a <strong>2-paycheck month</strong> — spending below your monthly plan is expected. Monthly plan is based on average income.
         </div>
       )}
-
-      <div className="flex justify-center gap-4 mb-4">
-        <button
-          className={`px-3 py-1 rounded border ${paycheckCount === 2 ? 'bg-yellow-300' : 'bg-white'}`}
-          onClick={() => setPaycheckCount(2)}
-        >
-          2 Paychecks
-        </button>
-        <button
-          className={`px-3 py-1 rounded border ${paycheckCount === 3 ? 'bg-blue-300' : 'bg-white'}`}
-          onClick={() => setPaycheckCount(3)}
-        >
-          3 Paychecks
-        </button>
-      </div>
 
       <div className="flex gap-8 justify-center">
         <div className="text-center">
@@ -225,6 +210,21 @@ export default function MonthlyVisualizer() {
             className="w-full"
           />
         </div>
+      </div>
+
+      <div className="flex justify-center gap-4 mt-6">
+        <button
+          className={`px-3 py-1 rounded border ${paycheckCount === 2 ? 'bg-yellow-300' : 'bg-white'}`}
+          onClick={() => setPaycheckCount(2)}
+        >
+          2 Paychecks
+        </button>
+        <button
+          className={`px-3 py-1 rounded border ${paycheckCount === 3 ? 'bg-blue-300' : 'bg-white'}`}
+          onClick={() => setPaycheckCount(3)}
+        >
+          3 Paychecks
+        </button>
       </div>
     </div>
   );

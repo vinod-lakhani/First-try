@@ -144,18 +144,6 @@ export default function PaycheckTimelineVisualizer() {
     <div className="p-4 max-w-md mx-auto">
       <h2 className="text-lg font-bold mb-4 text-center">Paycheck Analyzer</h2>
 
-      <div className="mb-4 text-center">
-        <label className="text-sm font-medium mr-2">3-Paycheck Month?</label>
-        <input
-          type="checkbox"
-          checked={isThreePaycheckMonth}
-          onChange={(e) => setIsThreePaycheckMonth(e.target.checked)}
-        />
-        {isThreePaycheckMonth && (
-          <div className="mt-2 text-xs text-green-600">🎉 You’ve got a 3rd paycheck this month — consider allocating it entirely to savings, debt, or investment goals.</div>
-        )}
-      </div>
-
       <div className="flex justify-between mb-4">
         {buildSections(120, "Previous", initialSavings, initialVariable, true)}
         {buildSections(variableSpentCurrent, "Current", currentAlloc.savings, currentAlloc.variable, false, currentAlloc)}
@@ -205,6 +193,18 @@ export default function PaycheckTimelineVisualizer() {
         <div><span className="inline-block w-3 h-3 bg-orange-400 mr-1"></span>Fixed</div>
         <div><span className="inline-block w-3 h-3 bg-green-500 mr-1"></span>Savings</div>
         <div><span className="inline-block w-3 h-3 bg-blue-500 mr-1"></span>Variable</div>
+      </div>
+
+      <div className="mt-6 text-center">
+        <label className="text-sm font-medium mr-2">3-Paycheck Month?</label>
+        <input
+          type="checkbox"
+          checked={isThreePaycheckMonth}
+          onChange={(e) => setIsThreePaycheckMonth(e.target.checked)}
+        />
+        {isThreePaycheckMonth && (
+          <div className="mt-2 text-xs text-green-600">🎉 You've got a 3rd paycheck this month — consider allocating it entirely to savings, debt, or investment goals.</div>
+        )}
       </div>
     </div>
   );

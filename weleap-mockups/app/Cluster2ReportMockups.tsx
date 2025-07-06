@@ -6,9 +6,11 @@ import { Progress } from "@/components/ui/progress";
 import { Bell, CalendarClock, DollarSign } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import { Slider } from "@/components/ui/slider";
+import PaycheckTimelineVisualizer from "./PaycheckTimelineVisualizer";
 
 export default function Cluster2ReportMockups() {
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [showModal, setShowModal] = useState(false);
 
   const toggleExpand = (category: string) => {
     setExpanded(expanded === category ? null : category);
@@ -115,9 +117,25 @@ export default function Cluster2ReportMockups() {
                 </div>
               ))}
             </div>
+            <Button className="w-full mt-4 bg-gray-800 text-white hover:bg-gray-900" onClick={() => setShowModal(true)}>Edit</Button>
           </div>
         </CardContent>
       </Card>
+
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white rounded-lg shadow-lg p-6 max-w-lg w-full relative">
+            <button
+              className="absolute top-2 right-2 text-gray-500 hover:text-gray-800 text-xl"
+              onClick={() => setShowModal(false)}
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <PaycheckTimelineVisualizer />
+          </div>
+        </div>
+      )}
 
       {/* Payday Sweep Card */}
       <Card>
