@@ -93,7 +93,16 @@ export default function PaycheckTimelineVisualizer() {
     </div>
   );
 
-  const buildSections = (spent, label, savingsBudget, variableBudget, isLocked = false, editable = null) => {
+  const buildSections = (spent, label, savingsBudget, variableBudget, isLocked = false, editable = null, hidden = false) => {
+    if (hidden) {
+      return (
+        <div className="text-center h-64 w-16 mx-auto opacity-0 pointer-events-none">
+          <div className="h-64 w-16"></div>
+          <div className="text-xs mt-1">{label}</div>
+          <div style={{ height: 24 }}></div>
+        </div>
+      );
+    }
     const effectiveFixed = editable ? editable.fixed : fixed;
     const effectiveSavings = editable ? editable.savings : savingsBudget;
     const effectiveVariable = editable ? editable.variable : variableBudget;
@@ -108,17 +117,26 @@ export default function PaycheckTimelineVisualizer() {
 
     const percent = (value) => total > 0 ? ((value / total) * 100).toFixed(1) : 0;
 
+    // Always render two lines for the top label (variable used)
+    const topLabel1 = variableUsed > 0 ? `-$${variableUsed} (${percent(variableUsed)}%)` : '';
+    const topLabel2 = variableUsed < 0 ? `-$${Math.abs(variableUsed)} (${percent(Math.abs(variableUsed))}%)` : '';
+    // Always render two lines for the savings label
+    const savingsLabel1 = savingsUsed > 0 ? `-$${savingsUsed} (${percent(savingsUsed)}%)` : '';
+    const savingsLabel2 = savingsUsed < 0 ? `-$${Math.abs(savingsUsed)} (${percent(Math.abs(savingsUsed))}%)` : '';
+
     return (
       <div className="text-center">
-        <div className="h-64 w-16 relative border border-gray-300 rounded overflow-hidden mx-auto">
-          <div className="absolute w-full bg-blue-200 text-[10px] text-blue-800 flex items-center justify-center" style={{ top: 0, height: `${percent(variableUsed)}%` }}>
-            {variableUsed > 0 && (<span className="w-full text-center">-${variableUsed} ({percent(variableUsed)}%)</span>)}
+        <div className="h-64 w-16 relative border border-gray-300 rounded overflow-hidden mx-auto flex flex-col justify-end">
+          <div className="absolute w-full bg-blue-200 flex flex-col items-center" style={{ top: 0, height: `${percent(variableUsed)}%` }}>
+            <span className="text-[10px] text-blue-800" style={{ minHeight: 14 }}>{topLabel1 || <span className="invisible">0</span>}</span>
+            <span className="text-[10px] text-blue-800" style={{ minHeight: 14 }}>{topLabel2 || <span className="invisible">0</span>}</span>
           </div>
           <div className="absolute w-full bg-blue-500 text-[10px] text-white flex items-center justify-center" style={{ top: `${percent(variableUsed)}%`, height: `${percent(variableRemaining)}%` }}>
             <span className="w-full text-center">${variableRemaining} ({percent(variableRemaining)}%)</span>
           </div>
-          <div className="absolute w-full bg-green-200 text-[10px] text-green-800 flex items-center justify-center" style={{ top: `${percent(effectiveVariable)}%`, height: `${percent(savingsUsed)}%` }}>
-            {savingsUsed > 0 && (<span className="w-full text-center">-${savingsUsed} ({percent(savingsUsed)}%)</span>)}
+          <div className="absolute w-full bg-green-200 flex flex-col items-center" style={{ top: `${percent(effectiveVariable)}%`, height: `${percent(savingsUsed)}%` }}>
+            <span className="text-[10px] text-green-800" style={{ minHeight: 14 }}>{savingsLabel1 || <span className="invisible">0</span>}</span>
+            <span className="text-[10px] text-green-800" style={{ minHeight: 14 }}>{savingsLabel2 || <span className="invisible">0</span>}</span>
           </div>
           <div className="absolute w-full bg-green-500 text-[10px] text-white flex items-center justify-center" style={{ top: `${percent(effectiveVariable + savingsUsed)}%`, height: `${percent(savingsRemaining)}%` }}>
             <span className="w-full text-center">${savingsRemaining} ({percent(savingsRemaining)}%)</span>
@@ -128,14 +146,17 @@ export default function PaycheckTimelineVisualizer() {
           </div>
         </div>
         <div className="text-xs mt-1">{label}</div>
-        {!isLocked && (
-          <button
-            onClick={() => setEditModeTarget(label)}
-            className="mt-1 text-blue-500 underline text-xs"
-          >
-            Edit
-          </button>
-        )}
+        {/* Always render an Edit button or invisible placeholder for alignment */}
+        {isLocked
+          ? <div style={{ height: 24 }}></div>
+          : <button
+              onClick={() => setEditModeTarget(label)}
+              className="mt-1 text-blue-500 underline text-xs"
+              style={label === "Previous" ? { visibility: 'hidden' } : {}}
+            >
+              Edit
+            </button>
+        }
       </div>
     );
   };
@@ -144,8 +165,8 @@ export default function PaycheckTimelineVisualizer() {
     <div className="p-4 max-w-md mx-auto">
       <h2 className="text-lg font-bold mb-4 text-center">Paycheck Analyzer</h2>
 
-      <div className="flex justify-between mb-4">
-        {buildSections(120, "Previous", initialSavings, initialVariable, true)}
+      <div className={`grid ${isThreePaycheckMonth ? 'grid-cols-4' : 'grid-cols-3'} gap-4 mb-4 items-end w-[340px] mx-auto`}>
+        {buildSections(0, "Previous", 334, 693, true)}
         {buildSections(variableSpentCurrent, "Current", currentAlloc.savings, currentAlloc.variable, false, currentAlloc)}
         {buildSections(0, "Next", nextAlloc.savings, nextAlloc.variable, false, nextAlloc)}
         {isThreePaycheckMonth && buildSections(0, "Bonus", bonusAlloc.savings, bonusAlloc.variable, false, bonusAlloc)}

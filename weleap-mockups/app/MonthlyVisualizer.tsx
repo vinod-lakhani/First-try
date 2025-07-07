@@ -13,12 +13,23 @@ export default function MonthlyVisualizer() {
   const [actualVariable, setActualVariable] = useState(1300);
   const [actualSavings, setActualSavings] = useState(900);
   const [paycheckCount, setPaycheckCount] = useState(2);
+  const [paychecksReceived, setPaychecksReceived] = useState(2);
   const [emergencyFundUsed, setEmergencyFundUsed] = useState(0);
 
   const targetAnnualIncome = target.income * 12;
   const actualMonthlyIncome = (targetAnnualIncome / 26) * paycheckCount;
   const actualTotal = actualFixed + actualVariable + actualSavings;
   const totalBarHeight = 256;
+
+  // Scaling factor for comparisons
+  const scaling = paychecksReceived / paycheckCount;
+  const scaledTarget = {
+    fixed: target.fixed * scaling,
+    variable: target.variable * scaling,
+    savings: target.savings * scaling,
+  };
+
+  const actualIncomeToDate = (targetAnnualIncome / 26) * paychecksReceived;
 
   useEffect(() => {
     const overspend = actualTotal - actualMonthlyIncome;
@@ -46,14 +57,25 @@ export default function MonthlyVisualizer() {
   });
 
   let status = "✅ You're on track this month!";
-  if (actualVariable > target.variable && actualSavings < target.savings) {
-    const overspent = (actualVariable - target.variable).toFixed(0);
-    const undersaved = (target.savings - actualSavings).toFixed(0);
-    status = `⚠️ You overspent on variable expenses by $${overspent} and saved $${undersaved} less than planned.`;
-  } else if (actualSavings < target.savings) {
-    status = `⚠️ You saved $${(target.savings - actualSavings).toFixed(0)} less than planned.`;
-  } else if (actualVariable > target.variable) {
-    status = `⚠️ You overspent on variable expenses by $${(actualVariable - target.variable).toFixed(0)}.`;
+  const fixedShort = actualFixed < scaledTarget.fixed ? (scaledTarget.fixed - actualFixed).toFixed(0) : null;
+  if (actualVariable > scaledTarget.variable && actualSavings < scaledTarget.savings && fixedShort) {
+    const overspent = (actualVariable - scaledTarget.variable).toFixed(0);
+    const undersaved = (scaledTarget.savings - actualSavings).toFixed(0);
+    status = `⚠️ You overspent on variable expenses by $${overspent}, saved $${undersaved} less than planned, and have $${fixedShort} less than needed for fixed expenses (to date).`;
+  } else if (actualVariable > scaledTarget.variable && actualSavings < scaledTarget.savings) {
+    const overspent = (actualVariable - scaledTarget.variable).toFixed(0);
+    const undersaved = (scaledTarget.savings - actualSavings).toFixed(0);
+    status = `⚠️ You overspent on variable expenses by $${overspent} and saved $${undersaved} less than planned (to date).`;
+  } else if (actualSavings < scaledTarget.savings && fixedShort) {
+    status = `⚠️ You saved $${(scaledTarget.savings - actualSavings).toFixed(0)} less than planned and have $${fixedShort} less than needed for fixed expenses (to date).`;
+  } else if (actualVariable > scaledTarget.variable && fixedShort) {
+    status = `⚠️ You overspent on variable expenses by $${(actualVariable - scaledTarget.variable).toFixed(0)} and have $${fixedShort} less than needed for fixed expenses (to date).`;
+  } else if (fixedShort) {
+    status = `⚠️ You have $${fixedShort} less than needed for fixed expenses (to date).`;
+  } else if (actualSavings < scaledTarget.savings) {
+    status = `⚠️ You saved $${(scaledTarget.savings - actualSavings).toFixed(0)} less than planned (to date).`;
+  } else if (actualVariable > scaledTarget.variable) {
+    status = `⚠️ You overspent on variable expenses by $${(actualVariable - scaledTarget.variable).toFixed(0)} (to date).`;
   }
 
   const savingsProgress = Math.min((actualSavings / target.savings) * 100, 100);
@@ -133,7 +155,7 @@ export default function MonthlyVisualizer() {
               ${actualVariable.toLocaleString()}
             </div>
           </div>
-          <div className="text-xs mt-2">${actualMonthlyIncome.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+          <div className="text-xs mt-2">${actualTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
         </div>
       </div>
 
@@ -212,7 +234,7 @@ export default function MonthlyVisualizer() {
         </div>
       </div>
 
-      <div className="flex justify-center gap-4 mt-6">
+      <div className="flex justify-center gap-4 mb-4">
         <button
           className={`px-3 py-1 rounded border ${paycheckCount === 2 ? 'bg-yellow-300' : 'bg-white'}`}
           onClick={() => setPaycheckCount(2)}
@@ -225,6 +247,21 @@ export default function MonthlyVisualizer() {
         >
           3 Paychecks
         </button>
+        <div className="flex items-center ml-4">
+          <span className="mr-2 text-sm">Paychecks Received:</span>
+          <button
+            className={`px-2 py-1 rounded border ${paychecksReceived === 1 ? 'bg-gray-200' : 'bg-white'}`}
+            onClick={() => setPaychecksReceived(1)}
+          >
+            1
+          </button>
+          <button
+            className={`ml-2 px-2 py-1 rounded border ${paychecksReceived === 2 ? 'bg-gray-200' : 'bg-white'}`}
+            onClick={() => setPaychecksReceived(2)}
+          >
+            2
+          </button>
+        </div>
       </div>
     </div>
   );
