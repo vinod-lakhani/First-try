@@ -1,0 +1,34 @@
+{
+  "name": "income-allocation-engine",
+  "version": "1.0.0",
+  "description": "Income Allocation Engine implementing Needs/Wants/Savings framework",
+  "main": "lib/alloc/income.ts",
+  "scripts": {
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest --coverage",
+    "serve": "npx serve standalone -p 3000",
+    "serve:open": "npx serve standalone -p 3000 --open"
+  },
+  "keywords": [
+    "income",
+    "allocation",
+    "budgeting",
+    "needs-wants-savings"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "chart.js": "^4.4.0",
+    "react": "^18.2.0",
+    "react-chartjs-2": "^5.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "typescript": "^5",
+    "vitest": "^4.0.10"
+  }
+}
