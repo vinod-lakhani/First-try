@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Savings Allocation Engine - Interactive Demo</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      background-color: #f5f5f5;
+      padding: 20px;
+    }
+    .container { max-width: 1400px; margin: 0 auto; }
+    h1 { font-size: 32px; font-weight: bold; margin-bottom: 8px; color: #1f2937; }
+    .subtitle { color: #6b7280; margin-bottom: 32px; }
+    .layout { display: grid; grid-template-columns: 450px 1fr; gap: 24px; }
+    .form-panel {
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+    }
+    .results-panel {
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .form-section {
+      margin-bottom: 24px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .form-section:last-child { border-bottom: none; }
+    .form-section h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #374151;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      color: #374151;
+      margin-bottom: 6px;
+    }
+    .form-group input,
+    .form-group select {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+    .debt-item {
+      background: #f9fafb;
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 8px;
+    }
+    .debt-item-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .btn-remove {
+      background: #ef4444;
+      color: white;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .btn-add {
+      background: #10b981;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      width: 100%;
+      margin-top: 8px;
+    }
+    .allocation-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .allocation-card {
+      background: #f9fafb;
+      padding: 16px;
+      border-radius: 8px;
+      border-left: 4px solid;
+    }
+    .allocation-card.ef { border-color: #3b82f6; }
+    .allocation-card.debt { border-color: #ef4444; }
+    .allocation-card.match { border-color: #f59e0b; }
+    .allocation-card.retirement { border-color: #10b981; }
+    .allocation-card.brokerage { border-color: #8b5cf6; }
+    .allocation-card h4 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #6b7280;
+    }
+    .allocation-card .amount {
+      font-size: 24px;
+      font-weight: bold;
+      color: #1f2937;
+    }
+    .allocation-card .percentage {
+      font-size: 14px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+    .notes {
+      background: #fef3c7;
+      padding: 12px;
+      border-radius: 6px;
+      margin-top: 16px;
+      font-size: 14px;
+      color: #92400e;
+    }
+    .notes ul {
+      margin-left: 20px;
+      margin-top: 8px;
+    }
+    .chart-container {
+      height: 400px;
+      margin-top: 24px;
+    }
+    .priority-stack {
+      background: #f9fafb;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 24px;
+    }
+    .priority-stack h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: #374151;
+    }
+    .priority-item {
+      display: flex;
+      align-items: center;
+      padding: 8px;
+      margin-bottom: 8px;
+      background: white;
+      border-radius: 4px;
+    }
+    .priority-number {
+      background: #3b82f6;
+      color: white;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 600;
+      margin-right: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Savings Allocation Engine</h1>
+    <p class="subtitle">Interactive visualization of priority-based savings allocation</p>
+    
+    <div class="layout">
+      <!-- Input Form -->
+      <div class="form-panel">
+        <div class="form-section">
+          <h3>Savings Budget</h3>
+          <div class="form-group">
+            <label>Savings Budget ($)</label>
+            <input type="number" id="savingsBudget" value="800" step="50">
+          </div>
+        </div>
+        
+        <div class="form-section">
+          <h3>Emergency Fund</h3>
+          <div class="form-group">
+            <label>EF Target ($)</label>
+            <input type="number" id="efTarget" value="10000" step="100">
+          </div>
+          <div class="form-group">
+            <label>EF Current Balance ($)</label>
+            <input type="number" id="efBalance" value="2000" step="100">
+          </div>
+        </div>
+        
+        <div class="form-section">
+          <h3>High-APR Debts</h3>
+          <div id="debtsContainer"></div>
+          <button class="btn-add" onclick="addDebt()">+ Add Debt</button>
+        </div>
+        
+        <div class="form-section">
+          <h3>401(k) Match</h3>
+          <div class="form-group">
+            <label>Match Needed This Period ($)</label>
+            <input type="number" id="matchNeed" value="100" step="10">
+          </div>
+        </div>
+        
+        <div class="form-section">
+          <h3>Account Selection</h3>
+          <div class="form-group">
+            <label>Single Filer Income ($)</label>
+            <input type="number" id="incomeSingle" value="50000" step="1000">
+          </div>
+          <div class="form-group">
+            <label>
+              <input type="checkbox" id="onIDR" style="width: auto; margin-right: 8px;">
+              On IDR (Income-Driven Repayment)
+            </label>
+          </div>
+        </div>
+        
+        <div class="form-section">
+          <h3>Liquidity & Retirement</h3>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Liquidity Need</label>
+              <select id="liquidity">
+                <option value="High">High</option>
+                <option value="Medium" selected>Medium</option>
+                <option value="Low">Low</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Retirement Focus</label>
+              <select id="retirementFocus">
+                <option value="High" selected>High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        
+        <div class="form-section">
+          <h3>Contribution Limits</h3>
+          <div class="form-row">
+            <div class="form-group">
+              <label>IRA Room This Year ($)</label>
+              <input type="number" id="iraRoom" value="7000" step="100">
+            </div>
+            <div class="form-group">
+              <label>401(k) Room This Year ($)</label>
+              <input type="number" id="k401Room" value="23000" step="100">
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Results -->
+      <div class="results-panel">
+        <h2 style="margin-bottom: 24px;">Allocation Results</h2>
+        
+        <div class="priority-stack">
+          <h3>Priority Stack</h3>
+          <div class="priority-item">
+            <div class="priority-number">1</div>
+            <span>Emergency Fund (up to 40% of budget)</span>
+          </div>
+          <div class="priority-item">
+            <div class="priority-number">2</div>
+            <span>High-APR Debt (up to 40% of remaining)</span>
+          </div>
+          <div class="priority-item">
+            <div class="priority-number">3</div>
+            <span>401(k) Employer Match</span>
+          </div>
+          <div class="priority-item">
+            <div class="priority-number">4</div>
+            <span>Retirement vs Brokerage Split</span>
+          </div>
+          <div class="priority-item">
+            <div class="priority-number">5</div>
+            <span>Route Retirement: IRA → 401(k) → Brokerage</span>
+          </div>
+        </div>
+        
+        <div class="allocation-grid" id="allocationCards"></div>
+        <div id="notes"></div>
+        
+        <div class="chart-container">
+          <canvas id="allocationChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function round2(n) { return Math.round(n * 100) / 100; }
+
+    function getLiquidityRetirementSplit(liquidity, retirementFocus) {
+      const matrix = {
+        High: { High: [0.30, 0.70], Medium: [0.20, 0.80], Low: [0.10, 0.90] },
+        Medium: { High: [0.70, 0.30], Medium: [0.50, 0.50], Low: [0.30, 0.70] },
+        Low: { High: [0.90, 0.10], Medium: [0.70, 0.30], Low: [0.50, 0.50] },
+      };
+      return matrix[liquidity][retirementFocus];
+    }
+
+    function chooseAccountType(incomeSingle$, onIDR) {
+      if (onIDR) return "Traditional401k";
+      return incomeSingle$ < 190000 ? "Roth" : "Traditional401k";
+    }
+
+    function allocateSavings(s) {
+      const {
+        savingsBudget$, efTarget$, efBalance$, highAprDebts,
+        matchNeedThisPeriod$, incomeSingle$, onIDR,
+        liquidity, retirementFocus, iraRoomThisYear$, k401RoomThisYear$,
+      } = s;
+      
+      let remaining$ = round2(savingsBudget$);
+      const notes = [];
+      
+      // Step 1: Emergency Fund
+      const efGap$ = round2(Math.max(0, efTarget$ - efBalance$));
+      const efCap$ = round2(savingsBudget$ * 0.40);
+      const efAlloc$ = round2(Math.min(efGap$, efCap$, remaining$));
+      remaining$ = round2(remaining$ - efAlloc$);
+      
+      // Step 2: High-APR Debt
+      const totalDebtBalance$ = round2(highAprDebts.reduce((sum, d) => sum + d.balance$, 0));
+      const debtCap$ = round2((savingsBudget$ - efAlloc$) * 0.40);
+      const debtAlloc$ = round2(Math.min(totalDebtBalance$, debtCap$, remaining$));
+      remaining$ = round2(remaining$ - debtAlloc$);
+      
+      // Step 3: 401(k) Match
+      const matchAlloc$ = round2(Math.min(matchNeedThisPeriod$, remaining$));
+      remaining$ = round2(remaining$ - matchAlloc$);
+      
+      // Step 4: Choose account type
+      const acctType = chooseAccountType(incomeSingle$, onIDR);
+      
+      // Step 5: Split remaining
+      const [retirePct, brokerPct] = getLiquidityRetirementSplit(liquidity, retirementFocus);
+      const retirementBudget$ = round2(remaining$ * retirePct);
+      const brokerageBudget$ = round2(remaining$ * brokerPct);
+      
+      // Step 6: Route retirement
+      let retirementTaxAdv$ = 0;
+      let brokerageFromRetirement$ = 0;
+      
+      if (retirementBudget$ > 0) {
+        const iraAlloc$ = round2(Math.min(retirementBudget$, iraRoomThisYear$));
+        retirementTaxAdv$ = round2(retirementTaxAdv$ + iraAlloc$);
+        let retirementRemaining$ = round2(retirementBudget$ - iraAlloc$);
+        
+        if (retirementRemaining$ > 0 && k401RoomThisYear$ > 0) {
+          const k401Alloc$ = round2(Math.min(retirementRemaining$, k401RoomThisYear$));
+          retirementTaxAdv$ = round2(retirementTaxAdv$ + k401Alloc$);
+          retirementRemaining$ = round2(retirementRemaining$ - k401Alloc$);
+        }
+        
+        if (retirementRemaining$ > 0.01) {
+          brokerageFromRetirement$ = round2(retirementRemaining$);
+        }
+      }
+      
+      const totalBrokerage$ = round2(brokerageBudget$ + brokerageFromRetirement$);
+      const currentTotal = round2(efAlloc$ + debtAlloc$ + matchAlloc$ + retirementTaxAdv$ + totalBrokerage$);
+      const roundingDiff = round2(savingsBudget$ - currentTotal);
+      
+      if (Math.abs(roundingDiff) > 0.001) {
+        const finalBrokerage$ = round2(totalBrokerage$ + roundingDiff);
+        return {
+          ef$: round2(efAlloc$),
+          highAprDebt$: round2(debtAlloc$),
+          match401k$: round2(matchAlloc$),
+          retirementTaxAdv$: round2(retirementTaxAdv$),
+          brokerage$: round2(finalBrokerage$),
+          routing: { acctType, splitRetirePct: round2(retirePct * 100), splitBrokerPct: round2(brokerPct * 100) },
+          notes: [],
+        };
+      }
+      
+      return {
+        ef$: round2(efAlloc$),
+        highAprDebt$: round2(debtAlloc$),
+        match401k$: round2(matchAlloc$),
+        retirementTaxAdv$: round2(retirementTaxAdv$),
+        brokerage$: round2(totalBrokerage$),
+        routing: { acctType, splitRetirePct: round2(retirePct * 100), splitBrokerPct: round2(brokerPct * 100) },
+        notes: [],
+      };
+    }
+
+    let debts = [{ name: 'Credit Card', balance$: 5000, aprPct: 22 }];
+    let chart = null;
+
+    function renderDebts() {
+      const container = document.getElementById('debtsContainer');
+      container.innerHTML = debts.map((debt, idx) => `
+        <div class="debt-item">
+          <div class="debt-item-header">
+            <strong>${debt.name}</strong>
+            <button class="btn-remove" onclick="removeDebt(${idx})">Remove</button>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Balance ($)</label>
+              <input type="number" value="${debt.balance$}" onchange="updateDebt(${idx}, 'balance$', this.value)" step="100">
+            </div>
+            <div class="form-group">
+              <label>APR (%)</label>
+              <input type="number" value="${debt.aprPct}" onchange="updateDebt(${idx}, 'aprPct', this.value)" step="0.1">
+            </div>
+          </div>
+        </div>
+      `).join('');
+      calculate();
+    }
+
+    function addDebt() {
+      debts.push({ name: 'New Debt', balance$: 1000, aprPct: 15 });
+      renderDebts();
+    }
+
+    function removeDebt(idx) {
+      debts.splice(idx, 1);
+      renderDebts();
+    }
+
+    function updateDebt(idx, field, value) {
+      debts[idx][field] = parseFloat(value) || 0;
+      calculate();
+    }
+
+    function calculate() {
+      const savingsBudget = parseFloat(document.getElementById('savingsBudget').value) || 0;
+      const efTarget = parseFloat(document.getElementById('efTarget').value) || 0;
+      const efBalance = parseFloat(document.getElementById('efBalance').value) || 0;
+      const matchNeed = parseFloat(document.getElementById('matchNeed').value) || 0;
+      const incomeSingle = parseFloat(document.getElementById('incomeSingle').value) || 0;
+      const onIDR = document.getElementById('onIDR').checked;
+      const liquidity = document.getElementById('liquidity').value;
+      const retirementFocus = document.getElementById('retirementFocus').value;
+      const iraRoom = parseFloat(document.getElementById('iraRoom').value) || 0;
+      const k401Room = parseFloat(document.getElementById('k401Room').value) || 0;
+
+      const highAprDebts = debts.map(d => ({ balance$: d.balance$, aprPct: d.aprPct }));
+
+      try {
+        const result = allocateSavings({
+          savingsBudget$: savingsBudget,
+          efTarget$: efTarget,
+          efBalance$: efBalance,
+          highAprDebts,
+          matchNeedThisPeriod$: matchNeed,
+          incomeSingle$: incomeSingle,
+          onIDR,
+          liquidity,
+          retirementFocus,
+          iraRoomThisYear$: iraRoom,
+          k401RoomThisYear$: k401Room,
+        });
+
+        // Update cards
+        document.getElementById('allocationCards').innerHTML = `
+          <div class="allocation-card ef">
+            <h4>Emergency Fund</h4>
+            <div class="amount">$${result.ef$.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <div class="percentage">${round2(result.ef$ / savingsBudget * 100).toFixed(1)}% of budget</div>
+          </div>
+          <div class="allocation-card debt">
+            <h4>High-APR Debt</h4>
+            <div class="amount">$${result.highAprDebt$.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <div class="percentage">${round2(result.highAprDebt$ / savingsBudget * 100).toFixed(1)}% of budget</div>
+          </div>
+          <div class="allocation-card match">
+            <h4>401(k) Match</h4>
+            <div class="amount">$${result.match401k$.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <div class="percentage">${round2(result.match401k$ / savingsBudget * 100).toFixed(1)}% of budget</div>
+          </div>
+          <div class="allocation-card retirement">
+            <h4>Retirement (${result.routing.acctType})</h4>
+            <div class="amount">$${result.retirementTaxAdv$.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <div class="percentage">${round2(result.retirementTaxAdv$ / savingsBudget * 100).toFixed(1)}% of budget</div>
+          </div>
+          <div class="allocation-card brokerage">
+            <h4>Brokerage</h4>
+            <div class="amount">$${result.brokerage$.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <div class="percentage">${round2(result.brokerage$ / savingsBudget * 100).toFixed(1)}% of budget</div>
+          </div>
+        `;
+
+        // Update notes
+        const notes = [];
+        notes.push(`Account Type: ${result.routing.acctType}`);
+        notes.push(`Retirement/Brokerage Split: ${result.routing.splitRetirePct}% / ${result.routing.splitBrokerPct}%`);
+        
+        document.getElementById('notes').innerHTML = `
+          <div class="notes">
+            <strong>Allocation Details:</strong>
+            <ul>
+              ${notes.map(note => `<li>${note}</li>`).join('')}
+            </ul>
+          </div>
+        `;
+
+        // Update chart
+        const ctx = document.getElementById('allocationChart').getContext('2d');
+        if (chart) chart.destroy();
+        chart = new Chart(ctx, {
+          type: 'doughnut',
+          data: {
+            labels: ['Emergency Fund', 'High-APR Debt', '401(k) Match', 'Retirement', 'Brokerage'],
+            datasets: [{
+              data: [result.ef$, result.highAprDebt$, result.match401k$, result.retirementTaxAdv$, result.brokerage$],
+              backgroundColor: ['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6'],
+              borderWidth: 0,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+              legend: { position: 'bottom' },
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    const label = context.label || '';
+                    const value = context.parsed || 0;
+                    const pct = round2(value / savingsBudget * 100);
+                    return `${label}: $${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${pct.toFixed(1)}%)`;
+                  }
+                }
+              }
+            }
+          }
+        });
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+
+    // Add event listeners
+    ['savingsBudget', 'efTarget', 'efBalance', 'matchNeed', 'incomeSingle', 'iraRoom', 'k401Room'].forEach(id => {
+      document.getElementById(id).addEventListener('input', calculate);
+    });
+    ['onIDR', 'liquidity', 'retirementFocus'].forEach(id => {
+      document.getElementById(id).addEventListener('change', calculate);
+    });
+
+    // Initial render
+    renderDebts();
+  </script>
+</body>
+</html>
+

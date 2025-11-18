@@ -3,39 +3,144 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="refresh" content="0; url=net-worth-interactive.html">
-  <title>Net Worth Simulator - Redirecting...</title>
+  <title>Financial Allocation Engines - Interactive Demos</title>
   <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      margin: 0;
-      background: #f5f5f5;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 40px 20px;
     }
-    .redirect-message {
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .header {
       text-align: center;
-      padding: 24px;
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      color: white;
+      margin-bottom: 48px;
     }
-    a {
+    .header h1 {
+      font-size: 48px;
+      font-weight: bold;
+      margin-bottom: 16px;
+    }
+    .header p {
+      font-size: 20px;
+      opacity: 0.9;
+    }
+    .demos-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+    }
+    .demo-card {
+      background: white;
+      border-radius: 12px;
+      padding: 32px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      transition: transform 0.2s, box-shadow 0.2s;
+      text-decoration: none;
+      color: inherit;
+      display: block;
+    }
+    .demo-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+    }
+    .demo-card h2 {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: #1f2937;
+    }
+    .demo-card p {
+      color: #6b7280;
+      margin-bottom: 16px;
+      line-height: 1.6;
+    }
+    .demo-card .features {
+      list-style: none;
+      margin-top: 16px;
+    }
+    .demo-card .features li {
+      color: #374151;
+      font-size: 14px;
+      margin-bottom: 8px;
+      padding-left: 24px;
+      position: relative;
+    }
+    .demo-card .features li:before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      color: #10b981;
+      font-weight: bold;
+    }
+    .demo-card .link {
+      display: inline-block;
+      margin-top: 16px;
       color: #2563eb;
+      font-weight: 600;
       text-decoration: none;
     }
-    a:hover {
+    .demo-card .link:hover {
       text-decoration: underline;
+    }
+    .icon {
+      font-size: 48px;
+      margin-bottom: 16px;
     }
   </style>
 </head>
 <body>
-  <div class="redirect-message">
-    <h1>Net Worth Simulator</h1>
-    <p>Redirecting to the interactive simulator...</p>
-    <p><a href="net-worth-interactive.html">Click here if you're not redirected</a></p>
+  <div class="container">
+    <div class="header">
+      <h1>Financial Allocation Engines</h1>
+      <p>Interactive demos for income, savings, and net worth simulation</p>
+    </div>
+    
+    <div class="demos-grid">
+      <a href="income-allocation-demo.html" class="demo-card">
+        <div class="icon">💰</div>
+        <h2>Income Allocation Engine</h2>
+        <p>Visualize how your income is allocated across Needs, Wants, and Savings based on targets, actuals, and shift limits.</p>
+        <ul class="features">
+          <li>Target vs Actual comparison</li>
+          <li>Shift limit visualization</li>
+          <li>Real-time allocation calculation</li>
+          <li>Interactive charts and tables</li>
+        </ul>
+        <span class="link">Open Demo →</span>
+      </a>
+      
+      <a href="savings-allocation-demo.html" class="demo-card">
+        <div class="icon">📊</div>
+        <h2>Savings Allocation Engine</h2>
+        <p>See how your savings budget is prioritized across Emergency Fund, Debt, Match, Retirement, and Brokerage.</p>
+        <ul class="features">
+          <li>Priority-based allocation</li>
+          <li>EF and Debt caps</li>
+          <li>Roth vs Traditional selection</li>
+          <li>Liquidity/Retirement matrix</li>
+        </ul>
+        <span class="link">Open Demo →</span>
+      </a>
+      
+      <a href="net-worth-interactive.html" class="demo-card">
+        <div class="icon">📈</div>
+        <h2>Net Worth Simulator</h2>
+        <p>40-year projection combining both engines with interactive charts, scenario comparison, and quarterly allocation tables.</p>
+        <ul class="features">
+          <li>40-year net worth projection</li>
+          <li>Scenario comparison</li>
+          <li>Quarterly allocation table</li>
+          <li>Crypto-style interactive charts</li>
+        </ul>
+        <span class="link">Open Simulator →</span>
+      </a>
+    </div>
   </div>
 </body>
 </html>

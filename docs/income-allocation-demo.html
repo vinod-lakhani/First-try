@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Income Allocation Engine - Interactive Demo</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      background-color: #f5f5f5;
+      padding: 20px;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    h1 { font-size: 32px; font-weight: bold; margin-bottom: 8px; color: #1f2937; }
+    .subtitle { color: #6b7280; margin-bottom: 32px; }
+    .layout { display: grid; grid-template-columns: 400px 1fr; gap: 24px; }
+    .form-panel {
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .results-panel {
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .form-section {
+      margin-bottom: 24px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .form-section:last-child { border-bottom: none; }
+    .form-section h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #374151;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      color: #374151;
+      margin-bottom: 6px;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    .allocation-card {
+      background: #f9fafb;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      border-left: 4px solid;
+    }
+    .allocation-card.needs { border-color: #ef4444; }
+    .allocation-card.wants { border-color: #f59e0b; }
+    .allocation-card.savings { border-color: #10b981; }
+    .allocation-card h4 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #6b7280;
+    }
+    .allocation-card .amount {
+      font-size: 24px;
+      font-weight: bold;
+      color: #1f2937;
+    }
+    .allocation-card .percentage {
+      font-size: 14px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+    .notes {
+      background: #fef3c7;
+      padding: 12px;
+      border-radius: 6px;
+      margin-top: 16px;
+      font-size: 14px;
+      color: #92400e;
+    }
+    .notes ul {
+      margin-left: 20px;
+      margin-top: 8px;
+    }
+    .chart-container {
+      height: 400px;
+      margin-top: 24px;
+    }
+    .comparison-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 24px;
+    }
+    .comparison-table th,
+    .comparison-table td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .comparison-table th {
+      background: #f9fafb;
+      font-weight: 600;
+      color: #374151;
+    }
+    .comparison-table td {
+      color: #1f2937;
+    }
+    .comparison-table .target { color: #6b7280; }
+    .comparison-table .actual { color: #374151; }
+    .comparison-table .allocated { color: #1f2937; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Income Allocation Engine</h1>
+    <p class="subtitle">Interactive visualization of Needs/Wants/Savings allocation with shift limit</p>
+    
+    <div class="layout">
+      <!-- Input Form -->
+      <div class="form-panel">
+        <div class="form-section">
+          <h3>Inputs</h3>
+          <div class="form-group">
+            <label>Monthly Net Income ($)</label>
+            <input type="number" id="income" value="4000" step="100">
+          </div>
+        </div>
+        
+        <div class="form-section">
+          <h3>Target Percentages</h3>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Needs (%)</label>
+              <input type="number" id="targetNeeds" value="50" step="1" min="0" max="100">
+            </div>
+            <div class="form-group">
+              <label>Wants (%)</label>
+              <input type="number" id="targetWants" value="30" step="1" min="0" max="100">
+            </div>
+            <div class="form-group">
+              <label>Savings (%)</label>
+              <input type="number" id="targetSavings" value="20" step="1" min="0" max="100">
+            </div>
+          </div>
+        </div>
+        
+        <div class="form-section">
+          <h3>3-Month Actuals (%)</h3>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Needs (%)</label>
+              <input type="number" id="actualNeeds" value="58" step="1" min="0" max="100">
+            </div>
+            <div class="form-group">
+              <label>Wants (%)</label>
+              <input type="number" id="actualWants" value="25" step="1" min="0" max="100">
+            </div>
+            <div class="form-group">
+              <label>Savings (%)</label>
+              <input type="number" id="actualSavings" value="17" step="1" min="0" max="100">
+            </div>
+          </div>
+        </div>
+        
+        <div class="form-section">
+          <h3>Shift Limit</h3>
+          <div class="form-group">
+            <label>Shift Limit (%)</label>
+            <input type="number" id="shiftLimit" value="4" step="0.1" min="0" max="100">
+            <small style="color: #6b7280; font-size: 12px; display: block; margin-top: 4px;">
+              Maximum % of income that can be shifted from Wants to Savings per period
+            </small>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Results -->
+      <div class="results-panel">
+        <h2 style="margin-bottom: 24px;">Allocation Results</h2>
+        
+        <div id="allocationCards"></div>
+        <div id="notes"></div>
+        
+        <div class="chart-container">
+          <canvas id="allocationChart"></canvas>
+        </div>
+        
+        <table class="comparison-table">
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th>Target</th>
+              <th>Actual (3-mo)</th>
+              <th>Allocated</th>
+              <th>Change</th>
+            </tr>
+          </thead>
+          <tbody id="comparisonTable"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function round2(n) { return Math.round(n * 100) / 100; }
+
+    function allocateIncome(i) {
+      const { incomePeriod$, targets, actuals3m, shiftLimitPct = 0.04 } = i;
+      const targetSum = targets.needsPct + targets.wantsPct + targets.savingsPct;
+      if (Math.abs(targetSum - 1.0) > 0.001) {
+        throw new Error(`Target percentages must sum to 1.0, got ${targetSum}`);
+      }
+      const actualSum = actuals3m.needsPct + actuals3m.wantsPct + actuals3m.savingsPct;
+      if (Math.abs(actualSum - 1.0) > 0.001) {
+        throw new Error(`Actual percentages must sum to 1.0, got ${actualSum}`);
+      }
+      
+      const targetNeeds$ = round2(incomePeriod$ * targets.needsPct);
+      const targetWants$ = round2(incomePeriod$ * targets.wantsPct);
+      const targetSavings$ = round2(incomePeriod$ * targets.savingsPct);
+      const actualNeeds$ = round2(incomePeriod$ * actuals3m.needsPct);
+      const actualWants$ = round2(incomePeriod$ * actuals3m.wantsPct);
+      const actualSavings$ = round2(incomePeriod$ * actuals3m.savingsPct);
+      
+      let needs$ = actualNeeds$;
+      let wants$ = actualWants$;
+      let savings$ = actualSavings$;
+      
+      const savingsGap$ = targetSavings$ - actualSavings$;
+      const notes = [];
+      if (savingsGap$ > 0.01) {
+        const savingsGapPct = round2(savingsGap$ / incomePeriod$);
+        const shiftPct = Math.min(savingsGapPct, shiftLimitPct);
+        const shiftAmount$ = round2(incomePeriod$ * shiftPct);
+        
+        if (shiftAmount$ > 0.01) {
+          wants$ = round2(wants$ - shiftAmount$);
+          savings$ = round2(savings$ + shiftAmount$);
+          
+          if (shiftPct < savingsGapPct) {
+            notes.push(`Applied $${shiftAmount$.toFixed(2)} shift from Wants→Savings (${round2(shiftPct * 100).toFixed(1)}% of income, limited by shift limit). Gap of ${round2((savingsGapPct - shiftPct) * 100).toFixed(1)}% remains.`);
+          } else {
+            notes.push(`Applied $${shiftAmount$.toFixed(2)} shift from Wants→Savings (${round2(shiftPct * 100).toFixed(1)}% of income). Savings target met.`);
+          }
+        }
+      }
+      
+      const currentTotal = round2(needs$ + wants$ + savings$);
+      const roundingDiff = round2(incomePeriod$ - currentTotal);
+      if (Math.abs(roundingDiff) > 0.001) {
+        savings$ = round2(savings$ + roundingDiff);
+      }
+      
+      return { needs$, wants$, savings$, notes };
+    }
+
+    let chart = null;
+
+    function calculate() {
+      const income = parseFloat(document.getElementById('income').value) || 0;
+      const targetNeeds = parseFloat(document.getElementById('targetNeeds').value) || 0;
+      const targetWants = parseFloat(document.getElementById('targetWants').value) || 0;
+      const targetSavings = parseFloat(document.getElementById('targetSavings').value) || 0;
+      const actualNeeds = parseFloat(document.getElementById('actualNeeds').value) || 0;
+      const actualWants = parseFloat(document.getElementById('actualWants').value) || 0;
+      const actualSavings = parseFloat(document.getElementById('actualSavings').value) || 0;
+      const shiftLimit = parseFloat(document.getElementById('shiftLimit').value) || 0;
+
+      try {
+        const result = allocateIncome({
+          incomePeriod$: income,
+          targets: { needsPct: targetNeeds/100, wantsPct: targetWants/100, savingsPct: targetSavings/100 },
+          actuals3m: { needsPct: actualNeeds/100, wantsPct: actualWants/100, savingsPct: actualSavings/100 },
+          shiftLimitPct: shiftLimit/100,
+        });
+
+        // Update cards
+        document.getElementById('allocationCards').innerHTML = `
+          <div class="allocation-card needs">
+            <h4>Needs</h4>
+            <div class="amount">$${result.needs$.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <div class="percentage">${round2(result.needs$ / income * 100).toFixed(1)}% of income</div>
+          </div>
+          <div class="allocation-card wants">
+            <h4>Wants</h4>
+            <div class="amount">$${result.wants$.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <div class="percentage">${round2(result.wants$ / income * 100).toFixed(1)}% of income</div>
+          </div>
+          <div class="allocation-card savings">
+            <h4>Savings</h4>
+            <div class="amount">$${result.savings$.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <div class="percentage">${round2(result.savings$ / income * 100).toFixed(1)}% of income</div>
+          </div>
+        `;
+
+        // Update notes
+        if (result.notes.length > 0) {
+          document.getElementById('notes').innerHTML = `
+            <div class="notes">
+              <strong>Notes:</strong>
+              <ul>
+                ${result.notes.map(note => `<li>${note}</li>`).join('')}
+              </ul>
+            </div>
+          `;
+        } else {
+          document.getElementById('notes').innerHTML = '';
+        }
+
+        // Update chart
+        const ctx = document.getElementById('allocationChart').getContext('2d');
+        if (chart) chart.destroy();
+        chart = new Chart(ctx, {
+          type: 'doughnut',
+          data: {
+            labels: ['Needs', 'Wants', 'Savings'],
+            datasets: [{
+              data: [result.needs$, result.wants$, result.savings$],
+              backgroundColor: ['#ef4444', '#f59e0b', '#10b981'],
+              borderWidth: 0,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+              legend: { position: 'bottom' },
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    const label = context.label || '';
+                    const value = context.parsed || 0;
+                    const pct = round2(value / income * 100);
+                    return `${label}: $${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${pct.toFixed(1)}%)`;
+                  }
+                }
+              }
+            }
+          }
+        });
+
+        // Update comparison table
+        const targetNeeds$ = round2(income * targetNeeds / 100);
+        const targetWants$ = round2(income * targetWants / 100);
+        const targetSavings$ = round2(income * targetSavings / 100);
+        const actualNeeds$ = round2(income * actualNeeds / 100);
+        const actualWants$ = round2(income * actualWants / 100);
+        const actualSavings$ = round2(income * actualSavings / 100);
+
+        document.getElementById('comparisonTable').innerHTML = `
+          <tr>
+            <td><strong>Needs</strong></td>
+            <td class="target">$${targetNeeds$.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            <td class="actual">$${actualNeeds$.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            <td class="allocated">$${result.needs$.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            <td>${result.needs$ === actualNeeds$ ? '—' : (result.needs$ > actualNeeds$ ? '+' : '')}${round2(result.needs$ - actualNeeds$).toFixed(2)}</td>
+          </tr>
+          <tr>
+            <td><strong>Wants</strong></td>
+            <td class="target">$${targetWants$.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            <td class="actual">$${actualWants$.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            <td class="allocated">$${result.wants$.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            <td>${result.wants$ === actualWants$ ? '—' : (result.wants$ > actualWants$ ? '+' : '')}${round2(result.wants$ - actualWants$).toFixed(2)}</td>
+          </tr>
+          <tr>
+            <td><strong>Savings</strong></td>
+            <td class="target">$${targetSavings$.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            <td class="actual">$${actualSavings$.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            <td class="allocated">$${result.savings$.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            <td>${result.savings$ === actualSavings$ ? '—' : '+'}${round2(result.savings$ - actualSavings$).toFixed(2)}</td>
+          </tr>
+        `;
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+
+    // Add event listeners
+    ['income', 'targetNeeds', 'targetWants', 'targetSavings', 'actualNeeds', 'actualWants', 'actualSavings', 'shiftLimit'].forEach(id => {
+      document.getElementById(id).addEventListener('input', calculate);
+    });
+
+    // Initial calculation
+    calculate();
+  </script>
+</body>
+</html>
+
