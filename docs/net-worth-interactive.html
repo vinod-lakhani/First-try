@@ -1,0 +1,1684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Net Worth Simulator - Interactive</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      background-color: #f5f5f5;
+      padding: 20px;
+    }
+    .container { max-width: 1600px; margin: 0 auto; }
+    h1 { font-size: 32px; font-weight: bold; margin-bottom: 8px; color: #1f2937; }
+    .subtitle { color: #6b7280; margin-bottom: 32px; }
+    .layout { display: grid; grid-template-columns: 400px 1fr; gap: 24px; }
+    .form-panel {
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      height: fit-content;
+      position: sticky;
+      top: 20px;
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+    }
+    .chart-panel {
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .form-section {
+      margin-bottom: 24px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .form-section:last-child { border-bottom: none; }
+    .form-section h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #374151;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      color: #374151;
+      margin-bottom: 6px;
+    }
+    .form-group input,
+    .form-group select {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .debt-item {
+      background: #f9fafb;
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 8px;
+    }
+    .debt-item-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .btn-remove {
+      background: #ef4444;
+      color: white;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .btn-add {
+      background: #10b981;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      width: 100%;
+      margin-top: 8px;
+    }
+    .timeline-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      background-color: #f5f5f5;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    .timeline-button {
+      padding: 8px 16px;
+      border: 2px solid #d1d5db;
+      border-radius: 6px;
+      background: white;
+      color: #374151;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    .timeline-button:hover { background-color: #f3f4f6; }
+    .timeline-button.active {
+      border-color: #2563eb;
+      background-color: #2563eb;
+      color: white;
+      font-weight: 600;
+    }
+    .net-worth-header {
+      padding: 24px 20px;
+      background: white;
+      border-radius: 12px 12px 0 0;
+    }
+    .net-worth-title {
+      font-size: 14px;
+      color: #6b7280;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+    .net-worth-value {
+      font-size: 36px;
+      font-weight: 700;
+      color: #1f2937;
+      margin-bottom: 8px;
+    }
+    .net-worth-change {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .net-worth-change.positive {
+      color: #10b981;
+    }
+    .net-worth-change.negative {
+      color: #ef4444;
+    }
+    .chart-container {
+      width: 100%;
+      height: 300px;
+      min-height: 250px;
+      position: relative;
+      background: white;
+      padding: 20px;
+    }
+    .chart-container canvas {
+      width: 100% !important;
+      height: 100% !important;
+    }
+    .time-range-selector {
+      display: flex;
+      gap: 8px;
+      padding: 16px 20px;
+      background: white;
+      border-radius: 0 0 12px 12px;
+      border-top: 1px solid #e5e7eb;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .time-range-button {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 20px;
+      background: #f3f4f6;
+      color: #6b7280;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .time-range-button:hover {
+      background: #e5e7eb;
+    }
+    .time-range-button.active {
+      background: #2563eb;
+      color: white;
+    }
+    .scenario-section {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 2px solid #e5e7eb;
+    }
+    .scenario-list {
+      margin-top: 16px;
+    }
+    .scenario-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      background: #f9fafb;
+      border-radius: 6px;
+      margin-bottom: 8px;
+    }
+    .scenario-item input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+    .scenario-name {
+      flex: 1;
+      font-weight: 500;
+      color: #374151;
+    }
+    .btn-save-scenario {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      width: 100%;
+      margin-top: 12px;
+    }
+    .btn-save-scenario:hover {
+      background: #1d4ed8;
+    }
+    .btn-delete-scenario {
+      background: #ef4444;
+      color: white;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .scenario-input {
+      width: 100%;
+      padding: 6px 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      font-size: 14px;
+      margin-top: 8px;
+    }
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 16px;
+      margin-top: 24px;
+    }
+    .allocation-table {
+      width: 100%;
+      margin-top: 32px;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .allocation-table h3 {
+      padding: 16px 20px;
+      margin: 0;
+      background: #f9fafb;
+      border-bottom: 1px solid #e5e7eb;
+      font-size: 16px;
+      font-weight: 600;
+      color: #374151;
+    }
+    .allocation-table table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .allocation-table th {
+      background: #f9fafb;
+      padding: 12px 16px;
+      text-align: left;
+      font-size: 13px;
+      font-weight: 600;
+      color: #6b7280;
+      border-bottom: 2px solid #e5e7eb;
+    }
+    .allocation-table td {
+      padding: 12px 16px;
+      font-size: 14px;
+      color: #374151;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .allocation-table tr:hover {
+      background: #f9fafb;
+    }
+    .allocation-table .quarter-label {
+      font-weight: 600;
+      color: #1f2937;
+    }
+    .allocation-table .number {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .kpi-card {
+      background: #f9fafb;
+      padding: 16px;
+      border-radius: 8px;
+      border-left: 4px solid #2563eb;
+    }
+    .kpi-label {
+      color: #6b7280;
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+    .kpi-value {
+      font-size: 20px;
+      font-weight: 600;
+      color: #1f2937;
+    }
+    .error {
+      background-color: #fee2e2;
+      padding: 12px;
+      border-radius: 6px;
+      border-left: 4px solid #ef4444;
+      color: #991b1b;
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+    .info {
+      background-color: #dbeafe;
+      padding: 12px;
+      border-radius: 6px;
+      border-left: 4px solid #2563eb;
+      color: #1e40af;
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+    @media (max-width: 1200px) {
+      .layout { grid-template-columns: 1fr; }
+      .form-panel { position: static; max-height: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div class="container">
+      <h1>Loading Net Worth Simulator...</h1>
+    </div>
+  </div>
+
+  <script>
+    function initApp() {
+      if (typeof React === 'undefined' || typeof ReactDOM === 'undefined' || typeof Chart === 'undefined') {
+        setTimeout(initApp, 100);
+        return;
+      }
+      
+      try {
+        const { useState, useMemo, useEffect, useRef } = React;
+        
+        Chart.register(
+          Chart.LinearScale, Chart.CategoryScale, Chart.PointElement,
+          Chart.LineElement, Chart.Title, Chart.Tooltip, Chart.Legend, Chart.Filler
+        );
+
+        // ========== ALLOCATION ENGINES ==========
+        // NOTE: These functions are embedded copies of the engine implementations from:
+        // - lib/alloc/income.ts (allocateIncome)
+        // - lib/alloc/savings.ts (allocateSavings, getLiquidityRetirementSplit, chooseAccountType)
+        // They must be kept in sync with the actual engine implementations.
+        // All allocation calculations throughout this file use these functions to ensure consistency.
+        
+        function round2(n) { return Math.round(n * 100) / 100; }
+
+        function allocateIncome(i) {
+          const { incomePeriod$, targets, actuals3m, shiftLimitPct = 0.04 } = i;
+          const targetSum = targets.needsPct + targets.wantsPct + targets.savingsPct;
+          if (Math.abs(targetSum - 1.0) > 0.001) {
+            throw new Error(`Target percentages must sum to 1.0, got ${targetSum}`);
+          }
+          const actualSum = actuals3m.needsPct + actuals3m.wantsPct + actuals3m.savingsPct;
+          if (Math.abs(actualSum - 1.0) > 0.001) {
+            throw new Error(`Actual percentages must sum to 1.0, got ${actualSum}`);
+          }
+          
+          const targetNeeds$ = round2(incomePeriod$ * targets.needsPct);
+          const targetWants$ = round2(incomePeriod$ * targets.wantsPct);
+          const targetSavings$ = round2(incomePeriod$ * targets.savingsPct);
+          const actualNeeds$ = round2(incomePeriod$ * actuals3m.needsPct);
+          const actualWants$ = round2(incomePeriod$ * actuals3m.wantsPct);
+          const actualSavings$ = round2(incomePeriod$ * actuals3m.savingsPct);
+          
+          let needs$ = actualNeeds$;
+          let wants$ = actualWants$;
+          let savings$ = actualSavings$;
+          
+          const savingsGap$ = targetSavings$ - actualSavings$;
+          const notes = [];
+          if (savingsGap$ > 0.01) {
+            // Calculate shift amount: min(savings gap, shift limit)
+            const savingsGapPct = round2(savingsGap$ / incomePeriod$);
+            const shiftPct = Math.min(savingsGapPct, shiftLimitPct);
+            const shiftAmount$ = round2(incomePeriod$ * shiftPct);
+            
+            if (shiftAmount$ > 0.01) {
+              // Shift from Wants to Savings (regardless of whether Wants is above/below target)
+              wants$ = round2(wants$ - shiftAmount$);
+              savings$ = round2(savings$ + shiftAmount$);
+              
+              if (shiftPct < savingsGapPct) {
+                notes.push(`Applied $${shiftAmount$.toFixed(2)} shift from Wants→Savings (${round2(shiftPct * 100).toFixed(1)}% of income, limited by shift limit). Gap of ${round2(savingsGapPct * 100).toFixed(1)}% remains.`);
+              } else {
+                notes.push(`Applied $${shiftAmount$.toFixed(2)} shift from Wants→Savings (${round2(shiftPct * 100).toFixed(1)}% of income). Savings target met.`);
+              }
+            }
+          }
+          
+          const currentTotal = round2(needs$ + wants$ + savings$);
+          const roundingDiff = round2(incomePeriod$ - currentTotal);
+          if (Math.abs(roundingDiff) > 0.001) {
+            savings$ = round2(savings$ + roundingDiff);
+          }
+          
+          return { needs$, wants$, savings$, notes };
+        }
+
+        function getLiquidityRetirementSplit(liquidity, retirementFocus) {
+          const matrix = {
+            High: { High: [0.30, 0.70], Medium: [0.20, 0.80], Low: [0.10, 0.90] },
+            Medium: { High: [0.70, 0.30], Medium: [0.50, 0.50], Low: [0.30, 0.70] },
+            Low: { High: [0.90, 0.10], Medium: [0.70, 0.30], Low: [0.50, 0.50] },
+          };
+          return matrix[liquidity][retirementFocus];
+        }
+
+        function chooseAccountType(incomeSingle$, onIDR) {
+          if (onIDR) return "Traditional401k";
+          return incomeSingle$ < 190000 ? "Roth" : "Traditional401k";
+        }
+
+        function allocateSavings(s) {
+          const {
+            savingsBudget$, efTarget$, efBalance$, highAprDebts,
+            matchNeedThisPeriod$, incomeSingle$, onIDR,
+            liquidity, retirementFocus, iraRoomThisYear$, k401RoomThisYear$,
+          } = s;
+          
+          let remaining$ = round2(savingsBudget$);
+          const efGap$ = round2(Math.max(0, efTarget$ - efBalance$));
+          const efCap$ = round2(savingsBudget$ * 0.40);
+          const efAlloc$ = round2(Math.min(efGap$, efCap$, remaining$));
+          remaining$ = round2(remaining$ - efAlloc$);
+          
+          const totalDebtBalance$ = round2(highAprDebts.reduce((sum, d) => sum + d.balance$, 0));
+          const debtCap$ = round2((savingsBudget$ - efAlloc$) * 0.40);
+          const debtAlloc$ = round2(Math.min(totalDebtBalance$, debtCap$, remaining$));
+          remaining$ = round2(remaining$ - debtAlloc$);
+          
+          const matchAlloc$ = round2(Math.min(matchNeedThisPeriod$, remaining$));
+          remaining$ = round2(remaining$ - matchAlloc$);
+          
+          const [retirePct, brokerPct] = getLiquidityRetirementSplit(liquidity, retirementFocus);
+          const retirementBudget$ = round2(remaining$ * retirePct);
+          const brokerageBudget$ = round2(remaining$ * brokerPct);
+          
+          let retirementTaxAdv$ = 0;
+          let brokerageFromRetirement$ = 0;
+          
+          if (retirementBudget$ > 0) {
+            const iraAlloc$ = round2(Math.min(retirementBudget$, iraRoomThisYear$));
+            retirementTaxAdv$ = round2(retirementTaxAdv$ + iraAlloc$);
+            let retirementRemaining$ = round2(retirementBudget$ - iraAlloc$);
+            
+            if (retirementRemaining$ > 0 && k401RoomThisYear$ > 0) {
+              const k401Alloc$ = round2(Math.min(retirementRemaining$, k401RoomThisYear$));
+              retirementTaxAdv$ = round2(retirementTaxAdv$ + k401Alloc$);
+              retirementRemaining$ = round2(retirementRemaining$ - k401Alloc$);
+            }
+            
+            if (retirementRemaining$ > 0.01) {
+              brokerageFromRetirement$ = round2(retirementRemaining$);
+            }
+          }
+          
+          const totalBrokerage$ = round2(brokerageBudget$ + brokerageFromRetirement$);
+          const currentTotal = round2(efAlloc$ + debtAlloc$ + matchAlloc$ + retirementTaxAdv$ + totalBrokerage$);
+          const roundingDiff = round2(savingsBudget$ - currentTotal);
+          
+          if (Math.abs(roundingDiff) > 0.001) {
+            const finalBrokerage$ = round2(totalBrokerage$ + roundingDiff);
+            return {
+              ef$: round2(efAlloc$),
+              highAprDebt$: round2(debtAlloc$),
+              match401k$: round2(matchAlloc$),
+              retirementTaxAdv$: round2(retirementTaxAdv$),
+              brokerage$: round2(finalBrokerage$),
+              routing: { acctType: chooseAccountType(incomeSingle$, onIDR), splitRetirePct: round2(retirePct * 100), splitBrokerPct: round2(brokerPct * 100) },
+              notes: [],
+            };
+          }
+          
+          return {
+            ef$: round2(efAlloc$),
+            highAprDebt$: round2(debtAlloc$),
+            match401k$: round2(matchAlloc$),
+            retirementTaxAdv$: round2(retirementTaxAdv$),
+            brokerage$: round2(totalBrokerage$),
+            routing: { acctType: chooseAccountType(incomeSingle$, onIDR), splitRetirePct: round2(retirePct * 100), splitBrokerPct: round2(brokerPct * 100) },
+            notes: [],
+          };
+        }
+
+        // ========== NET WORTH SIMULATION ==========
+        function buildMonthLabels(startDate, months) {
+          const start = new Date(startDate);
+          const labels = [];
+          for (let i = 0; i < months; i++) {
+            const date = new Date(start);
+            date.setMonth(start.getMonth() + i);
+            labels.push(date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }));
+          }
+          return labels;
+        }
+
+        function cloneLiabilities(liabilities) {
+          return liabilities.map(liab => ({ ...liab, balance: liab.balance }));
+        }
+
+        function applyExtraPayment(debts, extraPayment$) {
+          if (extraPayment$ <= 0.01 || debts.length === 0) return 0;
+          const activeDebts = debts.filter(d => d.balance > 0.01).sort((a, b) => b.aprPct - a.aprPct);
+          let remaining = extraPayment$;
+          for (const debt of activeDebts) {
+            if (remaining <= 0.01) break;
+            const payment = Math.min(remaining, debt.balance);
+            debt.balance = round2(debt.balance - payment);
+            remaining = round2(remaining - payment);
+          }
+          return round2(extraPayment$ - remaining);
+        }
+
+        function sumLiabilities(debts) {
+          return round2(debts.reduce((sum, d) => sum + Math.max(0, d.balance), 0));
+        }
+
+        function computeKPIs(series, efTarget$) {
+          const months = series.netWorth.length;
+          if (efTarget$ !== undefined) {
+            for (let i = 0; i < months; i++) {
+              if (series.cash[i] >= efTarget$) {
+                series.kpis.efReachedMonth = i;
+                break;
+              }
+            }
+          }
+          for (let i = 0; i < months; i++) {
+            if (series.liabilities[i] <= 0.01) {
+              series.kpis.debtFreeMonth = i;
+              break;
+            }
+          }
+          [5, 10, 20, 40].forEach(years => {
+            const monthIndex = years * 12;
+            if (monthIndex < months) {
+              series.kpis.netWorthAtYears[years] = round2(series.netWorth[monthIndex]);
+            }
+          });
+          if (months > 12) {
+            const startNW = series.netWorth[0];
+            const endNW = series.netWorth[months - 1];
+            if (startNW > 0 && endNW > 0) {
+              const years = months / 12;
+              const cagr = (Math.pow(endNW / startNW, 1 / years) - 1) * 100;
+              series.kpis.cagrNominal = round2(cagr);
+            }
+          }
+        }
+
+        function simulateScenario(input, monthlyPlan) {
+          const months = input.horizonMonths || 480;
+          const labels = buildMonthLabels(input.startDate, months);
+          let cash = round2(input.openingBalances.cash);
+          let brokerage = round2(input.openingBalances.brokerage);
+          let retirement = round2(input.openingBalances.retirement);
+          let hsa = round2(input.openingBalances.hsa || 0);
+          let otherAssets = round2(input.openingBalances.otherAssets || 0);
+          const debts = cloneLiabilities(input.openingBalances.liabilities);
+          
+          const series = {
+            labels, assets: new Array(months).fill(0), liabilities: new Array(months).fill(0),
+            netWorth: new Array(months).fill(0), cash: new Array(months).fill(0),
+            brokerage: new Array(months).fill(0), retirement: new Array(months).fill(0),
+            kpis: { netWorthAtYears: {} }, warnings: [],
+          };
+          
+          const cashYield = (input.cashYieldPct || 4.0) / 100 / 12;
+          const nominalReturn = (input.nominalReturnPct || 9.0) / 100 / 12;
+          const taxDrag = (input.taxDragBrokeragePct || 0.5) / 100 / 12;
+          const brokerageReturn = nominalReturn - taxDrag;
+          const efTarget$ = input.goals?.efTarget$;
+          
+          // Track original minimum payments for debts (for reallocation when paid off)
+          const originalMinPayments = new Map();
+          debts.forEach(debt => {
+            originalMinPayments.set(debt, debt.minPayment);
+          });
+          
+          // Track which debts have been paid off and their redirected min payments
+          const paidOffDebts = new Set();
+          let redirectedMinPayments$ = 0;
+          
+          for (let t = 0; t < months; t++) {
+            const plan = monthlyPlan[t] || monthlyPlan[0];
+            
+            cash = round2(cash * (1 + cashYield));
+            brokerage = round2(brokerage * (1 + brokerageReturn));
+            retirement = round2(retirement * (1 + nominalReturn));
+            if (hsa > 0) hsa = round2(hsa * (1 + nominalReturn));
+            
+            cash = round2(cash + plan.ef$);
+            brokerage = round2(brokerage + plan.brokerage$);
+            retirement = round2(retirement + plan.match401k$ + plan.retirementTaxAdv$);
+            
+            let totalMinPayment = 0;
+            let totalExtraPayment = plan.highAprDebt$;
+            
+            // Process each debt
+            for (const debt of debts) {
+              if (paidOffDebts.has(debt)) {
+                // This debt was already paid off in a previous month - its min payment is redirected
+                // (already counted in redirectedMinPayments$)
+                continue;
+              }
+              
+              if (debt.balance <= 0.01) {
+                // Debt is now paid off - add its min payment to redirected amount
+                const originalMinPay = originalMinPayments.get(debt) || 0;
+                if (originalMinPay > 0.01 && !paidOffDebts.has(debt)) {
+                  redirectedMinPayments$ = round2(redirectedMinPayments$ + originalMinPay);
+                  paidOffDebts.add(debt);
+                  series.warnings.push(
+                    `Month ${t + 1}: ${debt.name} paid off. Future minimum payment ($${originalMinPay.toFixed(2)}/month) redirected to brokerage.`
+                  );
+                }
+                continue;
+              }
+              
+              // Accrue interest
+              debt.balance = round2(debt.balance * (1 + debt.aprPct / 100 / 12));
+              
+              // Apply minimum payment
+              const minPay = Math.min(debt.balance, debt.minPayment);
+              debt.balance = round2(debt.balance - minPay);
+              totalMinPayment = round2(totalMinPayment + minPay);
+              
+              // Check if debt was just paid off this month
+              if (debt.balance <= 0.01) {
+                const originalMinPay = originalMinPayments.get(debt) || 0;
+                if (originalMinPay > 0.01 && !paidOffDebts.has(debt)) {
+                  redirectedMinPayments$ = round2(redirectedMinPayments$ + originalMinPay);
+                  paidOffDebts.add(debt);
+                  series.warnings.push(
+                    `Month ${t + 1}: ${debt.name} paid off. Future minimum payment ($${originalMinPay.toFixed(2)}/month) redirected to brokerage.`
+                  );
+                }
+              }
+            }
+            
+            const extraPaid = applyExtraPayment(debts, totalExtraPayment);
+            if (totalExtraPayment > extraPaid && extraPaid > 0) {
+              const redirected = round2(totalExtraPayment - extraPaid);
+              brokerage = round2(brokerage + redirected);
+            }
+            
+            // Add redirected minimum payments from previously paid-off debts to brokerage
+            if (redirectedMinPayments$ > 0.01) {
+              brokerage = round2(brokerage + redirectedMinPayments$);
+            }
+            
+            const totalOutflows = round2(plan.needs$ + plan.wants$ + totalMinPayment + extraPaid);
+            if (cash < totalOutflows) {
+              const shortfall = round2(totalOutflows - cash);
+              series.warnings.push(`Month ${t + 1}: Cash shortfall $${shortfall.toFixed(2)}`);
+              cash = 0;
+            } else {
+              cash = round2(cash - totalOutflows);
+            }
+            
+            cash = Math.max(0, cash);
+            brokerage = Math.max(0, brokerage);
+            retirement = Math.max(0, retirement);
+            hsa = Math.max(0, hsa);
+            
+            const totalLiabilities = sumLiabilities(debts);
+            const totalAssets = round2(cash + brokerage + retirement + hsa + otherAssets);
+            
+            series.cash[t] = cash;
+            series.brokerage[t] = brokerage;
+            series.retirement[t] = retirement;
+            series.assets[t] = totalAssets;
+            series.liabilities[t] = totalLiabilities;
+            series.netWorth[t] = round2(totalAssets - totalLiabilities);
+          }
+          
+          computeKPIs(series, efTarget$);
+          return series;
+        }
+
+        // ========== REACT COMPONENTS ==========
+        // Net Worth Chart Component (crypto-style design)
+        function NetWorthChart({ series, visibleYears, onTimeRangeChange, scenarios = [] }) {
+          const canvasRef = useRef(null);
+          const chartRef = useRef(null);
+          const [timeRange, setTimeRange] = useState('ALL');
+          
+          const { currentValue, change, changePct, chartData } = useMemo(() => {
+            const monthsToShow = visibleYears * 12;
+            const netWorthData = series.netWorth.slice(0, monthsToShow);
+            const assetsData = series.assets.slice(0, monthsToShow);
+            const liabilitiesData = series.liabilities.slice(0, monthsToShow);
+            const labels = series.labels.slice(0, monthsToShow);
+            
+            // Get active scenarios
+            const activeScenarios = (scenarios || []).filter(s => s && s.active && s.series);
+            
+            // Filter by time range
+            let filteredNetWorth = netWorthData;
+            let filteredAssets = assetsData;
+            let filteredLiabilities = liabilitiesData;
+            let filteredLabels = labels;
+            
+            if (timeRange !== 'ALL') {
+              const now = netWorthData.length - 1;
+              let monthsBack = 0;
+              switch(timeRange) {
+                case '1Y': monthsBack = 12; break;
+                case '5Y': monthsBack = 60; break;
+                case '10Y': monthsBack = 120; break;
+                case '20Y': monthsBack = 240; break;
+                case '40Y': monthsBack = 480; break;
+              }
+              const rangeStart = Math.max(0, now - monthsBack);
+              filteredNetWorth = netWorthData.slice(rangeStart);
+              filteredAssets = assetsData.slice(rangeStart);
+              filteredLiabilities = liabilitiesData.slice(rangeStart);
+              filteredLabels = labels.slice(rangeStart);
+            }
+            
+            const currentValue = filteredNetWorth[filteredNetWorth.length - 1] || 0;
+            const startValue = filteredNetWorth[0] || 0;
+            const change = round2(currentValue - startValue);
+            const changePct = startValue > 0 ? round2((change / startValue) * 100) : 0;
+            
+            // Build datasets array
+            const datasets = [];
+            
+            // Main scenario (Baseline - always current form inputs)
+            datasets.push({
+              label: 'Current - Net Worth',
+              data: filteredNetWorth,
+              borderColor: '#2563eb',
+              backgroundColor: 'rgba(37, 99, 235, 0.1)',
+              borderWidth: 2.5,
+              fill: true,
+              tension: 0.4,
+              pointRadius: 0,
+              pointHoverRadius: 4,
+              order: 1,
+            });
+            
+            // Add scenario comparisons (only if they differ from baseline)
+            const scenarioColors = ['#8b5cf6', '#f59e0b', '#ec4899', '#14b8a6', '#6366f1'];
+            let scenarioIdx = 0;
+            activeScenarios.forEach((scenario) => {
+              if (!scenario.series) return;
+              
+              const scenarioNetWorth = scenario.series.netWorth.slice(0, monthsToShow);
+              let scenarioFiltered = scenarioNetWorth;
+              
+              if (timeRange !== 'ALL') {
+                const now = scenarioNetWorth.length - 1;
+                let monthsBack = 0;
+                switch(timeRange) {
+                  case '1Y': monthsBack = 12; break;
+                  case '5Y': monthsBack = 60; break;
+                  case '10Y': monthsBack = 120; break;
+                  case '20Y': monthsBack = 240; break;
+                  case '40Y': monthsBack = 480; break;
+                }
+                const rangeStart = Math.max(0, now - monthsBack);
+                scenarioFiltered = scenarioNetWorth.slice(rangeStart);
+              }
+              
+              // Check if scenario is significantly different from baseline
+              // (compare a few key points to avoid showing identical lines)
+              const isDifferent = scenarioFiltered.length !== filteredNetWorth.length ||
+                scenarioFiltered.some((val, i) => {
+                  if (i % 12 === 0 && i < Math.min(scenarioFiltered.length, filteredNetWorth.length)) {
+                    return Math.abs(val - filteredNetWorth[i]) > 100; // $100 difference threshold
+                  }
+                  return false;
+                });
+              
+              // Only add if different from baseline
+              if (isDifferent) {
+                datasets.push({
+                  label: `${scenario.name} - Net Worth`,
+                  data: scenarioFiltered,
+                  borderColor: scenarioColors[scenarioIdx % scenarioColors.length],
+                  backgroundColor: 'transparent',
+                  borderWidth: 2,
+                  borderDash: [8, 4],
+                  fill: false,
+                  tension: 0.4,
+                  pointRadius: 0,
+                  pointHoverRadius: 4,
+                  order: 10 + scenarioIdx,
+                });
+                scenarioIdx++;
+              }
+            });
+            
+            // Add Assets and Liabilities for baseline only
+            datasets.push({
+              label: 'Assets',
+              data: filteredAssets,
+              borderColor: '#10b981',
+              backgroundColor: 'rgba(16, 185, 129, 0.05)',
+              borderWidth: 2,
+              borderDash: [5, 5],
+              fill: false,
+              tension: 0.4,
+              pointRadius: 0,
+              pointHoverRadius: 4,
+              order: 2,
+            }, {
+              label: 'Liabilities',
+              data: filteredLiabilities,
+              borderColor: '#ef4444',
+              backgroundColor: 'rgba(239, 68, 68, 0.05)',
+              borderWidth: 2,
+              borderDash: [3, 3],
+              fill: false,
+              tension: 0.4,
+              pointRadius: 0,
+              pointHoverRadius: 4,
+              order: 3,
+            });
+            
+            return {
+              currentValue,
+              change,
+              changePct,
+              chartData: {
+                labels: filteredLabels,
+                datasets: datasets,
+              },
+            };
+          }, [series, visibleYears, timeRange, scenarios]);
+          
+          const options = useMemo(() => ({
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                padding: 12,
+                titleFont: { size: 13, weight: 'bold' },
+                bodyFont: { size: 13 },
+                displayColors: true,
+                callbacks: {
+                  label: function(context) {
+                    const value = context.parsed.y;
+                    const formatted = value >= 1000000 
+                      ? '$' + (value / 1000000).toFixed(2) + 'M'
+                      : value >= 1000
+                      ? '$' + (value / 1000).toFixed(1) + 'K'
+                      : '$' + value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+                    return `${context.dataset.label}: ${formatted}`;
+                  },
+                  labelColor: function(context) {
+                    return {
+                      borderColor: context.dataset.borderColor,
+                      backgroundColor: context.dataset.borderColor,
+                    };
+                  },
+                },
+              },
+            },
+            scales: {
+              x: {
+                display: true,
+                grid: { display: false },
+                ticks: {
+                  maxTicksLimit: 8,
+                  font: { size: 11 },
+                  color: '#9ca3af',
+                },
+              },
+              y: {
+                display: true,
+                grid: {
+                  color: '#f3f4f6',
+                  drawBorder: false,
+                },
+                ticks: {
+                  font: { size: 11 },
+                  color: '#9ca3af',
+                  callback: function(value) {
+                    if (value >= 1000000) {
+                      return '$' + (value / 1000000).toFixed(1) + 'M';
+                    } else if (value >= 1000) {
+                      return '$' + (value / 1000).toFixed(0) + 'K';
+                    }
+                    return '$' + value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+                  },
+                },
+              },
+            },
+          }), [timeRange]);
+          
+          useEffect(() => {
+            if (!canvasRef.current) return;
+            const ctx = canvasRef.current.getContext('2d');
+            if (chartRef.current) chartRef.current.destroy();
+            
+            const container = canvasRef.current.parentElement;
+            if (container) {
+              const containerWidth = container.clientWidth - 40;
+              const containerHeight = 300;
+              canvasRef.current.width = containerWidth;
+              canvasRef.current.height = containerHeight;
+            }
+            
+            chartRef.current = new Chart(ctx, { 
+              type: 'line', 
+              data: chartData, 
+              options: {
+                ...options,
+                responsive: true,
+                maintainAspectRatio: false,
+              }
+            });
+            
+            const handleResize = () => {
+              if (chartRef.current && canvasRef.current) {
+                const container = canvasRef.current.parentElement;
+                if (container) {
+                  const containerWidth = container.clientWidth - 40;
+                  const containerHeight = 300;
+                  chartRef.current.resize(containerWidth, containerHeight);
+                }
+              }
+            };
+            
+            window.addEventListener('resize', handleResize);
+            
+            return () => { 
+              window.removeEventListener('resize', handleResize);
+              if (chartRef.current) chartRef.current.destroy(); 
+            };
+          }, [chartData, options]);
+          
+          const handleTimeRangeChange = (range) => {
+            setTimeRange(range);
+            if (onTimeRangeChange) onTimeRangeChange(range);
+          };
+          
+          return React.createElement('div', { style: { background: 'white', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' } },
+            React.createElement('div', { className: 'net-worth-header' },
+              React.createElement('div', { className: 'net-worth-title' }, 'Net Worth'),
+              React.createElement('div', { className: 'net-worth-value' },
+                `$${currentValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              ),
+              React.createElement('div', { className: `net-worth-change ${change >= 0 ? 'positive' : 'negative'}` },
+                React.createElement('span', null, change >= 0 ? '↑' : '↓'),
+                React.createElement('span', null,
+                  `$${Math.abs(change).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${Math.abs(changePct).toFixed(2)}%)`
+                )
+              )
+            ),
+            React.createElement('div', { className: 'chart-container' },
+              React.createElement('canvas', { ref: canvasRef })
+            ),
+            React.createElement('div', { className: 'time-range-selector' },
+              ['1Y', '5Y', '10Y', '20Y', '40Y', 'ALL'].map(range =>
+                React.createElement('button', {
+                  key: range,
+                  className: `time-range-button ${timeRange === range ? 'active' : ''}`,
+                  onClick: () => handleTimeRangeChange(range),
+                }, range)
+              )
+            )
+          );
+        }
+
+        function App() {
+          // Form state
+          const [income, setIncome] = useState(4000);
+          const [targetNeeds, setTargetNeeds] = useState(50);
+          const [targetWants, setTargetWants] = useState(30);
+          const [targetSavings, setTargetSavings] = useState(20);
+          const [actualNeeds, setActualNeeds] = useState(58);
+          const [actualWants, setActualWants] = useState(25);
+          const [actualSavings, setActualSavings] = useState(17);
+          const [shiftLimit, setShiftLimit] = useState(4);
+          
+          const [efTarget, setEfTarget] = useState(10000);
+          const [efBalance, setEfBalance] = useState(6000);
+          const [debts, setDebts] = useState([{ name: 'Credit Card', balance$: 2500, aprPct: 22, minPayment: 75 }]);
+          const [matchNeed, setMatchNeed] = useState(100);
+          const [incomeSingle, setIncomeSingle] = useState(150000);
+          const [onIDR, setOnIDR] = useState(false);
+          const [liquidity, setLiquidity] = useState('Medium');
+          const [retirementFocus, setRetirementFocus] = useState('High');
+          const [iraRoom, setIraRoom] = useState(5000);
+          const [k401Room, setK401Room] = useState(10000);
+          
+          const [openingCash, setOpeningCash] = useState(6000);
+          const [openingBrokerage, setOpeningBrokerage] = useState(5000);
+          const [openingRetirement, setOpeningRetirement] = useState(15000);
+          const [cashYield, setCashYield] = useState(4.0);
+          const [nominalReturn, setNominalReturn] = useState(9.0);
+          const [taxDrag, setTaxDrag] = useState(0.5);
+          const [visibleYears, setVisibleYears] = useState(40);
+          
+          const [error, setError] = useState(null);
+          const [scenarios, setScenarios] = useState([]);
+          const [newScenarioName, setNewScenarioName] = useState('');
+          
+          // Calculate allocations and simulate
+          // All allocations use the engine functions (allocateIncome, allocateSavings) to ensure accuracy
+          const { series, kpis, quarterlyAllocations, incomeAlloc } = useMemo(() => {
+            try {
+              setError(null);
+              
+              // Income Allocation - using engine function
+              const incomeAlloc = allocateIncome({
+                incomePeriod$: income,
+                targets: { needsPct: targetNeeds/100, wantsPct: targetWants/100, savingsPct: targetSavings/100 },
+                actuals3m: { needsPct: actualNeeds/100, wantsPct: actualWants/100, savingsPct: actualSavings/100 },
+                shiftLimitPct: shiftLimit/100,
+              });
+              
+              // Convert debts format
+              const highAprDebts = debts.map(d => ({ balance$: d.balance$, aprPct: d.aprPct }));
+              const liabilities = debts.map(d => ({ name: d.name, balance: d.balance$, aprPct: d.aprPct, minPayment: d.minPayment }));
+              
+              // Savings Allocation - using engine function
+              const savingsAlloc = allocateSavings({
+                savingsBudget$: incomeAlloc.savings$,
+                efTarget$: efTarget,
+                efBalance$: efBalance,
+                highAprDebts,
+                matchNeedThisPeriod$: matchNeed,
+                incomeSingle$: incomeSingle,
+                onIDR,
+                liquidity,
+                retirementFocus,
+                iraRoomThisYear$: iraRoom,
+                k401RoomThisYear$: k401Room,
+              });
+              
+              // Create monthly plan
+              const monthlyPlan = [{
+                monthIndex: 0,
+                incomeNet: income,
+                needs$: incomeAlloc.needs$,
+                wants$: incomeAlloc.wants$,
+                ef$: savingsAlloc.ef$,
+                highAprDebt$: savingsAlloc.highAprDebt$,
+                match401k$: savingsAlloc.match401k$,
+                retirementTaxAdv$: savingsAlloc.retirementTaxAdv$,
+                brokerage$: savingsAlloc.brokerage$,
+              }];
+              
+              // Calculate quarterly allocations by simulating month-by-month
+              // This accounts for EF target being reached and debts being paid off
+              // IMPORTANT: We use the actual allocateSavings() engine function for each month
+              // to ensure allocations are accurate and consistent with the main simulation
+              const quarters = [];
+              const startDate = new Date('2026-01-01');
+              
+              // Simulate first 5 years (60 months) to get accurate quarterly totals
+              let currentEfBalance = efBalance;
+              const simulatedDebts = debts.map(d => ({ ...d, balance: d.balance$ }));
+              
+              for (let q = 0; q < 20; q++) {
+                // Calculate the date for the start of this quarter
+                // q=0: Jan 2026, q=1: Apr 2026, q=2: Jul 2026, q=3: Oct 2026, q=4: Jan 2027, etc.
+                const quarterStart = new Date(startDate);
+                quarterStart.setMonth(startDate.getMonth() + q * 3);
+                quarterStart.setDate(1); // Ensure we're at the start of the month
+                
+                // Calculate quarter number from the month (0=Jan, 1=Feb, ..., 11=Dec)
+                // Q1: months 0-2, Q2: months 3-5, Q3: months 6-8, Q4: months 9-11
+                const month = quarterStart.getMonth();
+                const quarterNum = Math.floor(month / 3) + 1;
+                const year = quarterStart.getFullYear();
+                const quarterLabel = `Q${quarterNum} ${year}`;
+                
+                // Aggregate 3 months for this quarter
+                let quarterEf = 0;
+                let quarterDebt = 0;
+                let quarterMatch = 0;
+                let quarterRetirement = 0;
+                let quarterBrokerage = 0;
+                
+                for (let m = 0; m < 3; m++) {
+                  const monthIndex = q * 3 + m;
+                  
+                  // Use the actual allocateSavings function for each month to ensure accuracy
+                  // This ensures we get the exact same allocations as the engine would produce
+                  const currentHighAprDebts = simulatedDebts
+                    .filter(d => d.balance > 0.01)
+                    .map(d => ({ balance$: d.balance, aprPct: d.aprPct }));
+                  
+                  const monthSavingsAlloc = allocateSavings({
+                    savingsBudget$: incomeAlloc.savings$,
+                    efTarget$: efTarget,
+                    efBalance$: currentEfBalance,
+                    highAprDebts: currentHighAprDebts,
+                    matchNeedThisPeriod$: matchNeed,
+                    incomeSingle$: incomeSingle,
+                    onIDR,
+                    liquidity,
+                    retirementFocus,
+                    iraRoomThisYear$: iraRoom,
+                    k401RoomThisYear$: k401Room,
+                  });
+                  
+                  // Track allocations for this month
+                  quarterEf = round2(quarterEf + monthSavingsAlloc.ef$);
+                  quarterDebt = round2(quarterDebt + monthSavingsAlloc.highAprDebt$);
+                  quarterMatch = round2(quarterMatch + monthSavingsAlloc.match401k$);
+                  quarterRetirement = round2(quarterRetirement + monthSavingsAlloc.retirementTaxAdv$);
+                  quarterBrokerage = round2(quarterBrokerage + monthSavingsAlloc.brokerage$);
+                  
+                  // Update EF balance for next month
+                  currentEfBalance = round2(currentEfBalance + monthSavingsAlloc.ef$);
+                  
+                  // Update debt balances for next month (apply min payments + extra payments)
+                  // This is needed to track when debts are paid off
+                  const activeDebts = simulatedDebts.filter(d => d.balance > 0.01);
+                  if (activeDebts.length > 0) {
+                    // Sort by APR (highest first) for snowball
+                    activeDebts.sort((a, b) => b.aprPct - a.aprPct);
+                    
+                    // First, apply all minimum payments (from needs budget)
+                    for (const debt of activeDebts) {
+                      // Accrue interest first
+                      debt.balance = round2(debt.balance * (1 + debt.aprPct / 100 / 12));
+                      // Apply min payment (from needs budget, not tracked in savings table)
+                      const minPay = Math.min(debt.balance, debt.minPayment);
+                      debt.balance = round2(debt.balance - minPay);
+                    }
+                    
+                    // Then apply extra payment from savings (snowball highest APR)
+                    let extraRemaining = monthSavingsAlloc.highAprDebt$;
+                    for (const debt of activeDebts) {
+                      if (extraRemaining <= 0.01) break;
+                      if (debt.balance > 0.01) {
+                        const extraPay = Math.min(extraRemaining, debt.balance);
+                        debt.balance = round2(debt.balance - extraPay);
+                        extraRemaining = round2(extraRemaining - extraPay);
+                      }
+                      // Zero out if balance is very small
+                      if (debt.balance <= 0.01) {
+                        debt.balance = 0;
+                      }
+                    }
+                  }
+                }
+                
+                // Ensure all allocations are rounded
+                const roundedEf = round2(quarterEf);
+                const roundedDebt = round2(quarterDebt);
+                const roundedMatch = round2(quarterMatch);
+                const roundedRetirement = round2(quarterRetirement);
+                const roundedBrokerage = round2(quarterBrokerage);
+                
+                const calculatedTotal = round2(roundedEf + roundedDebt + roundedMatch + roundedRetirement + roundedBrokerage);
+                const expectedTotal = round2(incomeAlloc.savings$ * 3); // 3 months of savings budget
+                
+                // Validation: Total should equal 3 months of savings budget
+                // If there's a small discrepancy due to rounding, adjust brokerage to reconcile
+                let finalBrokerage = roundedBrokerage;
+                if (Math.abs(calculatedTotal - expectedTotal) > 0.01) {
+                  const adjustment = round2(expectedTotal - (roundedEf + roundedDebt + roundedMatch + roundedRetirement));
+                  finalBrokerage = Math.max(0, round2(roundedBrokerage + adjustment));
+                  console.warn(`Quarter ${quarterLabel}: Rounding adjustment applied. Brokerage adjusted by $${adjustment.toFixed(2)}`);
+                }
+                
+                const finalTotal = round2(roundedEf + roundedDebt + roundedMatch + roundedRetirement + finalBrokerage);
+                
+                quarters.push({
+                  quarter: quarterLabel,
+                  ef$: roundedEf,
+                  highAprDebt$: roundedDebt,
+                  match401k$: roundedMatch,
+                  retirementTaxAdv$: roundedRetirement,
+                  brokerage$: finalBrokerage,
+                  total$: finalTotal,
+                });
+              }
+              
+              // Simulate
+              const simInput = {
+                startDate: '2026-01-01',
+                horizonMonths: 480,
+                cashYieldPct: cashYield,
+                nominalReturnPct: nominalReturn,
+                taxDragBrokeragePct: taxDrag,
+                openingBalances: {
+                  cash: openingCash,
+                  brokerage: openingBrokerage,
+                  retirement: openingRetirement,
+                  liabilities,
+                },
+                goals: { efTarget$: efTarget },
+              };
+              
+              const simSeries = simulateScenario(simInput, monthlyPlan);
+              
+              return { series: simSeries, kpis: simSeries.kpis, quarterlyAllocations: quarters, incomeAlloc };
+            } catch (e) {
+              setError(e.message);
+              return { series: null, kpis: {}, quarterlyAllocations: [], incomeAlloc: null };
+            }
+          }, [
+            income, targetNeeds, targetWants, targetSavings, actualNeeds, actualWants, actualSavings, shiftLimit,
+            efTarget, efBalance, debts, matchNeed, incomeSingle, onIDR, liquidity, retirementFocus, iraRoom, k401Room,
+            openingCash, openingBrokerage, openingRetirement, cashYield, nominalReturn, taxDrag
+          ]);
+          
+          // Save current scenario
+          const saveScenario = () => {
+            if (!newScenarioName.trim()) {
+              alert('Please enter a scenario name');
+              return;
+            }
+            
+            const scenarioData = {
+              name: newScenarioName.trim(),
+              active: true,
+              inputs: {
+                income, targetNeeds, targetWants, targetSavings,
+                actualNeeds, actualWants, actualSavings, shiftLimit,
+                efTarget, efBalance, debts: debts.map(d => ({ ...d })),
+                matchNeed, incomeSingle, onIDR, liquidity, retirementFocus,
+                iraRoom, k401Room, openingCash, openingBrokerage, openingRetirement,
+                cashYield, nominalReturn, taxDrag,
+              },
+              series: series,
+            };
+            
+            setScenarios([...scenarios, scenarioData]);
+            setNewScenarioName('');
+          };
+          
+          // Toggle scenario visibility
+          const toggleScenario = (index) => {
+            const updated = [...scenarios];
+            updated[index].active = !updated[index].active;
+            setScenarios(updated);
+          };
+          
+          // Delete scenario
+          const deleteScenario = (index) => {
+            setScenarios(scenarios.filter((_, i) => i !== index));
+          };
+          
+          // Calculate scenario series
+          // Each scenario uses the engine functions to recalculate allocations from saved inputs
+          const scenarioSeries = useMemo(() => {
+            if (!scenarios || scenarios.length === 0) return [];
+            
+            return scenarios.map(scenario => {
+              if (scenario.series) return scenario;
+              if (!scenario.inputs) return scenario;
+              
+              try {
+                const s = scenario.inputs;
+                // Using engine functions for consistency
+                const incomeAlloc = allocateIncome({
+                  incomePeriod$: s.income,
+                  targets: { needsPct: s.targetNeeds/100, wantsPct: s.targetWants/100, savingsPct: s.targetSavings/100 },
+                  actuals3m: { needsPct: s.actualNeeds/100, wantsPct: s.actualWants/100, savingsPct: s.actualSavings/100 },
+                  shiftLimitPct: s.shiftLimit/100,
+                });
+                
+                const highAprDebts = s.debts.map(d => ({ balance$: d.balance$, aprPct: d.aprPct }));
+                const liabilities = s.debts.map(d => ({ name: d.name, balance: d.balance$, aprPct: d.aprPct, minPayment: d.minPayment }));
+                
+                const savingsAlloc = allocateSavings({
+                  savingsBudget$: incomeAlloc.savings$,
+                  efTarget$: s.efTarget,
+                  efBalance$: s.efBalance,
+                  highAprDebts,
+                  matchNeedThisPeriod$: s.matchNeed,
+                  incomeSingle$: s.incomeSingle,
+                  onIDR: s.onIDR,
+                  liquidity: s.liquidity,
+                  retirementFocus: s.retirementFocus,
+                  iraRoomThisYear$: s.iraRoom,
+                  k401RoomThisYear$: s.k401Room,
+                });
+                
+                const monthlyPlan = [{
+                  monthIndex: 0,
+                  incomeNet: s.income,
+                  needs$: incomeAlloc.needs$,
+                  wants$: incomeAlloc.wants$,
+                  ef$: savingsAlloc.ef$,
+                  highAprDebt$: savingsAlloc.highAprDebt$,
+                  match401k$: savingsAlloc.match401k$,
+                  retirementTaxAdv$: savingsAlloc.retirementTaxAdv$,
+                  brokerage$: savingsAlloc.brokerage$,
+                }];
+                
+                const simInput = {
+                  startDate: '2026-01-01',
+                  horizonMonths: 480,
+                  cashYieldPct: s.cashYield,
+                  nominalReturnPct: s.nominalReturn,
+                  taxDragBrokeragePct: s.taxDrag,
+                  openingBalances: {
+                    cash: s.openingCash,
+                    brokerage: s.openingBrokerage,
+                    retirement: s.openingRetirement,
+                    liabilities,
+                  },
+                  goals: { efTarget$: s.efTarget },
+                };
+                
+                return { ...scenario, series: simulateScenario(simInput, monthlyPlan) };
+              } catch (e) {
+                console.error('Error calculating scenario:', e);
+                return { ...scenario, series: null };
+              }
+            });
+          }, [scenarios]);
+          
+          return React.createElement('div', { className: 'container' },
+            React.createElement('h1', null, 'Net Worth Simulator'),
+            React.createElement('p', { className: 'subtitle' }, 'Interactive 40-year projection with Income & Savings Allocation engines'),
+            
+            error && React.createElement('div', { className: 'error' }, `Error: ${error}`),
+            
+            React.createElement('div', { className: 'layout' },
+              // Form Panel
+              React.createElement('div', { className: 'form-panel' },
+                React.createElement('div', { className: 'form-section' },
+                  React.createElement('h3', null, 'Income Allocation'),
+                  React.createElement('div', { className: 'form-group' },
+                    React.createElement('label', null, 'Monthly Net Income ($)'),
+                    React.createElement('input', { type: 'number', value: income, onChange: e => setIncome(parseFloat(e.target.value) || 0) })
+                  ),
+                  React.createElement('div', { className: 'form-group' },
+                    React.createElement('label', null, 'Targets (%)'),
+                    React.createElement('div', { className: 'form-row' },
+                      React.createElement('div', { className: 'form-group' },
+                        React.createElement('label', null, 'Needs'),
+                        React.createElement('input', { type: 'number', value: targetNeeds, onChange: e => setTargetNeeds(parseFloat(e.target.value) || 0) })
+                      ),
+                      React.createElement('div', { className: 'form-group' },
+                        React.createElement('label', null, 'Wants'),
+                        React.createElement('input', { type: 'number', value: targetWants, onChange: e => setTargetWants(parseFloat(e.target.value) || 0) })
+                      ),
+                      React.createElement('div', { className: 'form-group' },
+                        React.createElement('label', null, 'Savings'),
+                        React.createElement('input', { type: 'number', value: targetSavings, onChange: e => setTargetSavings(parseFloat(e.target.value) || 0) })
+                      )
+                    )
+                  ),
+                  React.createElement('div', { className: 'form-group' },
+                    React.createElement('label', null, '3-Month Actuals (%)'),
+                    React.createElement('div', { className: 'form-row' },
+                      React.createElement('div', { className: 'form-group' },
+                        React.createElement('label', null, 'Needs'),
+                        React.createElement('input', { type: 'number', value: actualNeeds, onChange: e => setActualNeeds(parseFloat(e.target.value) || 0) })
+                      ),
+                      React.createElement('div', { className: 'form-group' },
+                        React.createElement('label', null, 'Wants'),
+                        React.createElement('input', { type: 'number', value: actualWants, onChange: e => setActualWants(parseFloat(e.target.value) || 0) })
+                      ),
+                      React.createElement('div', { className: 'form-group' },
+                        React.createElement('label', null, 'Savings'),
+                        React.createElement('input', { type: 'number', value: actualSavings, onChange: e => setActualSavings(parseFloat(e.target.value) || 0) })
+                      )
+                    )
+                  ),
+                  React.createElement('div', { className: 'form-group' },
+                    React.createElement('label', null, 'Shift Limit (%)'),
+                    React.createElement('input', { type: 'number', value: shiftLimit, onChange: e => setShiftLimit(parseFloat(e.target.value) || 0), step: 0.1 })
+                  ),
+                  series && React.createElement('div', { className: 'form-group', style: { marginTop: '16px', padding: '12px', backgroundColor: '#f3f4f6', borderRadius: '8px' } },
+                    React.createElement('h4', { style: { margin: '0 0 8px 0', fontSize: '14px', fontWeight: '600', color: '#374151' } }, 'Allocated Amounts (Monthly):'),
+                    React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '4px' } },
+                      React.createElement('span', { style: { color: '#6b7280' } }, 'Needs:'),
+                      React.createElement('span', { style: { fontWeight: '600', color: '#1f2937' } }, `$${incomeAlloc?.needs$?.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) || '0'}`)
+                    ),
+                    React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '4px' } },
+                      React.createElement('span', { style: { color: '#6b7280' } }, 'Wants:'),
+                      React.createElement('span', { style: { fontWeight: '600', color: '#1f2937' } }, `$${incomeAlloc?.wants$?.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) || '0'}`)
+                    ),
+                    React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '4px' } },
+                      React.createElement('span', { style: { color: '#6b7280' } }, 'Savings:'),
+                      React.createElement('span', { style: { fontWeight: '600', color: '#10b981' } }, `$${incomeAlloc?.savings$?.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) || '0'}`)
+                    ),
+                    incomeAlloc?.notes && incomeAlloc.notes.length > 0 && React.createElement('div', { style: { marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e5e7eb', fontSize: '12px', color: '#6b7280' } },
+                      incomeAlloc.notes.map((note, idx) => React.createElement('div', { key: idx }, note))
+                    )
+                  )
+                ),
+                
+                React.createElement('div', { className: 'form-section' },
+                  React.createElement('h3', null, 'Savings Allocation'),
+                  React.createElement('div', { className: 'form-group' },
+                    React.createElement('label', null, 'EF Target ($)'),
+                    React.createElement('input', { type: 'number', value: efTarget, onChange: e => setEfTarget(parseFloat(e.target.value) || 0) })
+                  ),
+                  React.createElement('div', { className: 'form-group' },
+                    React.createElement('label', null, 'EF Current Balance ($)'),
+                    React.createElement('input', { type: 'number', value: efBalance, onChange: e => setEfBalance(parseFloat(e.target.value) || 0) })
+                  ),
+                  React.createElement('div', { className: 'form-group' },
+                    React.createElement('label', null, '401(k) Match Needed ($/month)'),
+                    React.createElement('input', { type: 'number', value: matchNeed, onChange: e => setMatchNeed(parseFloat(e.target.value) || 0) })
+                  ),
+                  React.createElement('div', { className: 'form-group' },
+                    React.createElement('label', null, 'High-APR Debts'),
+                    ...debts.map((debt, idx) =>
+                      React.createElement('div', { key: idx, className: 'debt-item' },
+                        React.createElement('div', { className: 'debt-item-header' },
+                          React.createElement('strong', null, debt.name),
+                          React.createElement('button', { className: 'btn-remove', onClick: () => setDebts(debts.filter((_, i) => i !== idx)) }, 'Remove')
+                        ),
+                        React.createElement('div', { className: 'form-row' },
+                          React.createElement('div', { className: 'form-group' },
+                            React.createElement('label', null, 'Balance ($)'),
+                            React.createElement('input', { type: 'number', value: debt.balance$, onChange: e => {
+                              const newDebts = [...debts];
+                              newDebts[idx].balance$ = parseFloat(e.target.value) || 0;
+                              setDebts(newDebts);
+                            }})
+                          ),
+                          React.createElement('div', { className: 'form-group' },
+                            React.createElement('label', null, 'APR (%)'),
+                            React.createElement('input', { type: 'number', value: debt.aprPct, onChange: e => {
+                              const newDebts = [...debts];
+                              newDebts[idx].aprPct = parseFloat(e.target.value) || 0;
+                              setDebts(newDebts);
+                            }})
+                          ),
+                          React.createElement('div', { className: 'form-group' },
+                            React.createElement('label', null, 'Min Payment ($)'),
+                            React.createElement('input', { type: 'number', value: debt.minPayment, onChange: e => {
+                              const newDebts = [...debts];
+                              newDebts[idx].minPayment = parseFloat(e.target.value) || 0;
+                              setDebts(newDebts);
+                            }})
+                          )
+                        )
+                      )
+                    ),
+                    React.createElement('button', { className: 'btn-add', onClick: () => setDebts([...debts, { name: 'New Debt', balance$: 1000, aprPct: 15, minPayment: 50 }]) }, '+ Add Debt')
+                  ),
+                  React.createElement('div', { className: 'form-group' },
+                    React.createElement('label', null, 'Single Filer Income ($)'),
+                    React.createElement('input', { type: 'number', value: incomeSingle, onChange: e => setIncomeSingle(parseFloat(e.target.value) || 0) })
+                  ),
+                  React.createElement('div', { className: 'form-group' },
+                    React.createElement('label', null,
+                      React.createElement('input', { type: 'checkbox', checked: onIDR, onChange: e => setOnIDR(e.target.checked) }),
+                      React.createElement('span', { style: { marginLeft: '8px' } }, 'On IDR (Income-Driven Repayment)')
+                    )
+                  ),
+                  React.createElement('div', { className: 'form-row' },
+                    React.createElement('div', { className: 'form-group' },
+                      React.createElement('label', null, 'Liquidity Need'),
+                      React.createElement('select', { value: liquidity, onChange: e => setLiquidity(e.target.value) },
+                        React.createElement('option', { value: 'High' }, 'High'),
+                        React.createElement('option', { value: 'Medium' }, 'Medium'),
+                        React.createElement('option', { value: 'Low' }, 'Low')
+                      )
+                    ),
+                    React.createElement('div', { className: 'form-group' },
+                      React.createElement('label', null, 'Retirement Focus'),
+                      React.createElement('select', { value: retirementFocus, onChange: e => setRetirementFocus(e.target.value) },
+                        React.createElement('option', { value: 'High' }, 'High'),
+                        React.createElement('option', { value: 'Medium' }, 'Medium'),
+                        React.createElement('option', { value: 'Low' }, 'Low')
+                      )
+                    )
+                  ),
+                  React.createElement('div', { className: 'form-row' },
+                    React.createElement('div', { className: 'form-group' },
+                      React.createElement('label', null, 'IRA Room This Year ($)'),
+                      React.createElement('input', { type: 'number', value: iraRoom, onChange: e => setIraRoom(parseFloat(e.target.value) || 0) })
+                    ),
+                    React.createElement('div', { className: 'form-group' },
+                      React.createElement('label', null, '401(k) Room This Year ($)'),
+                      React.createElement('input', { type: 'number', value: k401Room, onChange: e => setK401Room(parseFloat(e.target.value) || 0) })
+                    )
+                  )
+                ),
+                
+                React.createElement('div', { className: 'form-section' },
+                  React.createElement('h3', null, 'Opening Balances & Assumptions'),
+                  React.createElement('div', { className: 'form-row' },
+                    React.createElement('div', { className: 'form-group' },
+                      React.createElement('label', null, 'Cash ($)'),
+                      React.createElement('input', { type: 'number', value: openingCash, onChange: e => setOpeningCash(parseFloat(e.target.value) || 0) })
+                    ),
+                    React.createElement('div', { className: 'form-group' },
+                      React.createElement('label', null, 'Brokerage ($)'),
+                      React.createElement('input', { type: 'number', value: openingBrokerage, onChange: e => setOpeningBrokerage(parseFloat(e.target.value) || 0) })
+                    ),
+                    React.createElement('div', { className: 'form-group' },
+                      React.createElement('label', null, 'Retirement ($)'),
+                      React.createElement('input', { type: 'number', value: openingRetirement, onChange: e => setOpeningRetirement(parseFloat(e.target.value) || 0) })
+                    )
+                  ),
+                  React.createElement('div', { className: 'form-row' },
+                    React.createElement('div', { className: 'form-group' },
+                      React.createElement('label', null, 'Cash Yield (%)'),
+                      React.createElement('input', { type: 'number', value: cashYield, onChange: e => setCashYield(parseFloat(e.target.value) || 0), step: 0.1 })
+                    ),
+                    React.createElement('div', { className: 'form-group' },
+                      React.createElement('label', null, 'Investment Return (%)'),
+                      React.createElement('input', { type: 'number', value: nominalReturn, onChange: e => setNominalReturn(parseFloat(e.target.value) || 0), step: 0.1 })
+                    ),
+                    React.createElement('div', { className: 'form-group' },
+                      React.createElement('label', null, 'Tax Drag (%)'),
+                      React.createElement('input', { type: 'number', value: taxDrag, onChange: e => setTaxDrag(parseFloat(e.target.value) || 0), step: 0.1 })
+                    )
+                  )
+                ),
+                
+                React.createElement('div', { className: 'form-section scenario-section' },
+                  React.createElement('h3', null, 'Scenarios'),
+                  React.createElement('div', { className: 'form-group' },
+                    React.createElement('label', null, 'Scenario Name'),
+                    React.createElement('input', {
+                      type: 'text',
+                      className: 'scenario-input',
+                      placeholder: 'e.g., "Higher Income", "Aggressive Savings"',
+                      value: newScenarioName,
+                      onChange: e => setNewScenarioName(e.target.value),
+                      onKeyPress: e => { if (e.key === 'Enter') saveScenario(); }
+                    })
+                  ),
+                  React.createElement('button', {
+                    className: 'btn-save-scenario',
+                    onClick: saveScenario,
+                  }, 'Save Current as Scenario'),
+                  scenarios.length > 0 && React.createElement('div', { className: 'scenario-list' },
+                    React.createElement('h4', { style: { marginTop: '16px', marginBottom: '12px', fontSize: '14px', fontWeight: '600', color: '#374151' } }, 'Compare Scenarios:'),
+                    scenarios.map((scenario, idx) =>
+                      React.createElement('div', { key: idx, className: 'scenario-item' },
+                        React.createElement('input', {
+                          type: 'checkbox',
+                          checked: scenario.active || false,
+                          onChange: () => toggleScenario(idx),
+                        }),
+                        React.createElement('span', { className: 'scenario-name' }, scenario.name),
+                        React.createElement('button', {
+                          className: 'btn-delete-scenario',
+                          onClick: () => deleteScenario(idx),
+                        }, 'Delete')
+                      )
+                    )
+                  )
+                )
+              ),
+              
+              // Chart Panel
+              React.createElement('div', { className: 'chart-panel' },
+                series ? React.createElement(NetWorthChart, {
+                  series, 
+                  visibleYears,
+                  scenarios: scenarioSeries,
+                  onTimeRangeChange: (range) => {
+                    // Map time range to years for the main simulation
+                    const rangeMap = { '1Y': 1, '5Y': 5, '10Y': 10, '20Y': 20, '40Y': 40, 'ALL': 40 };
+                    if (rangeMap[range] && rangeMap[range] !== visibleYears) {
+                      setVisibleYears(rangeMap[range]);
+                    }
+                  }
+                }) : React.createElement('div', { style: { padding: '40px', textAlign: 'center' } }, 'Calculating...'),
+                series && React.createElement('div', { className: 'kpi-grid' },
+                  kpis.efReachedMonth !== undefined && React.createElement('div', { className: 'kpi-card' },
+                    React.createElement('div', { className: 'kpi-label' }, 'EF Reached'),
+                    React.createElement('div', { className: 'kpi-value' }, `Month ${kpis.efReachedMonth + 1}`)
+                  ),
+                  kpis.debtFreeMonth !== undefined && React.createElement('div', { className: 'kpi-card' },
+                    React.createElement('div', { className: 'kpi-label' }, 'Debt-Free'),
+                    React.createElement('div', { className: 'kpi-value' }, `Month ${kpis.debtFreeMonth + 1}`)
+                  ),
+                  kpis.netWorthAtYears[10] !== undefined && React.createElement('div', { className: 'kpi-card' },
+                    React.createElement('div', { className: 'kpi-label' }, 'Net Worth at 10Y'),
+                    React.createElement('div', { className: 'kpi-value' }, `$${kpis.netWorthAtYears[10].toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`)
+                  ),
+                  kpis.cagrNominal !== undefined && React.createElement('div', { className: 'kpi-card' },
+                    React.createElement('div', { className: 'kpi-label' }, 'CAGR'),
+                    React.createElement('div', { className: 'kpi-value' }, `${kpis.cagrNominal.toFixed(2)}%`)
+                  )
+                ),
+                quarterlyAllocations && quarterlyAllocations.length > 0 && React.createElement('div', { className: 'allocation-table' },
+                  React.createElement('h3', null, 'Savings Allocation by Quarter (First 5 Years)'),
+                  React.createElement('table', null,
+                    React.createElement('thead', null,
+                      React.createElement('tr', null,
+                        React.createElement('th', null, 'Quarter'),
+                        React.createElement('th', { style: { textAlign: 'right' } }, 'EF'),
+                        React.createElement('th', { style: { textAlign: 'right' } }, 'Debt'),
+                        React.createElement('th', { style: { textAlign: 'right' } }, '401(k) Match'),
+                        React.createElement('th', { style: { textAlign: 'right' } }, 'Retirement'),
+                        React.createElement('th', { style: { textAlign: 'right' } }, 'Brokerage'),
+                        React.createElement('th', { style: { textAlign: 'right' } }, 'Total')
+                      )
+                    ),
+                    React.createElement('tbody', null,
+                      quarterlyAllocations.map((q, idx) =>
+                        React.createElement('tr', { key: idx },
+                          React.createElement('td', { className: 'quarter-label' }, q.quarter),
+                          React.createElement('td', { className: 'number' }, `$${q.ef$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`),
+                          React.createElement('td', { className: 'number' }, `$${q.highAprDebt$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`),
+                          React.createElement('td', { className: 'number' }, `$${q.match401k$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`),
+                          React.createElement('td', { className: 'number' }, `$${q.retirementTaxAdv$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`),
+                          React.createElement('td', { className: 'number' }, `$${q.brokerage$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`),
+                          React.createElement('td', { className: 'number', style: { fontWeight: '600' } }, `$${q.total$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`)
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(React.createElement(App));
+      } catch (error) {
+        document.getElementById('root').innerHTML = `
+          <div class="container">
+            <div class="error">
+              <h2>Error Initializing Application</h2>
+              <p>${error.message}</p>
+            </div>
+          </div>
+        `;
+        console.error('App initialization error:', error);
+      }
+    }
+    
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initApp);
+    } else {
+      initApp();
+    }
+  </script>
+</body>
+</html>
+

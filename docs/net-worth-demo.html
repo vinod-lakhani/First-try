@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Net Worth Simulator - Standalone Demo</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+        'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+        sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      background-color: #f5f5f5;
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    h1 {
+      font-size: 32px;
+      font-weight: bold;
+      margin-bottom: 8px;
+      color: #1f2937;
+    }
+    
+    .subtitle {
+      color: #6b7280;
+      margin-bottom: 32px;
+    }
+    
+    .controls {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 24px;
+      padding: 12px;
+      background-color: #f9fafb;
+      border-radius: 8px;
+    }
+    
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .control-group label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    
+    .control-group input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+    
+    .timeline-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      background-color: #f5f5f5;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    
+    .timeline-controls label {
+      font-weight: 600;
+      font-size: 14px;
+    }
+    
+    .timeline-buttons {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .timeline-button {
+      padding: 8px 16px;
+      border: 2px solid #d1d5db;
+      border-radius: 6px;
+      background: white;
+      color: #374151;
+      font-weight: 400;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    
+    .timeline-button:hover {
+      background-color: #f3f4f6;
+    }
+    
+    .timeline-button.active {
+      border-color: #2563eb;
+      background-color: #2563eb;
+      color: white;
+      font-weight: 600;
+    }
+    
+    .chart-container {
+      width: 100%;
+      height: 500px;
+      position: relative;
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      margin-bottom: 32px;
+    }
+    
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+      margin-bottom: 32px;
+    }
+    
+    .kpi-card {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      border-left: 4px solid #2563eb;
+    }
+    
+    .kpi-card.variant {
+      border-left-color: #10b981;
+    }
+    
+    .kpi-card h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #2563eb;
+    }
+    
+    .kpi-card.variant h3 {
+      color: #10b981;
+    }
+    
+    .kpi-item {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    .kpi-label {
+      color: #6b7280;
+      font-size: 14px;
+    }
+    
+    .kpi-value {
+      font-size: 20px;
+      font-weight: 600;
+    }
+    
+    .warnings {
+      background-color: #fef3c7;
+      padding: 16px;
+      border-radius: 8px;
+      border-left: 4px solid #f59e0b;
+    }
+    
+    .warnings h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    
+    .warnings ul {
+      margin: 0;
+      padding-left: 20px;
+      color: #92400e;
+    }
+    
+    .warnings li {
+      margin-bottom: 8px;
+    }
+    
+    .error {
+      background-color: #fee2e2;
+      padding: 16px;
+      border-radius: 8px;
+      border-left: 4px solid #ef4444;
+      color: #991b1b;
+    }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div class="container">
+      <h1>Loading Net Worth Simulator...</h1>
+      <p>Please wait while the application loads.</p>
+    </div>
+  </div>
+
+  <script>
+    // Wait for all libraries to load
+    let loadAttempts = 0;
+    const maxAttempts = 50; // 5 seconds max wait
+    
+    function initApp() {
+      loadAttempts++;
+      
+      // Check if libraries are loaded
+      const reactLoaded = typeof React !== 'undefined';
+      const reactDomLoaded = typeof ReactDOM !== 'undefined';
+      const chartLoaded = typeof Chart !== 'undefined';
+      
+      console.log('Loading check:', {
+        React: reactLoaded,
+        ReactDOM: reactDomLoaded,
+        Chart: chartLoaded,
+        attempt: loadAttempts
+      });
+      
+      if (!reactLoaded || !reactDomLoaded || !chartLoaded) {
+        if (loadAttempts < maxAttempts) {
+          setTimeout(initApp, 100);
+          return;
+        } else {
+          // Timeout - show error
+          document.getElementById('root').innerHTML = `
+            <div class="container">
+              <div class="error">
+                <h2>Error Loading Libraries</h2>
+                <p>Failed to load required libraries after ${maxAttempts} attempts.</p>
+                <p>Status: React=${reactLoaded}, ReactDOM=${reactDomLoaded}, Chart=${chartLoaded}</p>
+                <p>Please check your internet connection and refresh the page.</p>
+              </div>
+            </div>
+          `;
+          return;
+        }
+      }
+      
+      try {
+        console.log('All libraries loaded, initializing app...');
+        
+        // All libraries loaded, run the app
+        (function() {
+          'use strict';
+          
+          const { useState, useMemo, useEffect, useRef } = React;
+          
+          // Register Chart.js components
+          if (Chart && Chart.register) {
+            Chart.register(
+              Chart.LinearScale,
+              Chart.CategoryScale,
+              Chart.PointElement,
+              Chart.LineElement,
+              Chart.Title,
+              Chart.Tooltip,
+              Chart.Legend,
+              Chart.Filler
+            );
+            console.log('Chart.js registered');
+          }
+
+        // Round helper function
+        function round2(n) {
+          return Math.round(n * 100) / 100;
+        }
+
+        // Build month labels
+        function buildMonthLabels(startDate, months) {
+          const start = new Date(startDate);
+          const labels = [];
+          for (let i = 0; i < months; i++) {
+            const date = new Date(start);
+            date.setMonth(start.getMonth() + i);
+            const monthName = date.toLocaleDateString('en-US', { month: 'short' });
+            const year = date.getFullYear();
+            labels.push(`${monthName} ${year}`);
+          }
+          return labels;
+        }
+
+        // Clone liabilities
+        function cloneLiabilities(liabilities) {
+          return liabilities.map(liab => ({ ...liab, balance: liab.balance }));
+        }
+
+        // Apply extra payment (snowball)
+        function applyExtraPayment(debts, extraPayment$) {
+          if (extraPayment$ <= 0.01 || debts.length === 0) return 0;
+          
+          const activeDebts = debts
+            .filter(d => d.balance > 0.01)
+            .sort((a, b) => b.aprPct - a.aprPct);
+          
+          let remaining = extraPayment$;
+          for (const debt of activeDebts) {
+            if (remaining <= 0.01) break;
+            const payment = Math.min(remaining, debt.balance);
+            debt.balance = round2(debt.balance - payment);
+            remaining = round2(remaining - payment);
+          }
+          return round2(extraPayment$ - remaining);
+        }
+
+        // Sum liabilities
+        function sumLiabilities(debts) {
+          return round2(debts.reduce((sum, d) => sum + Math.max(0, d.balance), 0));
+        }
+
+        // Compute KPIs
+        function computeKPIs(series, efTarget$) {
+          const months = series.netWorth.length;
+          
+          if (efTarget$ !== undefined) {
+            for (let i = 0; i < months; i++) {
+              if (series.cash[i] >= efTarget$) {
+                series.kpis.efReachedMonth = i;
+                break;
+              }
+            }
+          }
+          
+          for (let i = 0; i < months; i++) {
+            if (series.liabilities[i] <= 0.01) {
+              series.kpis.debtFreeMonth = i;
+              break;
+            }
+          }
+          
+          [5, 10, 20, 40].forEach(years => {
+            const monthIndex = years * 12;
+            if (monthIndex < months) {
+              series.kpis.netWorthAtYears[years] = round2(series.netWorth[monthIndex]);
+            }
+          });
+          
+          if (months > 12) {
+            const startNW = series.netWorth[0];
+            const endNW = series.netWorth[months - 1];
+            if (startNW > 0 && endNW > 0) {
+              const years = months / 12;
+              const cagr = (Math.pow(endNW / startNW, 1 / years) - 1) * 100;
+              series.kpis.cagrNominal = round2(cagr);
+            }
+          }
+        }
+
+        // Main simulation function
+        function simulateScenario(input) {
+          const months = input.horizonMonths || 480;
+          const labels = buildMonthLabels(input.startDate, months);
+          
+          let cash = round2(input.openingBalances.cash);
+          let brokerage = round2(input.openingBalances.brokerage);
+          let retirement = round2(input.openingBalances.retirement);
+          let hsa = round2(input.openingBalances.hsa || 0);
+          let otherAssets = round2(input.openingBalances.otherAssets || 0);
+          
+          const debts = cloneLiabilities(input.openingBalances.liabilities);
+          
+          const series = {
+            labels,
+            assets: new Array(months).fill(0),
+            liabilities: new Array(months).fill(0),
+            netWorth: new Array(months).fill(0),
+            cash: new Array(months).fill(0),
+            brokerage: new Array(months).fill(0),
+            retirement: new Array(months).fill(0),
+            kpis: { netWorthAtYears: {} },
+            warnings: [],
+          };
+          
+          if (hsa > 0 || input.openingBalances.hsa !== undefined) {
+            series.hsa = new Array(months).fill(0);
+          }
+          
+          const cashYield = (input.cashYieldPct || 4.0) / 100 / 12;
+          const nominalReturn = (input.nominalReturnPct || 6.0) / 100 / 12;
+          const taxDrag = (input.taxDragBrokeragePct || 0.5) / 100 / 12;
+          const brokerageReturn = nominalReturn - taxDrag;
+          const efTarget$ = input.goals?.efTarget$;
+          
+          for (let t = 0; t < months; t++) {
+            const plan = input.monthlyPlan[t] || input.monthlyPlan[0];
+            
+            cash = round2(cash * (1 + cashYield));
+            brokerage = round2(brokerage * (1 + brokerageReturn));
+            retirement = round2(retirement * (1 + nominalReturn));
+            if (hsa > 0) {
+              hsa = round2(hsa * (1 + nominalReturn));
+            }
+            
+            cash = round2(cash + plan.ef$);
+            brokerage = round2(brokerage + plan.brokerage$);
+            retirement = round2(retirement + plan.match401k$ + plan.retirementTaxAdv$);
+            
+            let totalMinPayment = 0;
+            let totalExtraPayment = plan.highAprDebt$;
+            
+            for (const debt of debts) {
+              if (debt.balance <= 0.01) continue;
+              debt.balance = round2(debt.balance * (1 + debt.aprPct / 100 / 12));
+              const minPay = Math.min(debt.balance, debt.minPayment);
+              debt.balance = round2(debt.balance - minPay);
+              totalMinPayment = round2(totalMinPayment + minPay);
+            }
+            
+            const extraPaid = applyExtraPayment(debts, totalExtraPayment);
+            
+            if (totalExtraPayment > extraPaid && extraPaid > 0) {
+              const redirected = round2(totalExtraPayment - extraPaid);
+              brokerage = round2(brokerage + redirected);
+              if (t === 0 || !series.warnings.some(w => w.includes('debt paid off'))) {
+                series.warnings.push(`Month ${t + 1}: Debt paid off, redirected $${redirected.toFixed(2)} to brokerage`);
+              }
+            }
+            
+            const totalOutflows = round2(plan.needs$ + plan.wants$ + totalMinPayment + extraPaid);
+            
+            if (cash < totalOutflows) {
+              const shortfall = round2(totalOutflows - cash);
+              series.warnings.push(
+                `Month ${t + 1}: Cash shortfall of $${shortfall.toFixed(2)}. Payments capped at available cash.`
+              );
+              cash = 0;
+            } else {
+              cash = round2(cash - totalOutflows);
+            }
+            
+            cash = Math.max(0, cash);
+            brokerage = Math.max(0, brokerage);
+            retirement = Math.max(0, retirement);
+            hsa = Math.max(0, hsa);
+            
+            const totalLiabilities = sumLiabilities(debts);
+            const totalAssets = round2(cash + brokerage + retirement + hsa + otherAssets);
+            
+            series.cash[t] = cash;
+            series.brokerage[t] = brokerage;
+            series.retirement[t] = retirement;
+            if (series.hsa) {
+              series.hsa[t] = hsa;
+            }
+            series.assets[t] = totalAssets;
+            series.liabilities[t] = totalLiabilities;
+            series.netWorth[t] = round2(totalAssets - totalLiabilities);
+          }
+          
+          computeKPIs(series, efTarget$);
+          return series;
+        }
+
+        // Net Worth Chart Component (using Chart.js directly)
+        function NetWorthChart({ scenarios, visibleYears, showAssets, showLiabilities }) {
+          const canvasRef = useRef(null);
+          const chartRef = useRef(null);
+          
+          const chartData = useMemo(() => {
+            const monthsToShow = visibleYears * 12;
+            const datasets = [];
+            
+            scenarios.forEach((scenario, idx) => {
+              const labels = scenario.series.labels.slice(0, monthsToShow);
+              const netWorth = scenario.series.netWorth.slice(0, monthsToShow);
+              
+              datasets.push({
+                label: `${scenario.name} - Net Worth`,
+                data: netWorth,
+                borderColor: scenario.color,
+                backgroundColor: `${scenario.color}20`,
+                borderWidth: 3,
+                fill: false,
+                tension: 0.1,
+                pointRadius: 0,
+                pointHoverRadius: 6,
+                order: idx * 3,
+              });
+              
+              if (showAssets) {
+                datasets.push({
+                  label: `${scenario.name} - Assets`,
+                  data: scenario.series.assets.slice(0, monthsToShow),
+                  borderColor: `${scenario.color}80`,
+                  backgroundColor: `${scenario.color}10`,
+                  borderWidth: 2,
+                  borderDash: [5, 5],
+                  fill: false,
+                  tension: 0.1,
+                  pointRadius: 0,
+                  pointHoverRadius: 4,
+                  order: idx * 3 + 1,
+                });
+              }
+              
+              if (showLiabilities) {
+                datasets.push({
+                  label: `${scenario.name} - Liabilities`,
+                  data: scenario.series.liabilities.slice(0, monthsToShow),
+                  borderColor: `${scenario.color}60`,
+                  backgroundColor: `${scenario.color}08`,
+                  borderWidth: 2,
+                  borderDash: [3, 3],
+                  fill: false,
+                  tension: 0.1,
+                  pointRadius: 0,
+                  pointHoverRadius: 4,
+                  order: idx * 3 + 2,
+                });
+              }
+            });
+            
+            return {
+              labels: scenarios[0]?.series.labels.slice(0, monthsToShow) || [],
+              datasets,
+            };
+          }, [scenarios, visibleYears, showAssets, showLiabilities]);
+          
+          const options = useMemo(() => ({
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+              legend: {
+                position: 'top',
+                labels: { usePointStyle: true, padding: 15 },
+              },
+              title: {
+                display: true,
+                text: `Net Worth Projection (${visibleYears} Years)`,
+                font: { size: 18, weight: 'bold' },
+                padding: { bottom: 20 },
+              },
+              tooltip: {
+                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                padding: 12,
+                titleFont: { size: 14, weight: 'bold' },
+                bodyFont: { size: 13 },
+                callbacks: {
+                  label: function(context) {
+                    const value = context.parsed.y;
+                    return `${context.dataset.label}: $${value.toLocaleString('en-US', {
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 0,
+                    })}`;
+                  },
+                },
+              },
+            },
+            scales: {
+              x: {
+                title: { display: true, text: 'Time' },
+                ticks: { maxRotation: 45, minRotation: 45 },
+              },
+              y: {
+                title: { display: true, text: 'Dollars ($)' },
+                ticks: {
+                  callback: function(value) {
+                    return '$' + value.toLocaleString('en-US', {
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 0,
+                    });
+                  },
+                },
+              },
+            },
+          }), [visibleYears]);
+          
+          useEffect(() => {
+            if (!canvasRef.current) return;
+            
+            const ctx = canvasRef.current.getContext('2d');
+            
+            // Destroy existing chart if it exists
+            if (chartRef.current) {
+              chartRef.current.destroy();
+            }
+            
+            // Create new chart
+            chartRef.current = new Chart(ctx, {
+              type: 'line',
+              data: chartData,
+              options: options,
+            });
+            
+            // Cleanup on unmount
+            return () => {
+              if (chartRef.current) {
+                chartRef.current.destroy();
+              }
+            };
+          }, [chartData, options]);
+          
+          return React.createElement('canvas', { ref: canvasRef });
+        }
+
+        // Timeline Controls Component
+        function TimelineControls({ visibleYears, onChange }) {
+          const options = [5, 10, 20, 40];
+          
+          return React.createElement('div', { className: 'timeline-controls' },
+            React.createElement('label', null, 'Time Horizon:'),
+            React.createElement('div', { className: 'timeline-buttons' },
+              options.map((years) =>
+                React.createElement('button', {
+                  key: years,
+                  onClick: () => onChange(years),
+                  className: `timeline-button ${visibleYears === years ? 'active' : ''}`,
+                }, `${years}Y`)
+              )
+            )
+          );
+        }
+
+        // Main App Component
+        function NetWorthDemo() {
+          const [visibleYears, setVisibleYears] = useState(40);
+          const [showBaseline, setShowBaseline] = useState(true);
+          const [showVariant, setShowVariant] = useState(true);
+          
+          const baselineInput = {
+            startDate: '2026-01-01',
+            horizonMonths: 480,
+            openingBalances: {
+              cash: 6000,
+              brokerage: 5000,
+              retirement: 15000,
+              liabilities: [
+                { name: 'Credit Card', balance: 2500, aprPct: 22, minPayment: 75 },
+              ],
+            },
+            monthlyPlan: [{
+              monthIndex: 0,
+              incomeNet: 4000,
+              needs$: 2000,
+              wants$: 1000,
+              ef$: 300,
+              highAprDebt$: 150,
+              match401k$: 100,
+              retirementTaxAdv$: 250,
+              brokerage$: 200,
+            }],
+            goals: { efTarget$: 10000 },
+          };
+          
+          const variantInput = {
+            ...baselineInput,
+            monthlyPlan: [{
+              monthIndex: 0,
+              incomeNet: 4000,
+              needs$: 1800,
+              wants$: 800,
+              ef$: 400,
+              highAprDebt$: 200,
+              match401k$: 100,
+              retirementTaxAdv$: 400,
+              brokerage$: 300,
+            }],
+          };
+          
+          const scenarios = useMemo(() => {
+            const results = [];
+            if (showBaseline) {
+              const baselineSeries = simulateScenario(baselineInput);
+              results.push({
+                name: 'Baseline',
+                series: baselineSeries,
+                color: '#2563eb',
+              });
+            }
+            if (showVariant) {
+              const variantSeries = simulateScenario(variantInput);
+              results.push({
+                name: 'Variant (Higher Savings)',
+                series: variantSeries,
+                color: '#10b981',
+              });
+            }
+            return results;
+          }, [showBaseline, showVariant]);
+          
+          const baselineKPIs = showBaseline ? scenarios.find(s => s.name === 'Baseline')?.series.kpis : null;
+          const variantKPIs = showVariant ? scenarios.find(s => s.name === 'Variant')?.series.kpis : null;
+          
+          return React.createElement('div', { className: 'container' },
+            React.createElement('h1', null, 'Net Worth Simulator'),
+            React.createElement('p', { className: 'subtitle' },
+              '40-year projection based on Income & Savings Allocation engines'
+            ),
+            React.createElement('div', { className: 'controls' },
+              React.createElement('div', { className: 'control-group' },
+                React.createElement('label', null,
+                  React.createElement('input', {
+                    type: 'checkbox',
+                    checked: showBaseline,
+                    onChange: (e) => setShowBaseline(e.target.checked),
+                  }),
+                  React.createElement('span', null, 'Baseline')
+                )
+              ),
+              React.createElement('div', { className: 'control-group' },
+                React.createElement('label', null,
+                  React.createElement('input', {
+                    type: 'checkbox',
+                    checked: showVariant,
+                    onChange: (e) => setShowVariant(e.target.checked),
+                  }),
+                  React.createElement('span', null, 'Variant (Higher Savings)')
+                )
+              )
+            ),
+            React.createElement(TimelineControls, { visibleYears, onChange: setVisibleYears }),
+            React.createElement('div', { className: 'chart-container' },
+              React.createElement(NetWorthChart, {
+                scenarios,
+                visibleYears,
+                showAssets: true,
+                showLiabilities: true,
+              })
+            ),
+            React.createElement('div', { className: 'kpi-grid' },
+              baselineKPIs && React.createElement('div', { className: 'kpi-card' },
+                React.createElement('h3', null, 'Baseline KPIs'),
+                React.createElement('div', { className: 'kpi-item' },
+                  baselineKPIs.efReachedMonth !== undefined && React.createElement('div', null,
+                    React.createElement('span', { className: 'kpi-label' }, 'EF Reached:'),
+                    React.createElement('div', { className: 'kpi-value' },
+                      `Month ${baselineKPIs.efReachedMonth + 1}`
+                    )
+                  ),
+                  baselineKPIs.debtFreeMonth !== undefined && React.createElement('div', null,
+                    React.createElement('span', { className: 'kpi-label' }, 'Debt-Free:'),
+                    React.createElement('div', { className: 'kpi-value' },
+                      `Month ${baselineKPIs.debtFreeMonth + 1}`
+                    )
+                  ),
+                  React.createElement('div', null,
+                    React.createElement('span', { className: 'kpi-label' }, 'Net Worth at 10Y:'),
+                    React.createElement('div', { className: 'kpi-value' },
+                      `$${baselineKPIs.netWorthAtYears[10]?.toLocaleString('en-US', {
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0,
+                      }) || 'N/A'}`
+                    )
+                  ),
+                  baselineKPIs.cagrNominal !== undefined && React.createElement('div', null,
+                    React.createElement('span', { className: 'kpi-label' }, 'CAGR:'),
+                    React.createElement('div', { className: 'kpi-value' },
+                      `${baselineKPIs.cagrNominal.toFixed(2)}%`
+                    )
+                  )
+                )
+              ),
+              variantKPIs && React.createElement('div', { className: 'kpi-card variant' },
+                React.createElement('h3', null, 'Variant KPIs'),
+                React.createElement('div', { className: 'kpi-item' },
+                  variantKPIs.efReachedMonth !== undefined && React.createElement('div', null,
+                    React.createElement('span', { className: 'kpi-label' }, 'EF Reached:'),
+                    React.createElement('div', { className: 'kpi-value' },
+                      `Month ${variantKPIs.efReachedMonth + 1}`
+                    )
+                  ),
+                  variantKPIs.debtFreeMonth !== undefined && React.createElement('div', null,
+                    React.createElement('span', { className: 'kpi-label' }, 'Debt-Free:'),
+                    React.createElement('div', { className: 'kpi-value' },
+                      `Month ${variantKPIs.debtFreeMonth + 1}`
+                    )
+                  ),
+                  React.createElement('div', null,
+                    React.createElement('span', { className: 'kpi-label' }, 'Net Worth at 10Y:'),
+                    React.createElement('div', { className: 'kpi-value' },
+                      `$${variantKPIs.netWorthAtYears[10]?.toLocaleString('en-US', {
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0,
+                      }) || 'N/A'}`
+                    )
+                  ),
+                  variantKPIs.cagrNominal !== undefined && React.createElement('div', null,
+                    React.createElement('span', { className: 'kpi-label' }, 'CAGR:'),
+                    React.createElement('div', { className: 'kpi-value' },
+                      `${variantKPIs.cagrNominal.toFixed(2)}%`
+                    )
+                  )
+                )
+              )
+            ),
+            scenarios.some(s => s.series.warnings.length > 0) && React.createElement('div', { className: 'warnings' },
+              React.createElement('h3', null, 'Warnings'),
+              React.createElement('ul', null,
+                scenarios.flatMap(s =>
+                  s.series.warnings.map((w, i) =>
+                    React.createElement('li', { key: `${s.name}-${i}` },
+                      React.createElement('strong', null, `${s.name}: `),
+                      w
+                    )
+                  )
+                )
+              )
+            )
+          );
+        }
+
+        // Render the app
+        console.log('Rendering app...');
+        const rootElement = document.getElementById('root');
+        if (!rootElement) {
+          throw new Error('Root element not found');
+        }
+        
+        const root = ReactDOM.createRoot(rootElement);
+        root.render(React.createElement(NetWorthDemo));
+        console.log('App rendered successfully');
+        })();
+      } catch (error) {
+        console.error('App initialization error:', error);
+        console.error('Error stack:', error.stack);
+        document.getElementById('root').innerHTML = `
+          <div class="container">
+            <div class="error">
+              <h2>Error Initializing Application</h2>
+              <p><strong>Error:</strong> ${error.message}</p>
+              <p>Please check the browser console (F12) for more details.</p>
+              <p>Stack: ${error.stack || 'N/A'}</p>
+            </div>
+          </div>
+        `;
+      }
+    }
+    
+    // Start initialization when page loads
+    console.log('Starting initialization...');
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initApp);
+    } else {
+      initApp();
+    }
+  </script>
+</body>
+</html>
