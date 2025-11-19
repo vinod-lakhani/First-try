@@ -81,7 +81,7 @@ export default function SavingsPlanPage() {
 
   const efBalance$ = useMemo(() => {
     return assets
-      .filter((a) => a.type === 'cash' || a.type === 'savings')
+      .filter((a) => a.type === 'cash')
       .reduce((sum, a) => sum + a.value$, 0);
   }, [assets]);
 

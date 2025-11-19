@@ -10,7 +10,7 @@ export default function PaycheckTimelineVisualizer() {
 
   const [variableSpentCurrent, setVariableSpentCurrent] = useState(0);
   const [isThreePaycheckMonth, setIsThreePaycheckMonth] = useState(false);
-  const [editModeTarget, setEditModeTarget] = useState(null);
+  const [editModeTarget, setEditModeTarget] = useState<string | null>(null);
   const [editableAllocations, setEditableAllocations] = useState({
     Current: { fixed, savings: initialSavings, variable: initialVariable },
     Next: { fixed, savings: initialSavings, variable: initialVariable },
@@ -32,7 +32,7 @@ export default function PaycheckTimelineVisualizer() {
     status = `🚨 Emergency fund in use! $${emergencyConsumed.toFixed(0)} used.`;
   }
 
-  const handleVariableChange = (value) => {
+  const handleVariableChange = (value: number) => {
     setVariableSpentCurrent(value);
     const overspent = value - currentAlloc.variable;
     if (overspent > 0) {
@@ -64,36 +64,42 @@ export default function PaycheckTimelineVisualizer() {
     }
   };
 
-  const handleEditChange = (category, value) => {
-    const updated = { ...editableAllocations[editModeTarget], [category]: value };
+  const handleEditChange = (category: string, value: number) => {
+    if (!editModeTarget) return;
+    const target = editModeTarget as keyof typeof editableAllocations;
+    const updated = { ...editableAllocations[target], [category]: value };
     const total = updated.fixed + updated.savings + updated.variable;
     if (total <= paycheck) {
-      setEditableAllocations((prev) => ({ ...prev, [editModeTarget]: updated }));
+      setEditableAllocations((prev) => ({ ...prev, [target]: updated }));
     }
   };
 
-  const renderEditSliders = () => (
-    <div className="space-y-2 mb-4">
-      {['fixed', 'savings', 'variable'].map((cat) => (
-        <div key={cat}>
-          <label className="block text-sm font-medium capitalize">{cat} (${editableAllocations[editModeTarget][cat]})</label>
-          <input
-            type="range"
-            min="0"
-            max={paycheck}
-            value={editableAllocations[editModeTarget][cat]}
+  const renderEditSliders = () => {
+    if (!editModeTarget) return null;
+    const target = editModeTarget as keyof typeof editableAllocations;
+    return (
+      <div className="space-y-2 mb-4">
+        {['fixed', 'savings', 'variable'].map((cat) => (
+          <div key={cat}>
+            <label className="block text-sm font-medium capitalize">{cat} (${editableAllocations[target][cat as keyof typeof editableAllocations[typeof target]]})</label>
+            <input
+              type="range"
+              min="0"
+              max={paycheck}
+              value={editableAllocations[target][cat as keyof typeof editableAllocations[typeof target]]}
             onChange={(e) => handleEditChange(cat, Number(e.target.value))}
             className="w-full"
           />
         </div>
       ))}
-      {(editableAllocations[editModeTarget].fixed < fixed) && (
+      {(editableAllocations[target].fixed < fixed) && (
         <div className="text-xs text-red-600">⚠️ Fixed budget is below your recommended amount (${fixed}).</div>
       )}
-    </div>
-  );
+      </div>
+    );
+  };
 
-  const buildSections = (spent, label, savingsBudget, variableBudget, isLocked = false, editable = null, hidden = false) => {
+  const buildSections = (spent: number, label: string, savingsBudget: number, variableBudget: number, isLocked = false, editable: { fixed: number; savings: number; variable: number } | null = null, hidden = false) => {
     if (hidden) {
       return (
         <div className="text-center h-64 w-16 mx-auto opacity-0 pointer-events-none">
@@ -115,7 +121,7 @@ export default function PaycheckTimelineVisualizer() {
     const emergencyConsumed = Math.max(spent - (effectiveVariable + effectiveSavings), 0);
     const total = effectiveFixed + effectiveSavings + effectiveVariable;
 
-    const percent = (value) => total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+    const percent = (value: number) => total > 0 ? ((value / total) * 100).toFixed(1) : 0;
 
     // Always render two lines for the top label (variable used)
     const topLabel1 = variableUsed > 0 ? `-$${variableUsed} (${percent(variableUsed)}%)` : '';

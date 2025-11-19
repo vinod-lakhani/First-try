@@ -26,15 +26,21 @@ export default function Cluster2ReportMockups() {
   );
 
   const data = [
-    { name: "Fixed", value: 1200, color: "#10B981" },
-    { name: "Variable", value: 650, color: "#F59E0B" },
-    { name: "Savings", value: 284, color: "#3B82F6" }
+    { name: "Fixed", value: 1779, color: "#10B981" },
+    { name: "Variable", value: 534, color: "#F59E0B" },
+    { name: "Savings", value: 356, color: "#3B82F6" }
   ];
 
   const annualIncomeData = [
     { name: "Fixed Expenses", value: 3414 * 12, color: "#F59E0B" },
     { name: "Variable Expenses", value: 1212 * 12, color: "#3B82F6" },
     { name: "Savings", value: 1157 * 12, color: "#10B981" }
+  ];
+
+  const MonthlyIncomeData = [
+    { name: "Fixed Expenses", value: 3558, color: "#F59E0B" },
+    { name: "Variable Expenses", value: 1069, color: "#3B82F6" },
+    { name: "Savings", value: 1157, color: "#10B981" }
   ];
 
   const cartridgeSubcategories = {
@@ -213,6 +219,41 @@ export default function Cluster2ReportMockups() {
         </CardContent>
       </Card>
 
+      {/* Monthly Income Allocation Donut Chart */}
+      <Card>
+        <CardContent className="p-4 space-y-4">
+          <h2 className="text-xl font-semibold">Monthly Income Allocation</h2>
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="60%">
+              <PieChart>
+                <Pie
+                  data={MonthlyIncomeData}  
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={70}
+                >
+                  {MonthlyIncomeData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="pt-4 space-y-1 text-sm">
+              {MonthlyIncomeData.map((entry, index) => (
+                <div key={index} className="flex items-center space-x-2">
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }}></div>
+                  <span>{entry.name}: ${entry.value.toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <Button className="w-full bg-gray-800 text-white hover:bg-gray-900">Edit Income Allocation</Button>
+        </CardContent>
+      </Card>
+
       {/* Weekly Pulse Report */}
       <Card>
         <CardContent className="p-4 space-y-3">
@@ -233,11 +274,12 @@ export default function Cluster2ReportMockups() {
         <CardContent className="p-4 space-y-3">
           <h2 className="text-xl font-semibold">Paycheck Report (7/15/25)</h2>
           <ul className="text-sm list-disc pl-5 space-y-2">
-            <li>💵 You got $2,134 — here's how we recommend splitting it.</li>
-            <li>📅 $1500 - Fixed Commitments: Rent, loans, utilities due before next paycheck.</li>
-            <li>🔄 $86 - Bills: Netflix ($15.99) + Credit card minimum ($72).</li>
-            <li>🔄 $548 - Variable Expenses</li>
+            <li>💵 You got $2,669 — here's how we recommend splitting it.</li>
+            <li>📅 $1779 - Fixed Commitments: Rent, loans, utilities due before next paycheck.</li>
+            <li>🔄 $88 - Bills: Netflix ($16) + Internet ($72).</li>
+            <li>🔄 $446 - Variable Expenses</li>
             <li>🪙 Move $80 to emergency fund</li>
+            <li>🪙 Move $276 to investment account</li>
             <li>💡 You can save $50 this cycle by pacing dining + pausing Spotify.</li>
           </ul>
         </CardContent>
@@ -248,6 +290,14 @@ export default function Cluster2ReportMockups() {
         <CardContent className="p-4">
           <h2 className="text-xl font-semibold">Balance Alert</h2>
           <p className="text-sm text-muted-foreground">You may go below $50 by Wednesday.</p>
+        </CardContent>
+      </Card>
+
+      {/* Smart Notifications */}
+      <Card>
+        <CardContent className="p-4">
+          <h2 className="text-xl font-semibold">New Paycheck Arrived for $2,669</h2>
+          <p className="text-sm text-muted-foreground">Click here to change your allocation.</p>
         </CardContent>
       </Card>
 

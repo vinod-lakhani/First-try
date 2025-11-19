@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 
 const paycheck = 2669;
 
-const computeDelta = (curr, prev) => {
+const computeDelta = (curr: any, prev: any) => {
   return {
     fixed: curr.fixed.funded - prev.fixed.funded,
     variable: curr.variable.funded - prev.variable.funded,
@@ -13,7 +13,7 @@ const computeDelta = (curr, prev) => {
   };
 };
 
-const computeCashBalance = (cards) => {
+const computeCashBalance = (cards: any[]) => {
   let balances = [];
   let cash = cards[0].cashBalance || 0;
   balances.push(cash);
@@ -123,13 +123,13 @@ export default function JulyStatusCards() {
     }
 
     const balances = computeCashBalance(updatedCards);
-    updatedCards.forEach((card, idx) => (card.cashBalance = balances[idx]));
+    updatedCards.forEach((card: any, idx: number) => (card.cashBalance = balances[idx]));
     setWorkingCardData(updatedCards);
-    console.log('Card cash balances:', updatedCards.map(c => c.cashBalance));
-    console.log('Card allocations:', updatedCards.map(c => c.allocations));
+    console.log('Card cash balances:', updatedCards.map((c: any) => c.cashBalance));
+    console.log('Card allocations:', updatedCards.map((c: any) => c.allocations));
   }, [hasEdited, hasEdited21, sliders, sliders21]);
 
-  const calcHeights = (base, overlay, target, spent = 0) => {
+  const calcHeights = (base: number, overlay: number, target: number, spent = 0) => {
     const total = target * 1.3;
     return {
       basePct: (base / total) * 100,
@@ -164,10 +164,11 @@ export default function JulyStatusCards() {
                 className="text-sm text-yellow-700 bg-yellow-100 p-2 rounded"
                 dangerouslySetInnerHTML={{ __html: message }}
                 onClick={(e) => {
-                  if ((e.target).id === "edit-link") {
+                  const target = e.target as HTMLElement;
+                  if (target.id === "edit-link") {
                     setIsEditing(true);
                   }
-                  if ((e.target).id === "edit-link-2") {
+                  if (target.id === "edit-link-2") {
                     setIsEditing21(true);
                   }
                 }}
@@ -175,10 +176,10 @@ export default function JulyStatusCards() {
 
               <div className="flex justify-between px-2 pt-2">
                 {Object.entries(card.allocations).map(([key, a]) => {
-                  const prevAlloc = idx > 0 ? workingCardData[idx - 1].allocations[key].funded : 0;
+                  const prevAlloc = idx > 0 ? (workingCardData[idx - 1].allocations as any)[key].funded : 0;
                   const base = idx === 3 ? prevAlloc : a.funded;
                   const overlay = idx === 3 ? a.funded - prevAlloc : 0;
-                  const { basePct, overlayPct, recommendedLine, spentPct } = calcHeights(base, overlay, a.target, a.spent);
+                  const { basePct, overlayPct, recommendedLine, spentPct } = calcHeights(base, overlay, a.target, (a as any).spent || 0);
 
                   return (
                     <div key={key} className="flex flex-col items-center w-20 cursor-pointer" onClick={() => setExpanded(expanded === key ? null : key)}>
@@ -208,7 +209,7 @@ export default function JulyStatusCards() {
                       {key.charAt(0).toUpperCase() + key.slice(1)} - ${currentSliders[key]}
                       <Slider
                         min={0}
-                        max={card.allocations[key].target}
+                        max={(card.allocations as any)[key].target}
                         step={1}
                         value={[currentSliders[key]]}
                         onValueChange={([v]) => {

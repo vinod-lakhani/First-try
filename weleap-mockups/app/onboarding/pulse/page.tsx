@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useOnboardingStore } from '@/lib/onboarding/store';
+import type { PulsePreferences } from '@/lib/onboarding/types';
 import { CheckCircle2, Bell, Mail } from 'lucide-react';
 
 export default function PulsePage() {
@@ -40,8 +41,8 @@ export default function PulsePage() {
   }, [pulsePreferences]);
 
   const handleSubmit = () => {
-    const preferences = {
-      enabled: weeklyPulse || smartAlerts,
+    const preferences: PulsePreferences = {
+      enabled: Boolean(weeklyPulse || smartAlerts),
       frequency: weeklyPulse ? ('weekly' as const) : undefined,
       channels: smartAlerts ? (['email'] as const) : undefined,
     };
