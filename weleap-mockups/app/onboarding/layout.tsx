@@ -25,7 +25,7 @@ export default function OnboardingLayout({
       </div>
 
       {/* Main Content */}
-      <div className="mx-auto max-w-2xl px-4 py-8 sm:py-12">
+      <div className="flex min-h-[calc(100vh-73px)] items-start justify-center px-4 py-4 sm:items-center sm:py-8">
         <div className="mx-auto w-full max-w-lg">
           {children}
         </div>
