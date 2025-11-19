@@ -102,7 +102,7 @@ export default function PlanFinalPage() {
   }
 
   return (
-    <div className="w-full min-w-0 max-w-full space-y-6 overflow-x-hidden">
+    <div className="w-full min-w-0 max-w-full space-y-6 overflow-x-hidden mx-auto">
       {/* SECTION 1 – Header Summary */}
       <Card className="min-w-0">
         <CardHeader className="space-y-2">
@@ -151,7 +151,7 @@ export default function PlanFinalPage() {
         <CardHeader>
           <CardTitle className="text-xl font-semibold">Your Savings Path</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-6 overflow-x-hidden min-w-0">
           {/* Emergency Fund Timeline */}
           <div className="rounded-lg border bg-white p-4 dark:bg-slate-800">
             <div className="mb-3 flex items-center gap-2">
@@ -244,7 +244,7 @@ export default function PlanFinalPage() {
           <CardHeader>
             <CardTitle className="text-xl font-semibold">Your Debt Path</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-3 overflow-x-hidden min-w-0">
             {planData.totalInterestSaved && planData.totalInterestSaved > 0 && (
               <div className="rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-900/20">
                 <p className="text-sm font-medium text-green-900 dark:text-green-200">
@@ -259,9 +259,9 @@ export default function PlanFinalPage() {
               {planData.debts.map((debt) => (
                 <div
                   key={debt.id}
-                  className="flex items-center justify-between rounded-lg border bg-white p-4 dark:bg-slate-800"
+                  className="flex items-center justify-between rounded-lg border bg-white p-4 dark:bg-slate-800 min-w-0"
                 >
-                  <div>
+                  <div className="min-w-0 flex-1 pr-2">
                     <p className="font-semibold text-slate-900 dark:text-white">
                       {debt.name}
                     </p>
@@ -271,8 +271,8 @@ export default function PlanFinalPage() {
                       </p>
                     )}
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-slate-900 dark:text-white">
+                  <div className="text-right min-w-0 flex-shrink-0">
+                    <p className="text-sm font-medium text-slate-900 dark:text-white break-words">
                       Paid off by {debt.payoffDateLabel}
                     </p>
                   </div>
@@ -288,7 +288,7 @@ export default function PlanFinalPage() {
         <CardHeader>
           <CardTitle className="text-xl font-semibold">How Your Net Worth Will Grow</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 overflow-x-hidden min-w-0">
           {/* Net Worth Chart */}
           <div className="overflow-x-auto rounded-lg border bg-white p-4 dark:bg-slate-800">
             <div className="min-w-0">
@@ -338,7 +338,7 @@ export default function PlanFinalPage() {
         <CardHeader>
           <CardTitle className="text-xl font-semibold">Your Safety Settings</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-x-hidden min-w-0">
           <div className="space-y-3">
             {planData.protection.minCheckingBuffer !== undefined && (
               <div className="flex items-center justify-between">
@@ -399,7 +399,7 @@ export default function PlanFinalPage() {
 
       {/* SECTION 7 – Final CTA */}
       <Card className="min-w-0 border-primary/20 bg-primary/5 dark:bg-primary/10">
-        <CardContent className="pt-6">
+        <CardContent className="pt-6 overflow-x-hidden min-w-0">
           <div className="space-y-4 text-center">
             <h3 className="text-xl font-bold text-slate-900 dark:text-white">
               Lock in this plan & stay on track automatically.
