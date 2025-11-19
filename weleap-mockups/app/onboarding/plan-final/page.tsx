@@ -102,9 +102,9 @@ export default function PlanFinalPage() {
   }
 
   return (
-    <div className="w-full max-w-full space-y-6 overflow-x-hidden">
+    <div className="w-full min-w-0 max-w-full space-y-6 overflow-x-hidden">
       {/* SECTION 1 – Header Summary */}
-      <Card>
+      <Card className="min-w-0">
         <CardHeader className="space-y-2">
           <CardTitle className="text-2xl sm:text-3xl font-bold">
             Your personalized financial plan is ready.
@@ -117,7 +117,7 @@ export default function PlanFinalPage() {
       </Card>
 
       {/* SECTION 2 – Income Distribution */}
-      <Card>
+      <Card className="min-w-0">
         <CardHeader>
           <CardTitle className="text-xl font-semibold">Income Distribution</CardTitle>
         </CardHeader>
@@ -147,7 +147,7 @@ export default function PlanFinalPage() {
       </Card>
 
       {/* SECTION 3 – Savings Strategy */}
-      <Card>
+      <Card className="min-w-0">
         <CardHeader>
           <CardTitle className="text-xl font-semibold">Your Savings Path</CardTitle>
         </CardHeader>
@@ -240,7 +240,7 @@ export default function PlanFinalPage() {
 
       {/* SECTION 4 – Debt Payoff Projection */}
       {planData.debts.length > 0 && (
-        <Card>
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle className="text-xl font-semibold">Your Debt Path</CardTitle>
           </CardHeader>
@@ -284,7 +284,7 @@ export default function PlanFinalPage() {
       )}
 
       {/* SECTION 5 – Net Worth Projection */}
-      <Card>
+      <Card className="min-w-0">
         <CardHeader>
           <CardTitle className="text-xl font-semibold">How Your Net Worth Will Grow</CardTitle>
         </CardHeader>
@@ -303,7 +303,7 @@ export default function PlanFinalPage() {
           </div>
 
           {/* Key Milestones */}
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 overflow-x-auto sm:grid-cols-4">
             {planData.netWorthProjection.map((projection) => (
               <div
                 key={projection.label}
@@ -334,7 +334,7 @@ export default function PlanFinalPage() {
       </Card>
 
       {/* SECTION 6 – Key Protection Settings */}
-      <Card>
+      <Card className="min-w-0">
         <CardHeader>
           <CardTitle className="text-xl font-semibold">Your Safety Settings</CardTitle>
         </CardHeader>
@@ -398,7 +398,7 @@ export default function PlanFinalPage() {
       </Card>
 
       {/* SECTION 7 – Final CTA */}
-      <Card className="border-primary/20 bg-primary/5 dark:bg-primary/10">
+      <Card className="min-w-0 border-primary/20 bg-primary/5 dark:bg-primary/10">
         <CardContent className="pt-6">
           <div className="space-y-4 text-center">
             <h3 className="text-xl font-bold text-slate-900 dark:text-white">

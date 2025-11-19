@@ -240,7 +240,7 @@ export default function SavingsPlanPage() {
   const remaining = savingsBudget$ - totalAllocated;
 
   return (
-    <Card className="w-full">
+    <Card className="w-full min-w-0 max-w-full overflow-x-hidden">
       <CardHeader className="space-y-2">
         <CardTitle className="text-2xl sm:text-3xl font-bold">
           Your Savings Plan
@@ -253,7 +253,7 @@ export default function SavingsPlanPage() {
         </CardDescription>
       </CardHeader>
 
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-6 overflow-x-hidden">
         {/* Input Section */}
         <div className="rounded-lg border bg-slate-50 p-4 dark:bg-slate-800">
           <h3 className="mb-4 text-lg font-semibold text-slate-900 dark:text-white">
