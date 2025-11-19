@@ -102,7 +102,7 @@ export default function PlanFinalPage() {
   }
 
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full max-w-full space-y-6 overflow-x-hidden">
       {/* SECTION 1 – Header Summary */}
       <Card>
         <CardHeader className="space-y-2">
@@ -121,22 +121,24 @@ export default function PlanFinalPage() {
         <CardHeader>
           <CardTitle className="text-xl font-semibold">Income Distribution</CardTitle>
         </CardHeader>
-        <CardContent>
-          <IncomeDistributionChart
-            takeHomePay={planData.paycheckAmount}
-            grossIncome={state.income?.grossIncome$ ? 
-              state.income.grossIncome$ * getPaychecksPerMonth(state.income.payFrequency || 'biweekly') : 
-              undefined
-            }
-            categories={planData.paycheckCategories.map((cat) => ({
-              label: cat.label,
-              amount: cat.amount,
-              percent: cat.percent,
-              color: categoryColors[cat.key] || '#6b7280',
-              description: cat.why,
-            }))}
-            size={280}
-          />
+        <CardContent className="overflow-hidden">
+          <div className="flex justify-center">
+            <IncomeDistributionChart
+              takeHomePay={planData.paycheckAmount}
+              grossIncome={state.income?.grossIncome$ ? 
+                state.income.grossIncome$ * getPaychecksPerMonth(state.income.payFrequency || 'biweekly') : 
+                undefined
+              }
+              categories={planData.paycheckCategories.map((cat) => ({
+                label: cat.label,
+                amount: cat.amount,
+                percent: cat.percent,
+                color: categoryColors[cat.key] || '#6b7280',
+                description: cat.why,
+              }))}
+              size={280}
+            />
+          </div>
           <div className="mt-6 space-y-1 text-sm text-slate-600 dark:text-slate-400">
             <p>This plan updates automatically if your income or spending changes.</p>
             <p>You can adjust categories anytime.</p>
@@ -288,14 +290,16 @@ export default function PlanFinalPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Net Worth Chart */}
-          <div className="rounded-lg border bg-white p-4 dark:bg-slate-800">
-            <NetWorthChart
-              labels={planData.netWorthChartData.labels}
-              netWorth={planData.netWorthChartData.netWorth}
-              assets={planData.netWorthChartData.assets}
-              liabilities={planData.netWorthChartData.liabilities}
-              height={400}
-            />
+          <div className="overflow-x-auto rounded-lg border bg-white p-4 dark:bg-slate-800">
+            <div className="min-w-0">
+              <NetWorthChart
+                labels={planData.netWorthChartData.labels}
+                netWorth={planData.netWorthChartData.netWorth}
+                assets={planData.netWorthChartData.assets}
+                liabilities={planData.netWorthChartData.liabilities}
+                height={400}
+              />
+            </div>
           </div>
 
           {/* Key Milestones */}
