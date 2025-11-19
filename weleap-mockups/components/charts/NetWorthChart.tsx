@@ -130,7 +130,7 @@ export function NetWorthChart({
       }
 
       const ctx = canvasRef.current!.getContext('2d');
-      if (!ctx) return;
+      if (!ctx || !canvasRef.current) return;
 
       const container = canvasRef.current.parentElement;
       if (container) {
@@ -224,7 +224,6 @@ export function NetWorthChart({
               display: true,
               grid: {
                 color: '#f3f4f6',
-                drawBorder: false,
               },
               ticks: {
                 font: { size: 11 },

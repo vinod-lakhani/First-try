@@ -134,8 +134,10 @@ export function IncomeDistributionChart({
       if (!ctx) return;
 
       // Set canvas size
-      canvasRef.current.width = size;
-      canvasRef.current.height = size;
+      if (canvasRef.current) {
+        canvasRef.current.width = size;
+        canvasRef.current.height = size;
+      }
 
       const data = mainCategories.map((cat) => ({
         label: cat.label,

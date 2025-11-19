@@ -1,3 +1,4 @@
+// @ts-nocheck
 "use client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";

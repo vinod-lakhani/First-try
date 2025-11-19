@@ -7,7 +7,7 @@
 import { allocateIncome, type IncomeInputs } from '@/lib/alloc/income';
 import { allocateSavings, type SavingsInputs } from '@/lib/alloc/savings';
 import { simulateScenario, type ScenarioInput, type MonthlyPlan as SimMonthlyPlan } from '@/lib/sim/netWorth';
-import type { OnboardingState, PaycheckPlan, PrimaryGoal } from './types';
+import type { OnboardingState, PaycheckPlan, PrimaryGoal, PayFrequency } from './types';
 
 /**
  * Generates an initial paycheck plan from onboarding state using the income allocation engine.
@@ -794,7 +794,7 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
   const paycheckCategories: FinalPlanData['paycheckCategories'] = [
     {
       id: 'essentials',
-      key: 'essentials',
+      key: 'essentials' as const,
       label: 'Essentials & Bills',
       amount: incomeAlloc.needs$ - totalDebtMinPayments$,
       percent: ((incomeAlloc.needs$ - totalDebtMinPayments$) / incomePeriod$) * 100,
@@ -802,7 +802,7 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
     },
     {
       id: 'debt_minimums',
-      key: 'debt_minimums',
+      key: 'debt_minimums' as const,
       label: 'Debt Minimums',
       amount: totalDebtMinPayments$,
       percent: (totalDebtMinPayments$ / incomePeriod$) * 100,
@@ -810,7 +810,7 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
     },
     {
       id: 'debt_extra',
-      key: 'debt_extra',
+      key: 'debt_extra' as const,
       label: 'Extra Debt Paydown',
       amount: savingsAlloc.highAprDebt$,
       percent: (savingsAlloc.highAprDebt$ / incomePeriod$) * 100,
@@ -818,7 +818,7 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
     },
     {
       id: 'emergency',
-      key: 'emergency',
+      key: 'emergency' as const,
       label: 'Emergency Savings',
       amount: savingsAlloc.ef$,
       percent: (savingsAlloc.ef$ / incomePeriod$) * 100,
@@ -826,7 +826,7 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
     },
     {
       id: 'long_term_investing',
-      key: 'long_term_investing',
+      key: 'long_term_investing' as const,
       label: 'Long-Term Investing',
       amount: savingsAlloc.retirementTaxAdv$ + savingsAlloc.brokerage$,
       percent: ((savingsAlloc.retirementTaxAdv$ + savingsAlloc.brokerage$) / incomePeriod$) * 100,
@@ -834,7 +834,7 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
     },
     {
       id: 'fun_flexible',
-      key: 'fun_flexible',
+      key: 'fun_flexible' as const,
       label: 'Fun & Flexible',
       amount: incomeAlloc.wants$,
       percent: (incomeAlloc.wants$ / incomePeriod$) * 100,
