@@ -162,9 +162,11 @@ export default function PlanPreviewPage() {
     const hasEnteredExpenses = needsExpenses.length > 0 || debts.length > 0;
     
     // Only show "Other Essential Expenses" if:
-    // 1. There's a meaningful difference (> $0.01)
-    // 2. The user has entered at least some expenses (so we know what's "other")
-    if (Math.abs(needsDifference) > 0.01 && hasEnteredExpenses) {
+    // 1. The difference is POSITIVE (meaning there's room for other expenses beyond what was entered)
+    // 2. The difference is meaningful (> $0.01)
+    // 3. The user has entered at least some expenses (so we know what's "other")
+    // If the difference is negative, it means entered expenses exceed the allocation, so don't show "Other"
+    if (needsDifference > 0.01 && hasEnteredExpenses) {
       breakdowns.Needs.push({
         label: 'Other Essential Expenses',
         amount: needsDifference,
