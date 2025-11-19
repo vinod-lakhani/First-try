@@ -102,7 +102,7 @@ export default function PlanFinalPage() {
   }
 
   return (
-    <div className="w-full min-w-0 max-w-full space-y-6 overflow-x-hidden mx-auto">
+    <div className="flex w-full min-w-0 max-w-full flex-col space-y-6 overflow-x-hidden">
       {/* SECTION 1 – Header Summary */}
       <Card className="min-w-0">
         <CardHeader className="space-y-2">
