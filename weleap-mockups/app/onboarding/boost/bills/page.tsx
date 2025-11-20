@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useOnboardingStore } from '@/lib/onboarding/store';
 import type { FixedExpense } from '@/lib/onboarding/types';
+import { normalizeExpenseToMonthly } from '@/lib/onboarding/expenseUtils';
 import { Plus, Trash2, Save } from 'lucide-react';
 
 export default function BillsPage() {
@@ -35,7 +36,9 @@ export default function BillsPage() {
   }, [fixedExpenses]);
 
   const handleSave = () => {
-    setFixedExpenses(expenses);
+    // Normalize all expenses to monthly before saving (single source of truth)
+    const normalizedExpenses = expenses.map(normalizeExpenseToMonthly);
+    setFixedExpenses(normalizedExpenses);
     router.push('/onboarding/boost');
   };
 
@@ -52,14 +55,15 @@ export default function BillsPage() {
 
   const handleAddExpense = () => {
     if (newExpenseName && newExpenseAmount > 0) {
-      const newExpense: FixedExpense = {
+      // Normalize to monthly (single source of truth)
+      const newExpense = normalizeExpenseToMonthly({
         id: `exp-${Date.now()}`,
         name: newExpenseName,
         amount$: newExpenseAmount,
-        frequency: 'monthly',
+        frequency: 'monthly', // User enters monthly, but normalize to be safe
         category: 'needs',
         isSubscription: false,
-      };
+      });
       setExpenses([...expenses, newExpense]);
       setNewExpenseName('');
       setNewExpenseAmount(0);
@@ -285,13 +289,13 @@ export default function BillsPage() {
                     if (existing) {
                       handleUpdateExpense(existing.id, { amount$: amount });
                     } else {
-                      const newExp: FixedExpense = {
+                      const newExp: FixedExpense = normalizeExpenseToMonthly({
                         id: `exp-rent-${Date.now()}`,
                         name: 'Rent / Housing',
                         amount$: amount,
-                        frequency: 'monthly',
+                        frequency: 'monthly', // User enters monthly, but normalize to be safe
                         category: 'needs',
-                      };
+                      });
                       setExpenses([...expenses, newExp]);
                     }
                   }

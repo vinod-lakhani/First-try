@@ -64,17 +64,11 @@ export default function SafetyStrategyPage() {
   }, [assets]);
 
   // Estimate monthly basics from fixed expenses
+  // All expenses should be stored as monthly (single source of truth)
   const monthlyBasics = useMemo(() => {
     return fixedExpenses
       .filter((e) => e.category === 'needs')
-      .reduce((sum, e) => {
-        let monthly = e.amount$;
-        if (e.frequency === 'weekly') monthly = e.amount$ * 4.33;
-        else if (e.frequency === 'biweekly') monthly = e.amount$ * 2.17;
-        else if (e.frequency === 'semimonthly') monthly = e.amount$ * 2;
-        else if (e.frequency === 'yearly') monthly = e.amount$ / 12;
-        return sum + monthly;
-      }, 0);
+      .reduce((sum, e) => sum + e.amount$, 0); // amount$ should already be monthly
   }, [fixedExpenses]);
 
   const currentMonthsSaved = useMemo(() => {

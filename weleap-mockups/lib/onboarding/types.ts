@@ -112,12 +112,20 @@ export interface SafetyStrategy {
   onIDR: boolean;
   /** Debt payoff strategy */
   debtPayoffStrategy?: "avalanche" | "snowball" | "minimum_only";
-  /** 401(k) employer match per paycheck (dollars needed to capture full match) */
-  match401kPerPaycheck$?: number;
+  /** 401(k) employer match per month (dollars needed to capture full match) */
+  match401kPerMonth$?: number;
   /** Remaining IRA contribution room this year */
   iraRoomThisYear$?: number;
   /** Remaining 401(k) contribution room this year (beyond match) */
   k401RoomThisYear$?: number;
+  /** Custom savings allocation (monthly amounts) - overrides engine calculation if set */
+  customSavingsAllocation?: {
+    ef$: number;
+    highAprDebt$: number;
+    match401k$: number;
+    retirementTaxAdv$: number;
+    brokerage$: number;
+  };
 }
 
 /**

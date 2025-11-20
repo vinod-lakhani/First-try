@@ -14,6 +14,7 @@ interface NetWorthChartProps {
   assets?: number[];
   liabilities?: number[];
   height?: number;
+  baselineNetWorth?: number[]; // Optional baseline series for comparison
 }
 
 export function NetWorthChart({
@@ -22,17 +23,19 @@ export function NetWorthChart({
   assets,
   liabilities,
   height = 300,
+  baselineNetWorth,
 }: NetWorthChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<any>(null);
   const [timeRange, setTimeRange] = useState<'1Y' | '5Y' | '10Y' | '20Y' | '40Y' | 'ALL'>('ALL');
 
-  const { currentValue, change, changePct, chartData } = useMemo(() => {
+  const { currentValue, change, changePct, deltaFromBaseline, deltaPctFromBaseline, chartData } = useMemo(() => {
     // Filter by time range
     let filteredNetWorth = netWorth;
     let filteredAssets = assets || [];
     let filteredLiabilities = liabilities || [];
     let filteredLabels = labels;
+    let filteredBaseline = baselineNetWorth || [];
 
     if (timeRange !== 'ALL') {
       const totalMonths = netWorth.length;
@@ -51,6 +54,9 @@ export function NetWorthChart({
       filteredAssets = (assets || []).slice(0, rangeEnd);
       filteredLiabilities = (liabilities || []).slice(0, rangeEnd);
       filteredLabels = labels.slice(0, rangeEnd);
+      if (baselineNetWorth && baselineNetWorth.length > 0) {
+        filteredBaseline = baselineNetWorth.slice(0, rangeEnd);
+      }
     }
 
     const currentValue = filteredNetWorth[filteredNetWorth.length - 1] || 0;
@@ -58,21 +64,48 @@ export function NetWorthChart({
     const change = currentValue - startValue;
     const changePct = startValue !== 0 ? (change / startValue) * 100 : 0;
 
+    // Calculate delta from baseline if baseline exists
+    let deltaFromBaseline = 0;
+    let deltaPctFromBaseline = 0;
+    if (baselineNetWorth && baselineNetWorth.length > 0) {
+      const baselineCurrentValue = filteredBaseline[filteredBaseline.length - 1] || 0;
+      deltaFromBaseline = currentValue - baselineCurrentValue;
+      deltaPctFromBaseline = baselineCurrentValue !== 0 ? (deltaFromBaseline / Math.abs(baselineCurrentValue)) * 100 : 0;
+    }
+
     // Build datasets
-    const datasets: any[] = [
-      {
-        label: 'Net Worth',
-        data: filteredNetWorth,
-        borderColor: '#2563eb',
-        backgroundColor: 'rgba(37, 99, 235, 0.1)',
-        borderWidth: 2.5,
-        fill: true,
+    const datasets: any[] = [];
+    
+    // Add baseline series if provided
+    if (baselineNetWorth && baselineNetWorth.length > 0) {
+      datasets.push({
+        label: 'Current Plan',
+        data: filteredBaseline,
+        borderColor: '#6b7280',
+        backgroundColor: 'rgba(107, 114, 128, 0.05)',
+        borderWidth: 2,
+        borderDash: [5, 5],
+        fill: false,
         tension: 0.4,
         pointRadius: 0,
         pointHoverRadius: 4,
         order: 1,
-      },
-    ];
+      });
+    }
+    
+    // Add scenario series
+    datasets.push({
+      label: baselineNetWorth ? 'Modified Plan' : 'Net Worth',
+      data: filteredNetWorth,
+      borderColor: '#2563eb',
+      backgroundColor: 'rgba(37, 99, 235, 0.1)',
+      borderWidth: 2.5,
+      fill: !baselineNetWorth,
+      tension: 0.4,
+      pointRadius: 0,
+      pointHoverRadius: 4,
+      order: baselineNetWorth ? 2 : 1,
+    });
 
     if (filteredAssets.length > 0) {
       datasets.push({
@@ -110,27 +143,33 @@ export function NetWorthChart({
       currentValue,
       change,
       changePct,
+      deltaFromBaseline,
+      deltaPctFromBaseline,
       chartData: {
         labels: filteredLabels,
         datasets,
       },
     };
-  }, [labels, netWorth, assets, liabilities, timeRange]);
+  }, [labels, netWorth, assets, liabilities, timeRange, baselineNetWorth]);
 
   useEffect(() => {
+    // Check if canvas ref is available before importing Chart.js
     if (!canvasRef.current) return;
 
     // Dynamically import Chart.js
     import('chart.js/auto').then((ChartModule) => {
       const Chart = ChartModule.default;
 
+      // Check again after async import
+      if (!canvasRef.current) return;
+
       // Destroy existing chart if it exists
       if (chartRef.current) {
         chartRef.current.destroy();
       }
-
-      const ctx = canvasRef.current!.getContext('2d');
-      if (!ctx || !canvasRef.current) return;
+      
+      const ctx = canvasRef.current.getContext('2d');
+      if (!ctx) return;
 
       const container = canvasRef.current.parentElement;
       if (container) {
@@ -142,7 +181,8 @@ export function NetWorthChart({
 
       // Store filtered data for tooltip callbacks
       const filteredLabels = chartData.labels;
-      const filteredNetWorth = chartData.datasets.find((d: any) => d.label === 'Net Worth')?.data || [];
+      const filteredNetWorth = chartData.datasets.find((d: any) => d.label === 'Net Worth' || d.label === 'Modified Plan')?.data || [];
+      const filteredBaseline = chartData.datasets.find((d: any) => d.label === 'Current Plan')?.data || [];
       const filteredAssets = chartData.datasets.find((d: any) => d.label === 'Assets')?.data || [];
       const filteredLiabilities = chartData.datasets.find((d: any) => d.label === 'Liabilities')?.data || [];
 
@@ -157,7 +197,17 @@ export function NetWorthChart({
             intersect: false,
           },
           plugins: {
-            legend: { display: false },
+            legend: {
+              display: true,
+              position: 'bottom',
+              labels: {
+                usePointStyle: true,
+                padding: 15,
+                font: {
+                  size: 12,
+                },
+              },
+            },
             tooltip: {
               backgroundColor: 'rgba(0, 0, 0, 0.8)',
               padding: 12,
@@ -179,12 +229,14 @@ export function NetWorthChart({
                   const datasetLabel = context.dataset.label;
                   let value: number;
                   
-                  if (datasetLabel === 'Net Worth') {
+                  if (datasetLabel === 'Net Worth' || datasetLabel === 'Modified Plan') {
                     value = filteredNetWorth[dataIndex] || 0;
                   } else if (datasetLabel === 'Assets') {
                     value = filteredAssets[dataIndex] || 0;
                   } else if (datasetLabel === 'Liabilities') {
                     value = filteredLiabilities[dataIndex] || 0;
+                  } else if (datasetLabel === 'Current Plan') {
+                    value = filteredBaseline[dataIndex] || 0;
                   } else {
                     value = context.parsed.y;
                   }
@@ -199,6 +251,24 @@ export function NetWorthChart({
                           minimumFractionDigits: 0,
                           maximumFractionDigits: 0,
                         });
+                  
+                  // Add delta for Modified Plan when baseline exists
+                  if (datasetLabel === 'Modified Plan' && filteredBaseline.length > 0) {
+                    const baselineValue = filteredBaseline[dataIndex] || 0;
+                    const delta = value - baselineValue;
+                    const deltaFormatted =
+                      Math.abs(delta) >= 1000000
+                        ? '$' + (delta / 1000000).toFixed(2) + 'M'
+                        : Math.abs(delta) >= 1000
+                        ? '$' + (delta / 1000).toFixed(1) + 'K'
+                        : '$' +
+                          delta.toLocaleString('en-US', {
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0,
+                          });
+                    return `${datasetLabel}: ${formatted} (${delta >= 0 ? '+' : ''}${deltaFormatted})`;
+                  }
+                  
                   return `${datasetLabel}: ${formatted}`;
                 },
                 labelColor: function (context: any) {
@@ -283,21 +353,41 @@ export function NetWorthChart({
             maximumFractionDigits: 2,
           })}
         </div>
-        <div
-          className={`flex items-center gap-1.5 text-base font-semibold ${
-            change >= 0
-              ? 'text-green-600 dark:text-green-400'
-              : 'text-red-600 dark:text-red-400'
-          }`}
-        >
-          <span>{change >= 0 ? '↑' : '↓'}</span>
-          <span>
-            ${Math.abs(change).toLocaleString('en-US', {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })}{' '}
-            ({Math.abs(changePct).toFixed(2)}%)
-          </span>
+        <div className="flex flex-col gap-2">
+          <div
+            className={`flex items-center gap-1.5 text-base font-semibold ${
+              change >= 0
+                ? 'text-green-600 dark:text-green-400'
+                : 'text-red-600 dark:text-red-400'
+            }`}
+          >
+            <span>{change >= 0 ? '↑' : '↓'}</span>
+            <span>
+              ${Math.abs(change).toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}{' '}
+              ({Math.abs(changePct).toFixed(2)}%) from start
+            </span>
+          </div>
+          {baselineNetWorth && baselineNetWorth.length > 0 && (
+            <div
+              className={`flex items-center gap-1.5 text-sm font-medium ${
+                deltaFromBaseline >= 0
+                  ? 'text-green-600 dark:text-green-400'
+                  : 'text-red-600 dark:text-red-400'
+              }`}
+            >
+              <span>{deltaFromBaseline >= 0 ? '↑' : '↓'}</span>
+              <span>
+                {deltaFromBaseline >= 0 ? '+' : ''}${Math.abs(deltaFromBaseline).toLocaleString('en-US', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}{' '}
+                ({deltaFromBaseline >= 0 ? '+' : ''}{Math.abs(deltaPctFromBaseline).toFixed(2)}%) vs Current Plan
+              </span>
+            </div>
+          )}
         </div>
       </div>
 

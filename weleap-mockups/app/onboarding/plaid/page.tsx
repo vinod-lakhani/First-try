@@ -25,8 +25,8 @@ export default function PlaidPage() {
     setIsConnecting(true);
     try {
       await connectWithPlaidAndUpdateStore(store);
-      setCurrentStep('paycheck-plan');
-      router.push('/onboarding/paycheck-plan');
+      setCurrentStep('monthly-plan');
+      router.push('/onboarding/monthly-plan');
     } catch (error) {
       console.error('Plaid connection error:', error);
       setIsConnecting(false);

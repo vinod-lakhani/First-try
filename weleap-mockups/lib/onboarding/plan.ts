@@ -9,6 +9,11 @@ import { allocateSavings, type SavingsInputs } from '@/lib/alloc/savings';
 import { simulateScenario, type ScenarioInput, type MonthlyPlan as SimMonthlyPlan } from '@/lib/sim/netWorth';
 import type { OnboardingState, PaycheckPlan, PrimaryGoal, PayFrequency } from './types';
 
+// Helper to round to 2 decimal places
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 /**
  * Generates an initial paycheck plan from onboarding state using the income allocation engine.
  * 
@@ -78,7 +83,8 @@ export function generateInitialPaycheckPlanFromEngines(
           fixedExpenses,
           incomePeriod$,
           targets,
-          income.payFrequency
+          income.payFrequency,
+          state.debts
         );
       console.log('[Paycheck Plan] Calculated actuals3m from expenses:', actuals3m);
     } catch (error) {
@@ -189,9 +195,10 @@ function calculateActualsFromExpenses(
   fixedExpenses: OnboardingState['fixedExpenses'],
   incomePeriod$: number,
   fallbackTargets: { needsPct: number; wantsPct: number; savingsPct: number },
-  incomePayFrequency?: PayFrequency
+  incomePayFrequency?: PayFrequency,
+  debts?: OnboardingState['debts']
 ): { needsPct: number; wantsPct: number; savingsPct: number } {
-  if (fixedExpenses.length === 0) {
+  if (fixedExpenses.length === 0 && (!debts || debts.length === 0)) {
     // No expenses data, use targets as baseline
     return fallbackTargets;
   }
@@ -201,9 +208,11 @@ function calculateActualsFromExpenses(
   let wantsTotal = 0;
 
   for (const expense of fixedExpenses) {
+    // All expenses should be stored as monthly (single source of truth)
+    // If frequency is not monthly, it's a data integrity issue, but convert for safety
     let monthlyAmount = expense.amount$;
-    
-    // Convert to monthly if needed
+    if (expense.frequency !== 'monthly') {
+      // This shouldn't happen if expenses are normalized, but convert for safety
     if (expense.frequency === 'weekly') {
       monthlyAmount = expense.amount$ * 4.33;
     } else if (expense.frequency === 'biweekly') {
@@ -213,7 +222,7 @@ function calculateActualsFromExpenses(
     } else if (expense.frequency === 'yearly') {
       monthlyAmount = expense.amount$ / 12;
     }
-    // If expense.frequency is 'monthly', monthlyAmount is already correct
+    }
 
     if (expense.category === 'needs') {
       needsTotal += monthlyAmount;
@@ -223,6 +232,12 @@ function calculateActualsFromExpenses(
       // Default to needs if category not specified
       needsTotal += monthlyAmount;
     }
+  }
+
+  // Add debt minimum payments to needs
+  if (debts && debts.length > 0) {
+    const totalDebtMinPayments$ = debts.reduce((sum, d) => sum + d.minPayment$, 0);
+    needsTotal += totalDebtMinPayments$;
   }
 
   // Determine if incomePeriod$ is monthly or per-paycheck
@@ -408,7 +423,8 @@ export function generateBoostedPlanAndProjection(
           fixedExpenses,
           incomePeriod$,
           targets,
-          income.payFrequency
+          income.payFrequency,
+          debts
         );
     } catch (error) {
       // If calculation fails, use targets as baseline
@@ -696,20 +712,31 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
   const incomePeriod$ = income.netIncome$ || income.grossIncome$ || 0;
   const paycheckAmount = incomePeriod$;
 
-  // Step 1: Use adjusted paycheck plan values if available (from slider adjustments)
-  // Otherwise, calculate from income allocation engine
-  let incomeAlloc: { needs$: number; wants$: number; savings$: number; notes: string[] };
+  // Log income source for debugging Plaid vs manual entry
+  console.log('[buildFinalPlanData] Income data:', {
+    netIncome$: income.netIncome$,
+    grossIncome$: income.grossIncome$,
+    payFrequency: income.payFrequency,
+    incomePeriod$,
+    hasInitialPaycheckPlan: !!initialPaycheckPlan,
+    initialPlanNeeds$: initialPaycheckPlan?.needs$,
+    plaidConnected: state.plaidConnected,
+    fixedExpensesCount: fixedExpenses.length,
+    debtsCount: debts.length,
+    fixedExpensesTotal: fixedExpenses.reduce((sum, e) => sum + e.amount$, 0), // All expenses should be monthly
+  });
+
+  // SINGLE SOURCE OF TRUTH: Always calculate from current state (expenses, debts, income)
+  // The state IS the source of truth - don't use initialPaycheckPlan as a cache
+  // initialPaycheckPlan is only for display/editing on the Monthly Plan page, not for calculations
+  console.log('[buildFinalPlanData] Calculating from current state (single source of truth)', {
+    fixedExpensesCount: fixedExpenses.length,
+    debtsCount: debts.length,
+    incomePeriod$,
+  });
   
-  if (initialPaycheckPlan && initialPaycheckPlan.needs$ > 0) {
-    // Use the values from the paycheck plan page (user-adjusted via sliders)
-    incomeAlloc = {
-      needs$: initialPaycheckPlan.needs$,
-      wants$: initialPaycheckPlan.wants$,
-      savings$: initialPaycheckPlan.savings$,
-      notes: initialPaycheckPlan.notes || [],
-    };
-  } else {
-    // Fallback: Calculate from income allocation engine
+  // Always calculate from current state - this is the source of truth
+  // Calculate from income allocation engine using current expenses and debts
     const defaultTargets = getDefaultTargetsForGoal(state.primaryGoal);
     let targets = riskConstraints?.targets || defaultTargets;
     
@@ -726,14 +753,34 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
     const shiftLimitPct = riskConstraints?.shiftLimitPct ?? 0.04;
     
     // Calculate actuals3m
+  // If actuals3m is explicitly provided in riskConstraints, use it (e.g., from savings optimizer sliders)
+  // Otherwise, calculate from expenses (state is source of truth)
     let actuals3m = riskConstraints?.actuals3m;
-    if (!actuals3m) {
+  
+  // Check if actuals3m is valid (sums to ~1.0 or ~100)
+  const hasValidActuals3m = actuals3m && (
+    Math.abs(actuals3m.needsPct + actuals3m.wantsPct + actuals3m.savingsPct - 1.0) < 0.1 ||
+    Math.abs(actuals3m.needsPct + actuals3m.wantsPct + actuals3m.savingsPct - 100) < 1
+  );
+  
+  if (!hasValidActuals3m) {
       try {
-        actuals3m = calculateActualsFromExpenses(fixedExpenses, incomePeriod$, targets);
+      console.log('[buildFinalPlanData] Calculating actuals3m from current expenses', {
+        hadCachedActuals3m: !!actuals3m,
+        fixedExpensesCount: fixedExpenses.length,
+        debtsCount: debts.length,
+        reason: !actuals3m ? 'no actuals3m provided' : 'actuals3m invalid - recalculating from expenses',
+      });
+      actuals3m = calculateActualsFromExpenses(fixedExpenses, incomePeriod$, targets, income.payFrequency, debts);
       } catch (error) {
         console.warn('Failed to calculate actuals from expenses, using targets:', error);
         actuals3m = targets;
       }
+  } else {
+    console.log('[buildFinalPlanData] Using explicit actuals3m from riskConstraints', {
+      actuals3m,
+      fixedExpensesCount: fixedExpenses.length,
+    });
     }
 
     // Normalize actuals3m
@@ -752,13 +799,24 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
       };
     }
 
-    incomeAlloc = allocateIncome({
+  const incomeAlloc = allocateIncome({
       incomePeriod$,
       targets,
       actuals3m,
       shiftLimitPct,
     });
-  }
+  
+  console.log('[buildFinalPlanData] Income allocation calculated from engine', {
+    needs$: incomeAlloc.needs$,
+    wants$: incomeAlloc.wants$,
+    savings$: incomeAlloc.savings$,
+    actuals3mNeedsPct: actuals3m.needsPct,
+    actuals3mWantsPct: actuals3m.wantsPct,
+    actuals3mSavingsPct: actuals3m.savingsPct,
+    targetsNeedsPct: targets.needsPct,
+    targetsWantsPct: targets.wantsPct,
+    targetsSavingsPct: targets.savingsPct,
+  });
 
   // Step 2: Savings Allocation Engine
   const efTargetMonths = safetyStrategy?.efTargetMonths || 3;
@@ -773,22 +831,79 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
     .filter(d => d.isHighApr || d.aprPct > 10)
     .map(d => ({ balance$: d.balance$, aprPct: d.aprPct }));
 
-  const savingsAlloc = allocateSavings({
-    savingsBudget$: incomeAlloc.savings$,
+  // Calculate total debt minimum payments before monthly conversions
+  const totalDebtMinPayments$ = debts.reduce((sum, d) => sum + d.minPayment$, 0);
+
+  // Convert to monthly for savings allocation (everything is monthly now)
+  const paychecksPerMonth = getPaychecksPerMonth(income.payFrequency || 'biweekly');
+  const monthlySavingsBudget = incomeAlloc.savings$ * paychecksPerMonth;
+  const monthlyNeedsTotal = incomeAlloc.needs$ * paychecksPerMonth;
+  const monthlyDebtMinimums = totalDebtMinPayments$;
+  const monthlyEssentials = Math.max(0, monthlyNeedsTotal - monthlyDebtMinimums);
+
+  // Use custom savings allocation if provided, otherwise calculate from engine
+  let savingsAlloc;
+  if (safetyStrategy?.customSavingsAllocation) {
+    // Use custom allocation (already in monthly amounts)
+    // Calculate routing info from the allocation percentages
+    const totalRetirement = safetyStrategy.customSavingsAllocation.match401k$ + safetyStrategy.customSavingsAllocation.retirementTaxAdv$;
+    const totalInvesting = totalRetirement + safetyStrategy.customSavingsAllocation.brokerage$;
+    const retirePct = totalInvesting > 0 ? totalRetirement / totalInvesting : 0.5;
+    const brokerPct = totalInvesting > 0 ? safetyStrategy.customSavingsAllocation.brokerage$ / totalInvesting : 0.5;
+    
+    // Determine account type based on income and IDR status
+    const incomeSingle$ = income.incomeSingle$ || income.annualSalary$ || incomePeriod$ * paychecksPerMonth * 12;
+    const onIDR = safetyStrategy?.onIDR || false;
+    const acctType = (onIDR || incomeSingle$ >= 190000) ? "Traditional401k" : "Roth";
+    
+    savingsAlloc = {
+      ef$: safetyStrategy.customSavingsAllocation.ef$,
+      highAprDebt$: safetyStrategy.customSavingsAllocation.highAprDebt$,
+      match401k$: safetyStrategy.customSavingsAllocation.match401k$,
+      retirementTaxAdv$: safetyStrategy.customSavingsAllocation.retirementTaxAdv$,
+      brokerage$: safetyStrategy.customSavingsAllocation.brokerage$,
+      routing: {
+        acctType,
+        splitRetirePct: round2(retirePct * 100),
+        splitBrokerPct: round2(brokerPct * 100),
+      },
+      notes: ['Using custom savings allocation from user adjustments'],
+    };
+    console.log('[buildFinalPlanData] Using custom savings allocation:', savingsAlloc);
+  } else {
+    // Calculate from engine
+    savingsAlloc = allocateSavings({
+    savingsBudget$: monthlySavingsBudget,
     efTarget$,
     efBalance$,
     highAprDebts,
-    matchNeedThisPeriod$: safetyStrategy?.match401kPerPaycheck$ || 0,
-    incomeSingle$: income.incomeSingle$ || income.annualSalary$ || incomePeriod$ * 26,
+    matchNeedThisPeriod$: safetyStrategy?.match401kPerMonth$ || 0,
+    incomeSingle$: income.incomeSingle$ || income.annualSalary$ || incomePeriod$ * paychecksPerMonth * 12,
     onIDR: safetyStrategy?.onIDR || false,
     liquidity: safetyStrategy?.liquidity || 'Medium',
     retirementFocus: safetyStrategy?.retirementFocus || 'Medium',
     iraRoomThisYear$: safetyStrategy?.iraRoomThisYear$ || 7000,
     k401RoomThisYear$: safetyStrategy?.k401RoomThisYear$ || 23000,
   });
+  }
+  
+  // Convert savings allocation back to per-paycheck for paycheck categories (for backward compatibility)
+  // But we'll display monthly amounts everywhere
+  const savingsAllocPerPaycheck = {
+    ef$: savingsAlloc.ef$ / paychecksPerMonth,
+    highAprDebt$: savingsAlloc.highAprDebt$ / paychecksPerMonth,
+    match401k$: savingsAlloc.match401k$ / paychecksPerMonth,
+    retirementTaxAdv$: savingsAlloc.retirementTaxAdv$ / paychecksPerMonth,
+    brokerage$: savingsAlloc.brokerage$ / paychecksPerMonth,
+  };
 
-  // Calculate total debt minimum payments (from needs budget)
-  const totalDebtMinPayments$ = debts.reduce((sum, d) => sum + d.minPayment$, 0);
+  console.log('[buildFinalPlanData] Building paycheck categories', {
+    incomeAllocNeeds$: incomeAlloc.needs$,
+    incomeAllocWants$: incomeAlloc.wants$,
+    incomeAllocSavings$: incomeAlloc.savings$,
+    totalDebtMinPayments$,
+    essentialsAmount: incomeAlloc.needs$ - totalDebtMinPayments$,
+  });
   
   // Build paycheck categories
   const paycheckCategories: FinalPlanData['paycheckCategories'] = [
@@ -812,25 +927,51 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
       id: 'debt_extra',
       key: 'debt_extra' as const,
       label: 'Extra Debt Paydown',
-      amount: savingsAlloc.highAprDebt$,
-      percent: (savingsAlloc.highAprDebt$ / incomePeriod$) * 100,
+      amount: savingsAllocPerPaycheck.highAprDebt$,
+      percent: (savingsAllocPerPaycheck.highAprDebt$ / incomePeriod$) * 100,
       why: 'Accelerates debt payoff and saves on interest',
     },
     {
       id: 'emergency',
       key: 'emergency' as const,
       label: 'Emergency Savings',
-      amount: savingsAlloc.ef$,
-      percent: (savingsAlloc.ef$ / incomePeriod$) * 100,
+      amount: savingsAllocPerPaycheck.ef$,
+      percent: (savingsAllocPerPaycheck.ef$ / incomePeriod$) * 100,
       why: 'Builds your safety net for unexpected expenses',
     },
     {
       id: 'long_term_investing',
       key: 'long_term_investing' as const,
       label: 'Long-Term Investing',
-      amount: savingsAlloc.retirementTaxAdv$ + savingsAlloc.brokerage$,
-      percent: ((savingsAlloc.retirementTaxAdv$ + savingsAlloc.brokerage$) / incomePeriod$) * 100,
-      why: 'Grows your wealth for retirement and long-term goals',
+      amount: savingsAllocPerPaycheck.match401k$ + savingsAllocPerPaycheck.retirementTaxAdv$ + savingsAllocPerPaycheck.brokerage$,
+      percent: ((savingsAllocPerPaycheck.match401k$ + savingsAllocPerPaycheck.retirementTaxAdv$ + savingsAllocPerPaycheck.brokerage$) / incomePeriod$) * 100,
+      why: 'Grows your wealth for retirement and long-term goals (includes 401K match)',
+      subCategories: [
+        {
+          id: '401k_match',
+          key: '401k_match' as const,
+          label: '401k Match',
+          amount: savingsAllocPerPaycheck.match401k$,
+          percent: (savingsAllocPerPaycheck.match401k$ / incomePeriod$) * 100,
+          why: 'Employer contribution to your retirement, essentially free money',
+        },
+        {
+          id: 'retirement_tax_advantaged',
+          key: 'retirement_tax_advantaged' as const,
+          label: 'Retirement Tax-Advantaged',
+          amount: savingsAllocPerPaycheck.retirementTaxAdv$,
+          percent: (savingsAllocPerPaycheck.retirementTaxAdv$ / incomePeriod$) * 100,
+          why: 'Investments in accounts like IRA/401k for tax benefits',
+        },
+        {
+          id: 'brokerage',
+          key: 'brokerage' as const,
+          label: 'Brokerage',
+          amount: savingsAllocPerPaycheck.brokerage$,
+          percent: (savingsAllocPerPaycheck.brokerage$ / incomePeriod$) * 100,
+          why: 'Flexible investments for long-term goals outside of retirement',
+        },
+      ],
     },
     {
       id: 'fun_flexible',
@@ -847,8 +988,9 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
   
   // Emergency Fund data
   const efGap$ = Math.max(0, efTarget$ - efBalance$);
+  // savingsAlloc.ef$ is now monthly, so no need to multiply by paychecksPerMonth
   const monthsToTarget = efGap$ > 0 && savingsAlloc.ef$ > 0
-    ? Math.ceil(efGap$ / (savingsAlloc.ef$ * paychecksPerMonthForCalc))
+    ? Math.ceil(efGap$ / savingsAlloc.ef$)
     : 0;
 
   // Goals funding (simplified - map from goals array)
@@ -879,11 +1021,11 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
   // Smart insights
   const smartInsights: string[] = [];
   if (savingsAlloc.ef$ > 0 && monthsToTarget > 0) {
-    const additional$ = 20;
-    const additionalMonths = Math.ceil(efGap$ / ((savingsAlloc.ef$ + additional$) * paychecksPerMonthForCalc));
+    const additional$ = 20 * paychecksPerMonthForCalc; // Convert to monthly
+    const additionalMonths = Math.ceil(efGap$ / (savingsAlloc.ef$ + additional$));
     if (additionalMonths < monthsToTarget) {
       smartInsights.push(
-        `If you increase savings by $${additional$} per paycheck, you reach your safety goal ${monthsToTarget - additionalMonths} month${monthsToTarget - additionalMonths === 1 ? '' : 's'} sooner.`
+        `If you increase savings by $${additional$} per month, you reach your safety goal ${monthsToTarget - additionalMonths} month${monthsToTarget - additionalMonths === 1 ? '' : 's'} sooner.`
       );
     }
   }
@@ -910,18 +1052,18 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
     })),
   };
 
-  const paychecksPerMonth = getPaychecksPerMonth(income.payFrequency || 'biweekly');
-  
+  // savingsAlloc is now monthly, so use directly
+  // paychecksPerMonth is already defined above (line 830)
   const monthlyPlan: SimMonthlyPlan = {
     monthIndex: 0,
     incomeNet: incomePeriod$ * paychecksPerMonth,
-    needs$: incomeAlloc.needs$ * paychecksPerMonth,
+    needs$: monthlyEssentials,
     wants$: incomeAlloc.wants$ * paychecksPerMonth,
-    ef$: savingsAlloc.ef$ * paychecksPerMonth,
-    highAprDebt$: savingsAlloc.highAprDebt$ * paychecksPerMonth,
-    match401k$: savingsAlloc.match401k$ * paychecksPerMonth,
-    retirementTaxAdv$: savingsAlloc.retirementTaxAdv$ * paychecksPerMonth,
-    brokerage$: savingsAlloc.brokerage$ * paychecksPerMonth,
+    ef$: savingsAlloc.ef$, // Already monthly
+    highAprDebt$: savingsAlloc.highAprDebt$, // Already monthly
+    match401k$: savingsAlloc.match401k$, // Already monthly
+    retirementTaxAdv$: savingsAlloc.retirementTaxAdv$, // Already monthly
+    brokerage$: savingsAlloc.brokerage$, // Already monthly
   };
 
   // Use 40 years (480 months) for full projection, but we'll sample for display

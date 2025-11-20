@@ -109,8 +109,8 @@ export default function BoostHubPage() {
   };
 
   const handleContinue = () => {
-    setCurrentStep('paycheck-plan');
-    router.push('/onboarding/paycheck-plan');
+    setCurrentStep('monthly-plan');
+    router.push('/onboarding/monthly-plan');
   };
 
   return (
@@ -243,7 +243,7 @@ export default function BoostHubPage() {
             size="lg"
             className="w-full"
           >
-            Continue to Paycheck Plan
+            Continue to Monthly Plan
           </Button>
           {!allComplete && (
             <p className="mt-2 text-center text-sm text-slate-600 dark:text-slate-400">

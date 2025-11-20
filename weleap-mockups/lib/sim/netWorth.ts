@@ -34,6 +34,7 @@ export interface MonthlyPlan {
   match401k$: number;
   retirementTaxAdv$: number;
   brokerage$: number;
+  unallocated$?: number;
 }
 
 export interface ScenarioGoals {
@@ -247,7 +248,29 @@ export function simulateScenario(input: ScenarioInput): ScenarioSeries {
   // Monthly simulation loop
   for (let t = 0; t < months; t++) {
     // Get plan for this month (repeat first if not enough entries)
-    const plan = input.monthlyPlan[t] ?? input.monthlyPlan[0];
+    let plan = input.monthlyPlan[t] ?? input.monthlyPlan[0];
+    
+    // Dynamically adjust plan based on current state:
+    // 1. If all debts are paid off, redirect debt payments to brokerage
+    // 2. If EF target is reached, redirect EF contributions to brokerage
+    const activeDebts = debts.filter(d => d.balance > 0.01);
+    const hasActiveDebt = activeDebts.length > 0;
+    const efTargetReached = efTarget$ !== undefined && cash >= efTarget$;
+    
+    // Create adjusted plan for this month
+    const adjustedPlan: MonthlyPlan = {
+      ...plan,
+      // If no active debt, redirect debt payments to brokerage
+      highAprDebt$: hasActiveDebt ? plan.highAprDebt$ : 0,
+      // If EF target reached, redirect EF to brokerage
+      ef$: efTargetReached ? 0 : plan.ef$,
+      // Redirect freed-up allocations to brokerage
+      brokerage$: plan.brokerage$ + 
+        (hasActiveDebt ? 0 : plan.highAprDebt$) + 
+        (efTargetReached ? plan.ef$ : 0),
+    };
+    
+    plan = adjustedPlan;
     
     // 1) Apply growth
     cash = round2(cash * (1 + cashYield));
@@ -258,7 +281,7 @@ export function simulateScenario(input: ScenarioInput): ScenarioSeries {
     }
     
     // 2) Inflows from plan
-    cash = round2(cash + plan.ef$);
+    cash = round2(cash + plan.ef$ + (plan.unallocated$ ?? 0));
     brokerage = round2(brokerage + plan.brokerage$);
     retirement = round2(retirement + plan.match401k$ + plan.retirementTaxAdv$);
     
@@ -316,20 +339,23 @@ export function simulateScenario(input: ScenarioInput): ScenarioSeries {
     // Match standalone HTML logic: always try to apply, redirect unused portion
     const extraPaid = applyExtraPayment(debts, totalExtraPayment);
     
-    // If we couldn't use all the extra payment (e.g., all debts paid off), redirect remainder to brokerage
-    if (totalExtraPayment > extraPaid && extraPaid > 0) {
+    // If we couldn't use all the extra payment (e.g., all debts paid off), redirect to brokerage
+    // This represents the savings that would have gone to debt but is now available for investing
+    if (totalExtraPayment > extraPaid && totalExtraPayment > 0) {
       const redirected = round2(totalExtraPayment - extraPaid);
       brokerage = round2(brokerage + redirected);
     }
     
     // Add redirected minimum payments from previously paid-off debts to brokerage
+    // These represent freed-up cash flow that should be invested, not left in cash
     if (redirectedMinPayments$ > 0.01) {
       brokerage = round2(brokerage + redirectedMinPayments$);
     }
     
     // 4) Cash outflows for needs + wants + debt payments
     // Note: redirectedMinPayments$ represents minimum payments from paid-off debts
-    // These are redirected to brokerage, so they don't come from cash outflows
+    // These minimum payments are redirected to brokerage (line 328), so they don't come from cash outflows
+    // Extra debt payments that can't be applied (all debts paid off) are also redirected to brokerage (line 323)
     const totalOutflows = round2(plan.needs$ + plan.wants$ + totalMinPayment + extraPaid);
     
     // Check for cash shortfall

@@ -252,7 +252,7 @@ export function IncomeDistributionChart({
             ${takeHomePayText}
           </div>
           <div className="text-sm font-medium text-slate-600 dark:text-slate-400">
-            Take Home Pay
+            Take Home Pay /month
           </div>
           {grossIncome && (
             <div className="mt-1 text-xs text-slate-500 dark:text-slate-500">

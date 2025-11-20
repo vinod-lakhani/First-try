@@ -50,7 +50,7 @@ const defaultState: OnboardingState = {
     liquidity: 'Medium',
     retirementFocus: 'High',
     onIDR: false,
-    match401kPerPaycheck$: 0,
+    match401kPerMonth$: 0,
     iraRoomThisYear$: 7000,
     k401RoomThisYear$: 23000,
   },
@@ -107,7 +107,7 @@ export interface OnboardingStore extends OnboardingState {
   updateRiskConstraints: (updates: Partial<RiskConstraints>) => void;
   
   // Paycheck plan setters
-  setInitialPaycheckPlan: (plan: PaycheckPlan) => void;
+  setInitialPaycheckPlan: (plan: PaycheckPlan | undefined) => void;
   setBoostedPaycheckPlan: (plan: PaycheckPlan) => void;
   
   // Net worth setters

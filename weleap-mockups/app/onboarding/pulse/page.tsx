@@ -105,7 +105,7 @@ export default function PulsePage() {
           </div>
 
           <Button
-            onClick={() => router.push('/')}
+            onClick={() => router.push('/app/home')}
             size="lg"
             className="w-full"
           >

@@ -58,11 +58,18 @@ export default function PlanPreviewPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
 
-  // Generate plan on mount or when riskConstraints change (targets, actuals, shift limit)
+  // Generate plan on mount only if it doesn't exist
+  // Preserve user adjustments by using existing initialPaycheckPlan from store
   useEffect(() => {
     if (income?.netIncome$ && income.netIncome$ > 0) {
-      // Always regenerate to ensure we're using the latest riskConstraints values
-      // This ensures targets, actuals3m, and shiftLimitPct from the store are always used
+      // If plan already exists in store, use it (preserves user adjustments)
+      if (initialPaycheckPlan && initialPaycheckPlan.needs$ > 0) {
+        setPlan(initialPaycheckPlan);
+        setIsGenerating(false);
+        return;
+      }
+      
+      // Only regenerate if no plan exists yet (first time)
       setIsGenerating(true);
       try {
         const generated = generateInitialPaycheckPlanFromEngines(
@@ -80,7 +87,7 @@ export default function PlanPreviewPage() {
       // Income not set yet, but don't show error - user might be navigating back
       console.warn('Income not set, cannot generate plan yet');
     }
-  }, [income, riskConstraints, fixedExpenses, setInitialPaycheckPlan]);
+  }, [income?.netIncome$, income?.payFrequency, initialPaycheckPlan, setInitialPaycheckPlan]);
 
   const incomeAmount = income?.netIncome$ || 0;
   const payFrequency = income?.payFrequency || 'biweekly';
@@ -197,7 +204,20 @@ export default function PlanPreviewPage() {
     }
 
     // Calculate percentages for Needs breakdown
-    if (needsTotal > 0) {
+    // First, ensure breakdown items sum to exactly needsTotal
+    // If they exceed it, scale them down proportionally
+    if (needsTotal > 0 && breakdowns.Needs.length > 0) {
+      const breakdownSum = breakdowns.Needs.reduce((sum, item) => sum + item.amount, 0);
+      
+      // If breakdown items sum to more than the total, scale them down
+      if (breakdownSum > needsTotal + 0.01) {
+        const scaleFactor = needsTotal / breakdownSum;
+        breakdowns.Needs.forEach((item) => {
+          item.amount = item.amount * scaleFactor;
+        });
+      }
+      
+      // Now calculate percentages based on the (possibly scaled) amounts
       breakdowns.Needs.forEach((item) => {
         item.percent = (item.amount / needsTotal) * 100;
       });

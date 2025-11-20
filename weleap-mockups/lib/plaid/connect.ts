@@ -6,6 +6,7 @@
 
 import { mockPlaidConnect, type MockPlaidData } from './mock';
 import type { OnboardingStore } from '@/lib/onboarding/store';
+import { normalizeExpensesToMonthly } from '@/lib/onboarding/expenseUtils';
 
 /**
  * Connects with Plaid (or mock) and updates the onboarding store.
@@ -28,6 +29,7 @@ export async function connectWithPlaidAndUpdateStore(
     | 'setAssets'
     | 'setPlaidConnected'
     | 'setLastSyncDate'
+    | 'setInitialPaycheckPlan'
   >
 ): Promise<MockPlaidData> {
   // Call Plaid/mock connection
@@ -37,11 +39,16 @@ export async function connectWithPlaidAndUpdateStore(
   if (data.income) {
     store.setIncome(data.income);
   }
-  store.setFixedExpenses(data.fixedExpenses);
+  // Normalize all expenses to monthly (single source of truth)
+  store.setFixedExpenses(normalizeExpensesToMonthly(data.fixedExpenses));
   store.setDebts(data.debts);
   store.setAssets(data.assets);
   store.setPlaidConnected(true);
   store.setLastSyncDate(new Date().toISOString());
+  
+  // Clear initialPaycheckPlan so buildFinalPlanData recalculates with new Plaid income/expenses
+  // This ensures the plan uses the updated Plaid data instead of stale manual entry data
+  store.setInitialPaycheckPlan(undefined);
 
   return data;
 }

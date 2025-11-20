@@ -24,15 +24,15 @@ export interface SavingsInputs {
   /** Single filer income for Roth vs Traditional decision */
   incomeSingle$: number;
   /** Whether user is on Income-Driven Repayment for student loans */
-  onIDR: boolean;
+  onIDR?: boolean;
   /** Liquidity need level */
-  liquidity: LiquidityLevel;
+  liquidity?: LiquidityLevel;
   /** Retirement focus level */
-  retirementFocus: RetirementFocus;
+  retirementFocus?: RetirementFocus;
   /** Remaining IRA contribution room this year */
-  iraRoomThisYear$: number;
+  iraRoomThisYear$?: number;
   /** Remaining 401(k) contribution room this year (beyond match) */
-  k401RoomThisYear$: number;
+  k401RoomThisYear$?: number;
 }
 
 export interface SavingsAllocation {
@@ -128,11 +128,11 @@ export function allocateSavings(s: SavingsInputs): SavingsAllocation {
     highAprDebts,
     matchNeedThisPeriod$,
     incomeSingle$,
-    onIDR,
-    liquidity,
-    retirementFocus,
-    iraRoomThisYear$,
-    k401RoomThisYear$,
+    onIDR = false,
+    liquidity = 'Medium',
+    retirementFocus = 'Medium',
+    iraRoomThisYear$ = 7000,
+    k401RoomThisYear$ = 23000,
   } = s;
   
   const notes: string[] = [];
