@@ -96,8 +96,9 @@ export default function FeedPage() {
       }));
 
     // Calculate current balance (mock - in real app, this would come from Plaid)
+    // Use cash assets as a proxy for checking/savings balance
     const currentBalance = state.assets
-      .filter(a => a.type === 'checking')
+      .filter(a => a.type === 'cash')
       .reduce((sum, a) => sum + a.value$, 0);
 
     // Calculate upcoming bills (mock - in real app, this would come from Plaid)
