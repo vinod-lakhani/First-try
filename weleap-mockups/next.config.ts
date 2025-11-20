@@ -1,10 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Enable static export for GitHub Pages (disabled for dev)
-  // output: 'export',
+  // Enable static export for GitHub Pages
+  output: 'export',
   // Set base path for GitHub Pages (repo name is "First-try")
-  // basePath: '/First-try', // Commented out for local development
+  basePath: process.env.NODE_ENV === 'production' ? '/First-try' : '',
   // Disable image optimization for static export
   images: {
     unoptimized: true,
