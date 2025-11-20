@@ -19,11 +19,6 @@ const quickQuestions = [
     scenario: 'save_more',
   },
   {
-    id: 'allocate',
-    label: 'How should I allocate my expenses?',
-    scenario: 'allocate',
-  },
-  {
     id: 'rent',
     label: 'How much rent can I afford?',
     scenario: 'rent',
