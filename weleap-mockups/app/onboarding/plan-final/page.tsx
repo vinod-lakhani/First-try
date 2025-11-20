@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { NetWorthChart } from '@/components/charts/NetWorthChart';
 import { IncomeDistributionChart } from '@/components/charts/IncomeDistributionChart';
+import { OnboardingChat } from '@/components/onboarding/OnboardingChat';
 
 // Helper to get paychecks per month
 function getPaychecksPerMonth(frequency: string): number {
@@ -49,6 +50,7 @@ const categoryColors: Record<string, string> = {
 export default function PlanFinalPage() {
   const router = useRouter();
   const state = useOnboardingStore();
+  const { setComplete } = useOnboardingStore();
   const [planData, setPlanData] = useState<FinalPlanData | null>(null);
   const [isGenerating, setIsGenerating] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +67,20 @@ export default function PlanFinalPage() {
       setIsGenerating(false);
     }
   }, [state]);
+
+  // Convert per-paycheck amounts to monthly for display
+  const paychecksPerMonth = getPaychecksPerMonth(state.income?.payFrequency || 'biweekly');
+  const monthlyTakeHomePay = planData ? planData.paycheckAmount * paychecksPerMonth : 0;
+  const monthlyCategories = planData ? planData.paycheckCategories.map(cat => ({
+    ...cat,
+    amount: cat.amount * paychecksPerMonth, // Convert to monthly
+  })) : [];
+
+  const handleSavePlan = () => {
+    // Mark onboarding as complete and redirect to app
+    setComplete(true);
+    router.push('/app/home');
+  };
 
   const handleEnablePulse = () => {
     router.push('/onboarding/pulse');
@@ -89,6 +105,14 @@ export default function PlanFinalPage() {
   if (error || !planData) {
     return (
       <Card className="w-full">
+        <CardHeader className="space-y-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-2xl sm:text-3xl font-bold">
+              Your personalized financial plan is ready.
+            </CardTitle>
+            <OnboardingChat context="plan-final" inline />
+          </div>
+        </CardHeader>
         <CardContent className="py-12 text-center space-y-4">
           <p className="text-red-600 dark:text-red-400 font-medium">
             {error || 'Unable to generate plan. Please check your information.'}
@@ -106,9 +130,12 @@ export default function PlanFinalPage() {
       {/* SECTION 1 – Header Summary */}
       <Card className="min-w-0">
         <CardHeader className="space-y-2">
-          <CardTitle className="text-2xl sm:text-3xl font-bold">
-            Your personalized financial plan is ready.
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-2xl sm:text-3xl font-bold">
+              Your personalized financial plan is ready.
+            </CardTitle>
+            <OnboardingChat context="plan-final" inline />
+          </div>
           <CardDescription className="text-base space-y-1">
             <p>We've combined your income, bills, debts, and goals.</p>
             <p>Here's how your money can grow with a smarter allocation.</p>
@@ -124,12 +151,12 @@ export default function PlanFinalPage() {
         <CardContent className="overflow-hidden">
           <div className="flex justify-center">
             <IncomeDistributionChart
-              takeHomePay={planData.paycheckAmount}
+              takeHomePay={monthlyTakeHomePay}
               grossIncome={state.income?.grossIncome$ ? 
                 state.income.grossIncome$ * getPaychecksPerMonth(state.income.payFrequency || 'biweekly') : 
                 undefined
               }
-              categories={planData.paycheckCategories.map((cat) => ({
+              categories={monthlyCategories.map((cat) => ({
                 label: cat.label,
                 amount: cat.amount,
                 percent: cat.percent,
@@ -206,7 +233,7 @@ export default function PlanFinalPage() {
                         {goal.label}
                       </p>
                       <p className="text-sm text-slate-600 dark:text-slate-400">
-                        ${goal.amountPerPaycheck.toFixed(2)} per paycheck • Target: {goal.targetDateLabel}
+                        ${(goal.amountPerPaycheck * paychecksPerMonth).toFixed(2)} /month • Target: {goal.targetDateLabel}
                       </p>
                     </div>
                   </div>
@@ -409,9 +436,12 @@ export default function PlanFinalPage() {
               <p>We'll notify you when it's time to take action.</p>
             </div>
             <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:justify-center">
-              <Button onClick={handleEnablePulse} size="lg" className="w-full sm:w-auto">
-                Enable Pulse
+              <Button onClick={handleSavePlan} size="lg" className="w-full sm:w-auto">
+                Save this plan
                 <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+              <Button onClick={handleEnablePulse} size="lg" variant="outline" className="w-full sm:w-auto">
+                Enable Pulse
               </Button>
               <Button
                 onClick={handleSkip}

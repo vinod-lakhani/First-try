@@ -12,7 +12,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useOnboardingStore } from '@/lib/onboarding/store';
 import { allocateSavings, type SavingsInputs, type SavingsAllocation } from '@/lib/alloc/savings';
-import { Info, Shield, CreditCard, TrendingUp, Building2, PiggyBank, HelpCircle } from 'lucide-react';
+import { Info, Shield, CreditCard, TrendingUp, Building2, PiggyBank } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
+import { OnboardingChat } from '@/components/onboarding/OnboardingChat';
 
 interface SavingsCategory {
   id: string;
@@ -43,27 +45,38 @@ export default function SavingsPlanPage() {
   const [isGenerating, setIsGenerating] = useState(false);
 
   // Local state for inputs
-  const [match401kPerPaycheck, setMatch401kPerPaycheck] = useState<number>(
-    safetyStrategy?.match401kPerPaycheck$ || 0
+  const [match401kPerMonth, setMatch401kPerMonth] = useState<number>(
+    safetyStrategy?.match401kPerMonth$ || 0
   );
-  const [onIDR, setOnIDR] = useState<boolean>(safetyStrategy?.onIDR || false);
-  const [iraRoom, setIraRoom] = useState<number>(safetyStrategy?.iraRoomThisYear$ || 7000);
-  const [k401Room, setK401Room] = useState<number>(safetyStrategy?.k401RoomThisYear$ || 23000);
-  const [liquidity, setLiquidity] = useState<'High' | 'Medium' | 'Low'>(
-    safetyStrategy?.liquidity || 'Medium'
+  const [efTargetMonths, setEfTargetMonths] = useState<number>(
+    safetyStrategy?.efTargetMonths || 3
   );
-  const [retirementFocus, setRetirementFocus] = useState<'High' | 'Medium' | 'Low'>(
-    safetyStrategy?.retirementFocus || 'Medium'
-  );
+  const [efAllocationPct, setEfAllocationPct] = useState<number>(0);
+  const [hasAdjustedEfSlider, setHasAdjustedEfSlider] = useState<boolean>(false);
 
-  // Get savings budget from paycheck plan
+  // Helper to get paychecks per month
+  const getPaychecksPerMonth = (frequency: string): number => {
+    switch (frequency) {
+      case 'weekly': return 4.33;
+      case 'biweekly': return 2.17;
+      case 'semimonthly': return 2;
+      case 'monthly': return 1;
+      default: return 2.17;
+    }
+  };
+
+  // Get savings budget from paycheck plan and convert to monthly
   const savingsBudget$ = useMemo(() => {
-    return initialPaycheckPlan?.savings$ || 0;
-  }, [initialPaycheckPlan]);
+    const perPaycheckSavings = initialPaycheckPlan?.savings$ || 0;
+    if (perPaycheckSavings === 0) return 0;
+    // Convert per-paycheck to monthly
+    const paychecksPerMonth = getPaychecksPerMonth(income?.payFrequency || 'biweekly');
+    return perPaycheckSavings * paychecksPerMonth;
+  }, [initialPaycheckPlan, income?.payFrequency]);
 
   // Calculate EF target and current balance
   const efTarget$ = useMemo(() => {
-    if (!safetyStrategy?.efTargetMonths || fixedExpenses.length === 0) {
+    if (!efTargetMonths || fixedExpenses.length === 0) {
       return 0;
     }
     const monthlyEssentials = fixedExpenses
@@ -76,14 +89,16 @@ export default function SavingsPlanPage() {
         else if (exp.frequency === 'yearly') monthly = exp.amount$ / 12;
         return sum + monthly;
       }, 0);
-    return monthlyEssentials * safetyStrategy.efTargetMonths;
-  }, [safetyStrategy, fixedExpenses]);
+    return monthlyEssentials * efTargetMonths;
+  }, [efTargetMonths, fixedExpenses]);
 
   const efBalance$ = useMemo(() => {
     return assets
       .filter((a) => a.type === 'cash')
       .reduce((sum, a) => sum + a.value$, 0);
   }, [assets]);
+  
+  const efGap$ = useMemo(() => Math.max(0, efTarget$ - efBalance$), [efTarget$, efBalance$]);
 
   // Get high-APR debts
   const highAprDebts = useMemo(() => {
@@ -105,16 +120,48 @@ export default function SavingsPlanPage() {
           efTarget$,
           efBalance$,
           highAprDebts,
-          matchNeedThisPeriod$: match401kPerPaycheck,
+          matchNeedThisPeriod$: match401kPerMonth,
           incomeSingle$: income.incomeSingle$ || income.annualSalary$ || income.netIncome$ * 26,
-          onIDR,
-          liquidity,
-          retirementFocus,
-          iraRoomThisYear$: iraRoom,
-          k401RoomThisYear$: k401Room,
         };
 
         const allocation = allocateSavings(inputs);
+        
+        // Initialize EF allocation percentage from the calculated allocation if user hasn't adjusted
+        if (!hasAdjustedEfSlider) {
+          setEfAllocationPct((allocation.ef$ / savingsBudget$) * 100);
+        }
+        
+        // Override EF allocation with slider value if user has adjusted it
+        if (hasAdjustedEfSlider) {
+          const efAmount = Math.min(
+            (efAllocationPct / 100) * savingsBudget$,
+            efGap$ > 0 ? efGap$ : savingsBudget$ * 0.4 // Cap at gap or 40% of budget
+          );
+          
+          // Redistribute the difference to other categories proportionally
+          const originalEf = allocation.ef$;
+          const difference = efAmount - originalEf;
+          allocation.ef$ = efAmount;
+          
+          const otherTotal = allocation.highAprDebt$ + allocation.retirementTaxAdv$ + allocation.brokerage$;
+          
+          if (otherTotal > 0 && Math.abs(difference) > 0.01) {
+            const scale = (otherTotal - difference) / otherTotal;
+            allocation.highAprDebt$ = Math.max(0, allocation.highAprDebt$ * scale);
+            allocation.retirementTaxAdv$ = Math.max(0, allocation.retirementTaxAdv$ * scale);
+            allocation.brokerage$ = Math.max(0, allocation.brokerage$ * scale);
+          } else if (difference > 0 && otherTotal > 0) {
+            // If EF increased, reduce other categories proportionally
+            const scale = (otherTotal - difference) / otherTotal;
+            allocation.highAprDebt$ = Math.max(0, allocation.highAprDebt$ * scale);
+            allocation.retirementTaxAdv$ = Math.max(0, allocation.retirementTaxAdv$ * scale);
+            allocation.brokerage$ = Math.max(0, allocation.brokerage$ * scale);
+          } else if (difference < 0) {
+            // If EF decreased, add to brokerage
+            allocation.brokerage$ = allocation.brokerage$ - difference;
+          }
+        }
+        
         setSavingsAlloc(allocation);
       } catch (error) {
         console.error('Failed to generate savings allocation:', error);
@@ -126,25 +173,19 @@ export default function SavingsPlanPage() {
     savingsBudget$,
     efTarget$,
     efBalance$,
+    efGap$,
     highAprDebts,
     income,
-    match401kPerPaycheck,
-    onIDR,
-    liquidity,
-    retirementFocus,
-    iraRoom,
-    k401Room,
+    match401kPerMonth,
+    efAllocationPct,
+    hasAdjustedEfSlider,
   ]);
 
   const handleContinue = () => {
     // Save inputs to store
     updateSafetyStrategy({
-      match401kPerPaycheck$: match401kPerPaycheck,
-      onIDR,
-      iraRoomThisYear$: iraRoom,
-      k401RoomThisYear$: k401Room,
-      liquidity,
-      retirementFocus,
+      match401kPerMonth$: match401kPerMonth,
+      efTargetMonths,
     });
     setCurrentStep('plan-final');
     router.push('/onboarding/plan-final');
@@ -153,6 +194,14 @@ export default function SavingsPlanPage() {
   if (isGenerating) {
     return (
       <Card className="w-full">
+        <CardHeader className="space-y-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-2xl sm:text-3xl font-bold">
+              Your Savings Plan
+            </CardTitle>
+            <OnboardingChat context="savings-plan" inline />
+          </div>
+        </CardHeader>
         <CardContent className="py-12 text-center">
           <p className="text-slate-600 dark:text-slate-400">
             Generating your savings allocation...
@@ -165,17 +214,25 @@ export default function SavingsPlanPage() {
   if (!savingsAlloc) {
     return (
       <Card className="w-full">
+        <CardHeader className="space-y-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-2xl sm:text-3xl font-bold">
+              Your Savings Plan
+            </CardTitle>
+            <OnboardingChat context="savings-plan" inline />
+          </div>
+        </CardHeader>
         <CardContent className="py-12 text-center space-y-4">
           {savingsBudget$ <= 0 ? (
             <>
               <p className="text-red-600 dark:text-red-400 font-medium">
-                Paycheck plan is required to generate savings allocation.
+                Monthly plan is required to generate savings allocation.
               </p>
               <Button
-                onClick={() => router.push('/onboarding/paycheck-plan')}
+                onClick={() => router.push('/onboarding/monthly-plan')}
                 variant="outline"
               >
-                Go to Paycheck Plan
+                Go to Monthly Plan
               </Button>
             </>
           ) : (
@@ -188,8 +245,8 @@ export default function SavingsPlanPage() {
     );
   }
 
-  const categories: SavingsCategory[] = [
-    {
+  // Emergency fund category - always show, even if 0
+  const emergencyCategory: SavingsCategory = {
       id: 'emergency',
       label: 'Emergency Fund',
       amount: savingsAlloc.ef$,
@@ -197,7 +254,10 @@ export default function SavingsPlanPage() {
       icon: <Shield className="h-5 w-5" />,
       description: 'Builds your safety net for unexpected expenses',
       color: '#10b981',
-    },
+  };
+
+  // Other categories - filter out zero amounts
+  const otherCategories: SavingsCategory[] = [
     {
       id: 'debt',
       label: 'High-APR Debt Paydown',
@@ -236,20 +296,26 @@ export default function SavingsPlanPage() {
     },
   ].filter((cat) => cat.amount > 0.01); // Only show categories with meaningful amounts
 
+  const categories = [emergencyCategory, ...otherCategories];
+
   const totalAllocated = categories.reduce((sum, cat) => sum + cat.amount, 0);
   const remaining = savingsBudget$ - totalAllocated;
 
   return (
+    <>
     <Card className="w-full min-w-0 max-w-full overflow-x-hidden">
       <CardHeader className="space-y-2">
-        <CardTitle className="text-2xl sm:text-3xl font-bold">
-          Your Savings Plan
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-2xl sm:text-3xl font-bold">
+            Your Savings Plan
+          </CardTitle>
+          <OnboardingChat context="savings-plan" inline />
+        </div>
         <CardDescription className="text-base">
           Here's how we suggest allocating your ${savingsBudget$.toLocaleString('en-US', {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
-          })} savings budget. Adjust the settings below to optimize your allocation.
+          })} /month savings budget. Adjust the settings below to optimize your allocation.
         </CardDescription>
       </CardHeader>
 
@@ -264,7 +330,7 @@ export default function SavingsPlanPage() {
             <div className="space-y-2">
               <label htmlFor="match401k" className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
                 <Building2 className="h-4 w-4" />
-                401(k) Employer Match (per paycheck)
+                401(k) Employer Match (per month)
               </label>
               <div className="flex items-center gap-2">
                 <span className="text-slate-600 dark:text-slate-400">$</span>
@@ -273,8 +339,8 @@ export default function SavingsPlanPage() {
                   type="number"
                   min="0"
                   step="0.01"
-                  value={match401kPerPaycheck}
-                  onChange={(e) => setMatch401kPerPaycheck(parseFloat(e.target.value) || 0)}
+                  value={match401kPerMonth}
+                  onChange={(e) => setMatch401kPerMonth(parseFloat(e.target.value) || 0)}
                   className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-slate-600 dark:bg-slate-700 dark:text-white"
                 />
               </div>
@@ -283,110 +349,6 @@ export default function SavingsPlanPage() {
               </p>
             </div>
 
-            {/* Student Loan IDR */}
-            <div className="space-y-2">
-              <label htmlFor="onIDR" className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-                <HelpCircle className="h-4 w-4" />
-                Student Loan IDR Plan
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  id="onIDR"
-                  type="checkbox"
-                  checked={onIDR}
-                  onChange={(e) => setOnIDR(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
-                />
-                <span className="text-sm text-slate-700 dark:text-slate-300">
-                  I'm on an Income-Driven Repayment plan
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Traditional 401(k) contributions can lower your AGI and reduce IDR payments
-              </p>
-            </div>
-
-            {/* IRA Room */}
-            <div className="space-y-2">
-              <label htmlFor="iraRoom" className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-                <TrendingUp className="h-4 w-4" />
-                Remaining IRA Contribution Room (this year)
-              </label>
-              <div className="flex items-center gap-2">
-                <span className="text-slate-600 dark:text-slate-400">$</span>
-                <input
-                  id="iraRoom"
-                  type="number"
-                  min="0"
-                  step="100"
-                  value={iraRoom}
-                  onChange={(e) => setIraRoom(parseInt(e.target.value) || 0)}
-                  className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-slate-600 dark:bg-slate-700 dark:text-white"
-                />
-              </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                How much you can still contribute to IRA this year (max $7,000 for 2024)
-              </p>
-            </div>
-
-            {/* 401(k) Room */}
-            <div className="space-y-2">
-              <label htmlFor="k401Room" className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-                <Building2 className="h-4 w-4" />
-                Remaining 401(k) Contribution Room (this year, beyond match)
-              </label>
-              <div className="flex items-center gap-2">
-                <span className="text-slate-600 dark:text-slate-400">$</span>
-                <input
-                  id="k401Room"
-                  type="number"
-                  min="0"
-                  step="100"
-                  value={k401Room}
-                  onChange={(e) => setK401Room(parseInt(e.target.value) || 0)}
-                  className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-slate-600 dark:bg-slate-700 dark:text-white"
-                />
-              </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                How much you can still contribute to 401(k) beyond match (max $23,000 for 2024)
-              </p>
-            </div>
-
-            {/* Liquidity Need */}
-            <div className="space-y-2">
-              <label htmlFor="liquidity" className="text-sm font-medium text-slate-700 dark:text-slate-300">Liquidity Need</label>
-              <select
-                id="liquidity"
-                value={liquidity}
-                onChange={(e) => setLiquidity(e.target.value as 'High' | 'Medium' | 'Low')}
-                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-slate-600 dark:bg-slate-700 dark:text-white"
-              >
-                <option value="High">High - Need access to funds soon</option>
-                <option value="Medium">Medium - Some flexibility</option>
-                <option value="Low">Low - Long-term focus</option>
-              </select>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                How important is it to have quick access to your savings?
-              </p>
-            </div>
-
-            {/* Retirement Focus */}
-            <div className="space-y-2">
-              <label htmlFor="retirementFocus" className="text-sm font-medium text-slate-700 dark:text-slate-300">Retirement Focus</label>
-              <select
-                id="retirementFocus"
-                value={retirementFocus}
-                onChange={(e) => setRetirementFocus(e.target.value as 'High' | 'Medium' | 'Low')}
-                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-slate-600 dark:bg-slate-700 dark:text-white"
-              >
-                <option value="High">High - Maximize retirement savings</option>
-                <option value="Medium">Medium - Balanced approach</option>
-                <option value="Low">Low - Focus on other goals</option>
-              </select>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                How important is retirement savings vs. other financial goals?
-              </p>
-            </div>
           </div>
         </div>
 
@@ -395,7 +357,144 @@ export default function SavingsPlanPage() {
           <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
             Allocation Breakdown
           </h3>
-          {categories.map((category) => (
+          
+          {/* Emergency Fund Section with Slider */}
+          {(() => {
+            const efCategory = emergencyCategory;
+            // Use slider value if user has adjusted it, otherwise use actual allocation
+            const currentEfPct = hasAdjustedEfSlider ? efAllocationPct : (savingsAlloc.ef$ / savingsBudget$) * 100;
+            const efAllocationAmount = (currentEfPct / 100) * savingsBudget$;
+            const efCap = Math.min(savingsBudget$ * 0.4, efGap$ > 0 ? efGap$ : savingsBudget$);
+            const maxPct = (efCap / savingsBudget$) * 100;
+            
+            return (
+              <div className="rounded-lg border-2 border-green-200 bg-white p-4 dark:border-green-800 dark:bg-slate-800">
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="rounded-lg p-2"
+                      style={{ backgroundColor: `${efCategory.color}20` }}
+                    >
+                      <div style={{ color: efCategory.color }}>{efCategory.icon}</div>
+                    </div>
+                    <div>
+                      <span className="font-semibold text-slate-900 dark:text-white">
+                        {efCategory.label}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-lg font-bold text-slate-900 dark:text-white">
+                      ${efAllocationAmount.toLocaleString('en-US', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })} /month
+                    </div>
+                    <div className="text-sm text-slate-600 dark:text-slate-400">
+                      {currentEfPct.toFixed(1)}%
+                    </div>
+                  </div>
+                </div>
+
+                {/* EF Status: Current Balance and Target */}
+                <div className="mb-4 rounded-lg bg-slate-50 p-3 dark:bg-slate-700">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <div className="text-slate-600 dark:text-slate-400">Current Balance</div>
+                      <div className="text-lg font-semibold text-slate-900 dark:text-white">
+                        ${efBalance$.toLocaleString('en-US', {
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 0,
+                        })}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-600 dark:text-slate-400">Target</span>
+                        <select
+                          value={efTargetMonths}
+                          onChange={(e) => {
+                            const months = parseInt(e.target.value);
+                            setEfTargetMonths(months);
+                            updateSafetyStrategy({ efTargetMonths: months });
+                          }}
+                          className="rounded border border-slate-300 bg-white px-2 py-1 text-xs focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                        >
+                          <option value="3">3 months</option>
+                          <option value="6">6 months</option>
+                        </select>
+                      </div>
+                      <div className="text-lg font-semibold text-slate-900 dark:text-white">
+                        ${efTarget$.toLocaleString('en-US', {
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 0,
+                        })}
+                      </div>
+                      {efGap$ > 0 && (
+                        <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                          ${efGap$.toLocaleString('en-US', {
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0,
+                          })} remaining
+                        </div>
+                      )}
+                      {efGap$ <= 0 && (
+                        <div className="mt-1 text-xs text-green-600 dark:text-green-400">
+                          Target reached! ✓
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Slider */}
+                <div className="mb-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-sm text-slate-600 dark:text-slate-400">
+                      Monthly Allocation (% of savings budget)
+                    </span>
+                    <span className="text-sm font-semibold">{currentEfPct.toFixed(1)}%</span>
+                  </div>
+                  <Slider
+                    value={[currentEfPct]}
+                    onValueChange={([value]) => {
+                      setEfAllocationPct(Math.min(value, maxPct));
+                      setHasAdjustedEfSlider(true);
+                    }}
+                    min={0}
+                    max={maxPct}
+                    step={0.5}
+                    className="w-full"
+                  />
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    {efGap$ > 0 
+                      ? `Recommended: ${Math.min(40, (efGap$ / savingsBudget$) * 100).toFixed(1)}% to reach target`
+                      : 'Target reached - excess allocation will go to other categories'}
+                  </p>
+                </div>
+
+                {/* Progress bar */}
+                <div className="mb-2 h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                  <div
+                    className="h-full transition-all"
+                    style={{
+                      width: `${currentEfPct}%`,
+                      backgroundColor: efCategory.color,
+                    }}
+                  />
+                </div>
+
+                {/* Description */}
+                <div className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-400">
+                  <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                  <p>{efCategory.description}</p>
+                </div>
+              </div>
+            );
+          })()}
+          
+          {/* Other Categories */}
+          {otherCategories.map((category) => (
             <div
               key={category.id}
               className="rounded-lg border bg-white p-4 dark:bg-slate-800"
@@ -419,7 +518,7 @@ export default function SavingsPlanPage() {
                     ${category.amount.toLocaleString('en-US', {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2,
-                    })}
+                    })} /month
                   </div>
                   <div className="text-sm text-slate-600 dark:text-slate-400">
                     {category.percent.toFixed(1)}%
@@ -457,7 +556,7 @@ export default function SavingsPlanPage() {
               ${totalAllocated.toLocaleString('en-US', {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
-              })}
+              })} /month
             </span>
           </div>
           {remaining > 0.01 && (
@@ -467,7 +566,7 @@ export default function SavingsPlanPage() {
                 ${remaining.toLocaleString('en-US', {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
-                })}
+                })} /month
               </span>
             </div>
           )}
@@ -506,5 +605,6 @@ export default function SavingsPlanPage() {
         </div>
       </CardContent>
     </Card>
+    </>
   );
 }
