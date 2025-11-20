@@ -38,7 +38,7 @@ export default function IncomePage() {
         // Store both gross and net based on what user selected
         grossIncome$: isTakeHomePay ? 0 : monthlyAmount, // If user entered gross, store it
         netIncome$: isTakeHomePay ? monthlyAmount : 0, // If user entered take home, store it
-        payFrequency: 'monthly',
+        payFrequency: 'monthly' as const,
         // Calculate annual if needed
         annualSalary$: annualAmount,
         incomeSingle$: annualAmount,

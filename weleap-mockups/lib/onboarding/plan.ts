@@ -643,6 +643,14 @@ export interface FinalPlanData {
     amount: number;
     percent: number; // 0–100
     why: string;
+    subCategories?: Array<{
+      id: string;
+      key: string;
+      label: string;
+      amount: number;
+      percent: number;
+      why: string;
+    }>;
   }>;
 
   // SECTION 3 – Savings Strategy
@@ -784,6 +792,9 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
     }
 
     // Normalize actuals3m
+    if (!actuals3m) {
+      actuals3m = { needsPct: 0.5, wantsPct: 0.3, savingsPct: 0.2 };
+    }
     const actualsSum = actuals3m.needsPct + actuals3m.wantsPct + actuals3m.savingsPct;
     if (Math.abs(actualsSum - 100) < 1 && Math.abs(actualsSum - 1.0) > 0.1) {
       actuals3m = {

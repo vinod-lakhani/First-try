@@ -112,7 +112,7 @@ function SavingsOptimizerContent() {
           savingsPct: actuals3mSavingsPct,
         },
       } : {
-        shiftLimitPct: baselineState.riskConstraints?.shiftLimitPct ?? 0.04,
+        shiftLimitPct: 0.04,
         targets: targetsFromSliders,
         actuals3m: targetsFromSliders,
       },
