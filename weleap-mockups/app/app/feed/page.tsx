@@ -158,7 +158,14 @@ export default function FeedPage() {
       
       case 'open_view':
         // Handle opening different views
-        console.log('Open view:', action.payload);
+        const { view } = action.payload || {};
+        if (view === 'pulse') {
+          router.push('/app/tools/monthly-pulse');
+        } else if (view === 'debt') {
+          router.push('/app/tools/savings-allocator');
+        } else {
+          console.log('Open view:', action.payload);
+        }
         break;
       
       case 'apply_plan':

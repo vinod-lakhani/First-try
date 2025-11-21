@@ -11,12 +11,15 @@ import { useMemo, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useOnboardingStore } from '@/lib/onboarding/store';
 import { usePlanData } from '@/lib/onboarding/usePlanData';
+import { buildFinalPlanData, type FinalPlanData } from '@/lib/onboarding/plan';
+import type { OnboardingState } from '@/lib/onboarding/types';
 import { computeIncomePlan, type IncomePlanInputs, type IncomePlanResult, type NWSState } from '@/lib/income/computePlan';
 import { NWSBars } from '@/components/income/NWSBars';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { X, Info } from 'lucide-react';
+import { NetWorthChart } from '@/components/charts/NetWorthChart';
 
 // Helper to get paychecks per month
 function getPaychecksPerMonth(frequency: string): number {
@@ -202,6 +205,71 @@ export default function IncomeAllocatorPage() {
     setTargetWantsPct(normalizedTargets.wantsPct * 100);
     setTargetSavingsPct(normalizedTargets.savingsPct * 100);
   }, [normalizedTargets]);
+
+  // Store original target values for comparison
+  const [originalTargetNeedsPct, setOriginalTargetNeedsPct] = useState(normalizedTargets.needsPct * 100);
+  const [originalTargetWantsPct, setOriginalTargetWantsPct] = useState(normalizedTargets.wantsPct * 100);
+  const [originalTargetSavingsPct, setOriginalTargetSavingsPct] = useState(normalizedTargets.savingsPct * 100);
+
+  useEffect(() => {
+    setOriginalTargetNeedsPct(normalizedTargets.needsPct * 100);
+    setOriginalTargetWantsPct(normalizedTargets.wantsPct * 100);
+    setOriginalTargetSavingsPct(normalizedTargets.savingsPct * 100);
+  }, [normalizedTargets]);
+
+  // Build scenario state with updated targets (for net worth calculation)
+  const scenarioState = useMemo((): OnboardingState => {
+    const targetsFromSliders = {
+      needsPct: targetNeedsPct / 100,
+      wantsPct: targetWantsPct / 100,
+      savingsPct: targetSavingsPct / 100,
+    };
+    
+    return {
+      ...state,
+      fixedExpenses: [...state.fixedExpenses],
+      plaidConnected: state.plaidConnected,
+      riskConstraints: state.riskConstraints ? {
+        ...state.riskConstraints,
+        targets: targetsFromSliders,
+        // Update actuals3m to match targets for net worth calculation
+        actuals3m: {
+          needsPct: targetsFromSliders.needsPct,
+          wantsPct: targetsFromSliders.wantsPct,
+          savingsPct: targetsFromSliders.savingsPct,
+        },
+      } : {
+        shiftLimitPct: 0.04,
+        targets: targetsFromSliders,
+        actuals3m: targetsFromSliders,
+      },
+      initialPaycheckPlan: undefined, // Force recalculation
+    };
+  }, [state, targetNeedsPct, targetWantsPct, targetSavingsPct]);
+
+  // Calculate scenario plan data with updated targets
+  const scenarioPlanData = useMemo(() => {
+    try {
+      const plan = buildFinalPlanData(scenarioState);
+      console.log('[Income Allocator] Scenario plan calculated with new targets', {
+        targetNeedsPct,
+        targetWantsPct,
+        targetSavingsPct,
+        netWorthDataPoints: plan.netWorthChartData.netWorth.length,
+      });
+      return plan;
+    } catch (err) {
+      console.error('[Income Allocator] Scenario plan data error:', err);
+      return planData ?? null;
+    }
+  }, [scenarioState, planData, targetNeedsPct, targetWantsPct, targetSavingsPct]);
+
+  // Check if targets have changed
+  const hasChanged = useMemo(() => {
+    return Math.abs(targetNeedsPct - originalTargetNeedsPct) > 0.1 ||
+           Math.abs(targetWantsPct - originalTargetWantsPct) > 0.1 ||
+           Math.abs(targetSavingsPct - originalTargetSavingsPct) > 0.1;
+  }, [targetNeedsPct, targetWantsPct, targetSavingsPct, originalTargetNeedsPct, originalTargetWantsPct, originalTargetSavingsPct]);
 
   // Get shift limit from riskConstraints
   const shiftLimitPct = riskConstraints?.shiftLimitPct || 0.04;
@@ -523,6 +591,77 @@ export default function IncomeAllocatorPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Net Worth Chart */}
+          {scenarioPlanData && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Wealth Accumulation</CardTitle>
+                <CardDescription>
+                  Projected net worth based on your goal allocation
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Net Worth Chart */}
+                <div className="overflow-x-auto rounded-lg border bg-white p-4 dark:bg-slate-800">
+                  <div className="min-w-0">
+                    <NetWorthChart
+                      key={`income-allocator-${targetNeedsPct}-${targetWantsPct}-${targetSavingsPct}`}
+                      labels={scenarioPlanData.netWorthChartData.labels}
+                      netWorth={scenarioPlanData.netWorthChartData.netWorth}
+                      assets={scenarioPlanData.netWorthChartData.assets}
+                      liabilities={scenarioPlanData.netWorthChartData.liabilities}
+                      baselineNetWorth={hasChanged && planData ? planData.netWorthChartData.netWorth : undefined}
+                      height={400}
+                    />
+                  </div>
+                </div>
+
+                {/* Net Worth Projections */}
+                {scenarioPlanData.netWorthProjection && (
+                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                    {scenarioPlanData.netWorthProjection.map((projection) => {
+                      const baselineValue = planData?.netWorthProjection.find(p => p.label === projection.label)?.value || 0;
+                      const scenarioValue = projection.value;
+                      const delta = scenarioValue - baselineValue;
+                      const showDelta = hasChanged && Math.abs(delta) > 1;
+                      
+                      return (
+                        <div
+                          key={projection.label}
+                          className="rounded-lg border bg-white p-4 text-center dark:bg-slate-800"
+                        >
+                          <p className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-400">
+                            {projection.label}
+                          </p>
+                          <p className={`text-2xl font-bold ${
+                            scenarioValue >= 0 
+                              ? 'text-green-600 dark:text-green-400' 
+                              : 'text-red-600 dark:text-red-400'
+                          }`}>
+                            ${scenarioValue.toLocaleString('en-US', {
+                              minimumFractionDigits: 0,
+                              maximumFractionDigits: 0,
+                            })}
+                          </p>
+                          {showDelta && (
+                            <p className={`mt-1 text-xs font-medium ${
+                              delta >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                            }`}>
+                              {delta >= 0 ? '+' : ''}${delta.toLocaleString('en-US', {
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 0,
+                              })} vs Current
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Explanation */}
           <Card>

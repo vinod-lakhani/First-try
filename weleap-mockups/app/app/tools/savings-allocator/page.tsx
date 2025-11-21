@@ -95,7 +95,13 @@ function SavingsAllocatorContent() {
 
   const highAprDebts = baselineState.debts
     .filter(d => d.isHighApr || d.aprPct > 10)
-    .map(d => ({ balance$: d.balance$, aprPct: d.aprPct }));
+    .map(d => ({ 
+      id: d.id,
+      name: d.name,
+      balance$: d.balance$, 
+      aprPct: d.aprPct,
+      minPayment$: d.minPayment$,
+    }));
   const totalDebtBalance$ = highAprDebts.reduce((sum, d) => sum + d.balance$, 0);
 
   // match401kPerMonth$ is already monthly, use directly
@@ -451,6 +457,7 @@ function SavingsAllocatorContent() {
   }, [baselinePlanData]);
 
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showDebtDetails, setShowDebtDetails] = useState(false);
 
   // Determine if values have changed
   const hasChanged = useMemo(() => {
@@ -649,7 +656,13 @@ function SavingsAllocatorContent() {
               {/* High-APR Debt */}
               <div className="mb-6">
                 <div className="mb-2 flex items-center justify-between">
-                  <h3 className="font-medium text-slate-900 dark:text-white">High-APR Debt Paydown</h3>
+                  <button
+                    onClick={() => totalDebtBalance$ > 0 && setShowDebtDetails(!showDebtDetails)}
+                    className={`font-medium text-slate-900 dark:text-white ${totalDebtBalance$ > 0 ? 'cursor-pointer hover:text-primary' : ''}`}
+                    disabled={totalDebtBalance$ === 0}
+                  >
+                    High-APR Debt Paydown
+                  </button>
                   <span className="text-sm text-slate-600 dark:text-slate-400">
                     ${customAllocation.highAprDebt$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} /month
                   </span>
@@ -665,6 +678,116 @@ function SavingsAllocatorContent() {
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                   {totalDebtBalance$ > 0 ? `Balance: $${totalDebtBalance$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : 'No high-APR debt'}
                 </p>
+
+                {/* Debt Details Section */}
+                {showDebtDetails && totalDebtBalance$ > 0 && (
+                  <div className="mt-4 rounded-lg border bg-slate-50 p-4 dark:bg-slate-800">
+                    <h4 className="mb-3 text-sm font-semibold text-slate-900 dark:text-white">
+                      Debt Details & Payoff Schedule
+                    </h4>
+                    <div className="space-y-4">
+                      {highAprDebts.map((debt) => {
+                        // Calculate monthly payment (minimum + proportional extra)
+                        const debtProportion = totalDebtBalance$ > 0 ? debt.balance$ / totalDebtBalance$ : 0;
+                        const extraPayment = customAllocation.highAprDebt$ * debtProportion;
+                        const totalMonthlyPayment = debt.minPayment$ + extraPayment;
+                        
+                        // Calculate months to payoff (simplified calculation)
+                        // Using: months = -log(1 - (balance * apr/12) / payment) / log(1 + apr/12)
+                        const monthlyRate = debt.aprPct / 100 / 12;
+                        let monthsToPayoff = 0;
+                        if (totalMonthlyPayment > debt.balance$ * monthlyRate) {
+                          monthsToPayoff = Math.ceil(
+                            -Math.log(1 - (debt.balance$ * monthlyRate) / totalMonthlyPayment) / Math.log(1 + monthlyRate)
+                          );
+                        } else {
+                          monthsToPayoff = 999; // Will never pay off at this rate
+                        }
+
+                        // Calculate total interest paid
+                        const totalPayment = totalMonthlyPayment * monthsToPayoff;
+                        const totalInterest = Math.max(0, totalPayment - debt.balance$);
+
+                        // Format date
+                        const payoffDate = new Date();
+                        payoffDate.setMonth(payoffDate.getMonth() + monthsToPayoff);
+                        const payoffDateStr = monthsToPayoff < 999 
+                          ? payoffDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+                          : 'Never (increase payment)';
+
+                        return (
+                          <div key={debt.id} className="rounded border bg-white p-3 dark:bg-slate-900">
+                            <div className="mb-2 flex items-center justify-between">
+                              <h5 className="font-medium text-slate-900 dark:text-white">{debt.name}</h5>
+                              <span className="text-xs font-semibold text-red-600 dark:text-red-400">
+                                {debt.aprPct.toFixed(1)}% APR
+                              </span>
+                            </div>
+                            
+                            <div className="space-y-2 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-slate-600 dark:text-slate-400">Current Balance:</span>
+                                <span className="font-semibold">${debt.balance$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-600 dark:text-slate-400">Minimum Payment:</span>
+                                <span className="font-semibold">${debt.minPayment$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/mo</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-600 dark:text-slate-400">Extra Payment:</span>
+                                <span className="font-semibold text-green-600 dark:text-green-400">
+                                  ${extraPayment.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/mo
+                                </span>
+                              </div>
+                              <div className="flex justify-between border-t pt-2">
+                                <span className="text-slate-600 dark:text-slate-400">Total Monthly Payment:</span>
+                                <span className="font-semibold text-primary">
+                                  ${totalMonthlyPayment.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/mo
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-600 dark:text-slate-400">Payoff Date:</span>
+                                <span className={`font-semibold ${monthsToPayoff < 999 ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                                  {payoffDateStr}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-600 dark:text-slate-400">Total Interest:</span>
+                                <span className="font-semibold text-red-600 dark:text-red-400">
+                                  ${totalInterest.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      
+                      {/* Summary */}
+                      <div className="rounded border-2 border-primary/20 bg-primary/5 p-3">
+                        <div className="mb-2 text-sm font-semibold text-slate-900 dark:text-white">
+                          Total Debt Paydown Summary
+                        </div>
+                        <div className="space-y-1 text-xs">
+                          <div className="flex justify-between">
+                            <span className="text-slate-600 dark:text-slate-400">Total Monthly Payment:</span>
+                            <span className="font-semibold">
+                              ${(highAprDebts.reduce((sum, d) => sum + d.minPayment$, 0) + customAllocation.highAprDebt$).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/mo
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-600 dark:text-slate-400">Allocated to Debt:</span>
+                            <span className="font-semibold text-green-600 dark:text-green-400">
+                              ${customAllocation.highAprDebt$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/mo
+                            </span>
+                          </div>
+                          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                            Adjust the slider above to change your total debt paydown allocation. Extra payments will be distributed proportionally across all debts.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Retirement Match */}

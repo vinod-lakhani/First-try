@@ -125,7 +125,7 @@ export function HomeScreen({ data }: HomeScreenProps) {
               </div>
 
               <Button
-                onClick={() => router.push('/onboarding/pulse')}
+                onClick={() => router.push('/app/tools/monthly-pulse')}
                 variant="outline"
                 className="w-full"
               >
@@ -189,7 +189,7 @@ export function HomeScreen({ data }: HomeScreenProps) {
               </div>
               <NetWorthSparkline data={netWorth.history} />
               <Button
-                onClick={() => router.push('/app/tools/net-worth-analyzer')}
+                onClick={() => router.push('/app/tools/savings-optimizer')}
                 variant="outline"
                 className="w-full"
               >
@@ -300,6 +300,9 @@ export function HomeScreen({ data }: HomeScreenProps) {
                             router.push('/app/tools/savings-allocator');
                           } else if (goal.id === 'goal-debt') {
                             router.push('/app/tools/savings-allocator');
+                          } else {
+                            // For monthly savings goal, open savings optimizer
+                            router.push('/app/tools/savings-optimizer');
                           }
                         }}
                         variant="ghost"

@@ -263,8 +263,8 @@ export function buildFeed(snapshot: UserSnapshot): FeedCard[] {
       body: `You paid down $${paidThisMonth.toFixed(0)} in high-interest debt this month. Stay at this pace and you'll be debt-free in ${monthsToPayoff} months.`,
       ctaLabel: 'See debt plan',
       ctaAction: {
-        kind: 'open_view',
-        payload: { view: 'debt' },
+        kind: 'open_optimizer',
+        payload: { tool: 'savings_allocator', focus: 'debt' },
       },
       metadata: {
         debtName: highAprDebt.name,
