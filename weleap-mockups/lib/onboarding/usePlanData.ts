@@ -35,39 +35,8 @@ export function usePlanData(): FinalPlanData | null {
   // Recalculate plan whenever relevant state changes
   useEffect(() => {
     const state = useOnboardingStore.getState();
-    // Calculate fixedExpensesTotal to verify it's updating
-    const fixedExpensesTotal = state.fixedExpenses.reduce((sum, e) => sum + e.amount$, 0);
-    console.log('[usePlanData] Recalculating plan', {
-      income: state.income?.netIncome$,
-      grossIncome: state.income?.grossIncome$,
-      payFrequency: state.income?.payFrequency,
-      fixedExpensesCount: state.fixedExpenses.length,
-      fixedExpensesTotal: fixedExpensesTotal.toFixed(2),
-      fixedExpensesDetails: state.fixedExpenses.map(e => ({
-        name: e.name,
-        amount$: e.amount$,
-        frequency: e.frequency,
-      })),
-      debtsCount: state.debts.length,
-      hasInitialPaycheckPlan: !!state.initialPaycheckPlan,
-      plaidConnected: state.plaidConnected,
-      initialPaycheckPlanNeeds$: state.initialPaycheckPlan?.needs$,
-      initialPaycheckPlanWants$: state.initialPaycheckPlan?.wants$,
-      initialPaycheckPlanSavings$: state.initialPaycheckPlan?.savings$,
-    });
     try {
       const data = buildFinalPlanData(state);
-      const paychecksPerMonth = getPaychecksPerMonth(state.income?.payFrequency || 'biweekly');
-      const needsCategories = data.paycheckCategories.filter(c => c.key === 'essentials' || c.key === 'debt_minimums');
-      const wantsCategories = data.paycheckCategories.filter(c => c.key === 'fun_flexible');
-      const savingsCategories = data.paycheckCategories.filter(c => c.key === 'emergency' || c.key === 'long_term_investing' || c.key === 'debt_extra');
-      console.log('[usePlanData] Plan calculated', {
-        paycheckAmount: data.paycheckAmount,
-        categoriesCount: data.paycheckCategories.length,
-        monthlyNeeds: needsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth,
-        monthlyWants: wantsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth,
-        monthlySavings: savingsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth,
-      });
       setPlanData(data);
     } catch (err) {
       console.error('[usePlanData] Failed to build plan data:', err);

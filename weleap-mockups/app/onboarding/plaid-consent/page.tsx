@@ -73,8 +73,10 @@ export default function PlaidConsentPage() {
     } catch (error) {
       console.error('Error in handleAgreeAndConnect:', error);
       setIsProcessing(false);
-      // Still redirect even on error
-      router.push('/onboarding/plaid');
+      // Still redirect even on error (unless it's a navigation error)
+      if (error instanceof Error && error.message !== 'Navigation cancelled') {
+        router.push('/onboarding/plaid');
+      }
     }
   };
 
@@ -153,9 +155,7 @@ export default function PlaidConsentPage() {
           {/* Action Buttons */}
           <div className="space-y-3 pt-4">
             <Button
-              onClick={(e) => {
-                e.preventDefault();
-                console.log('Button clicked, consentChecked:', consentChecked);
+              onClick={() => {
                 handleAgreeAndConnect();
               }}
               size="lg"

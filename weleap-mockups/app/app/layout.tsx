@@ -11,8 +11,6 @@ import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useOnboardingStore } from '@/lib/onboarding/store';
 import { FinancialSidekick } from './components/FinancialSidekick';
-import { LogDownloadButton } from './components/LogDownloadButton';
-import { LoggerInit } from './components/LoggerInit';
 import { Home, DollarSign, Rss, User } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -106,12 +104,6 @@ export default function AppLayout({
           <FinancialSidekick inline={true} />
         </div>
       </div>
-
-      {/* Logger Initialization - Must be client-side */}
-      <LoggerInit />
-      
-      {/* Log Download Button - For debugging */}
-      <LogDownloadButton />
     </div>
   );
 }

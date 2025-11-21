@@ -11,8 +11,9 @@ import { useRouter } from 'next/navigation';
 import { useOnboardingStore } from '@/lib/onboarding/store';
 import { usePlanData } from '@/lib/onboarding/usePlanData';
 import { buildFeed } from '@/lib/feed/buildFeed';
-import type { UserSnapshot } from '@/lib/feed/types';
+import type { UserSnapshot, TransactionsSection, FeedTransaction } from '@/lib/feed/types';
 import { FeedCardRenderer } from '@/components/feed/cards';
+import { TransactionsSection as TransactionsSectionComponent } from '@/components/feed/TransactionsSection';
 import type { FeedCard } from '@/lib/feed/types';
 
 // Helper to get paychecks per month
@@ -138,6 +139,101 @@ export default function FeedPage() {
     return buildFeed(userSnapshot);
   }, [userSnapshot]);
 
+  // TODO: Replace with real data from Plaid transaction APIs via backend
+  // Static transaction data created once to avoid regeneration and improve performance
+  const mockTransactions = useMemo((): TransactionsSection => {
+    // Create dates relative to a fixed base time to avoid recalculation
+    const baseTime = Date.now();
+    
+    return {
+      bankTransactions: [
+        {
+          id: 'bank-feed-0',
+          accountKind: 'bank' as const,
+          accountName: 'Chase Checking',
+          merchant: 'Amazon',
+          amount$: -125.50,
+          date: new Date(baseTime - 0 * 24 * 60 * 60 * 1000).toISOString(),
+          category: 'Shopping',
+        },
+        {
+          id: 'bank-feed-1',
+          accountKind: 'bank' as const,
+          accountName: 'Wells Fargo Savings',
+          merchant: 'Starbucks',
+          amount$: -8.75,
+          date: new Date(baseTime - 1 * 24 * 60 * 60 * 1000).toISOString(),
+          category: 'Food & Drink',
+        },
+        {
+          id: 'bank-feed-2',
+          accountKind: 'bank' as const,
+          accountName: 'Chase Checking',
+          merchant: 'Whole Foods',
+          amount$: -89.32,
+          date: new Date(baseTime - 2 * 24 * 60 * 60 * 1000).toISOString(),
+          category: 'Groceries',
+        },
+        {
+          id: 'bank-feed-3',
+          accountKind: 'bank' as const,
+          accountName: 'Wells Fargo Savings',
+          merchant: 'Uber',
+          amount$: -24.50,
+          date: new Date(baseTime - 3 * 24 * 60 * 60 * 1000).toISOString(),
+          category: 'Transportation',
+        },
+        {
+          id: 'bank-feed-4',
+          accountKind: 'bank' as const,
+          accountName: 'Chase Checking',
+          merchant: 'Spotify',
+          amount$: -9.99,
+          date: new Date(baseTime - 4 * 24 * 60 * 60 * 1000).toISOString(),
+          category: 'Entertainment',
+        },
+      ],
+      creditCardTransactions: [
+        {
+          id: 'cc-feed-0',
+          accountKind: 'credit_card' as const,
+          accountName: 'Chase Sapphire',
+          merchant: 'Restaurant',
+          amount$: -85.20,
+          date: new Date(baseTime - 0 * 24 * 60 * 60 * 1000).toISOString(),
+          category: 'Dining',
+        },
+        {
+          id: 'cc-feed-1',
+          accountKind: 'credit_card' as const,
+          accountName: 'Amex Gold',
+          merchant: 'Airbnb',
+          amount$: -325.00,
+          date: new Date(baseTime - 1 * 24 * 60 * 60 * 1000).toISOString(),
+          category: 'Travel',
+        },
+        {
+          id: 'cc-feed-2',
+          accountKind: 'credit_card' as const,
+          accountName: 'Chase Sapphire',
+          merchant: 'Delta Airlines',
+          amount$: -450.00,
+          date: new Date(baseTime - 2 * 24 * 60 * 60 * 1000).toISOString(),
+          category: 'Travel',
+        },
+        {
+          id: 'cc-feed-3',
+          accountKind: 'credit_card' as const,
+          accountName: 'Amex Gold',
+          merchant: 'Best Buy',
+          amount$: -199.99,
+          date: new Date(baseTime - 3 * 24 * 60 * 60 * 1000).toISOString(),
+          category: 'Electronics',
+        },
+      ],
+    };
+  }, []);
+
   // Handle card actions
   const handleCardAction = (action: FeedCard['ctaAction']) => {
     if (!action) return;
@@ -195,6 +291,11 @@ export default function FeedPage() {
     );
   }
 
+  // Separate cards by priority for better layout
+  const highPriorityCards = feedCards.filter(card => card.priority <= 2);
+  const mediumPriorityCards = feedCards.filter(card => card.priority === 3);
+  const lowPriorityCards = feedCards.filter(card => card.priority >= 4);
+
   return (
     <div className="flex min-h-[calc(100vh-73px)] flex-col">
       <div className="flex-1 overflow-y-auto px-4 py-6">
@@ -204,13 +305,37 @@ export default function FeedPage() {
               No feed items available. Complete your onboarding to see personalized insights.
             </p>
           ) : (
-            feedCards.map((card) => (
-              <FeedCardRenderer
-                key={card.id}
-                card={card}
-                onAction={handleCardAction}
-              />
-            ))
+            <>
+              {/* High Priority Cards (Alerts, Actions) */}
+              {highPriorityCards.map((card) => (
+                <FeedCardRenderer
+                  key={card.id}
+                  card={card}
+                  onAction={handleCardAction}
+                />
+              ))}
+
+              {/* Recent Activity Section - placed after high-priority cards */}
+              <TransactionsSectionComponent data={mockTransactions} />
+
+              {/* Medium Priority Cards (Progress, Opportunities) */}
+              {mediumPriorityCards.map((card) => (
+                <FeedCardRenderer
+                  key={card.id}
+                  card={card}
+                  onAction={handleCardAction}
+                />
+              ))}
+
+              {/* Low Priority Cards (Education, Weekly Summary) */}
+              {lowPriorityCards.map((card) => (
+                <FeedCardRenderer
+                  key={card.id}
+                  card={card}
+                  onAction={handleCardAction}
+                />
+              ))}
+            </>
           )}
         </div>
       </div>

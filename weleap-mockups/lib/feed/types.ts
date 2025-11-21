@@ -217,3 +217,24 @@ export interface UserSnapshot {
   savingsStreakMonths?: number;
 }
 
+/**
+ * Transaction and Activity Types
+ */
+
+export type AccountKind = 'bank' | 'credit_card';
+
+export interface FeedTransaction {
+  id: string;
+  accountKind: AccountKind;
+  accountName: string;
+  merchant: string;
+  amount$: number; // positive for credits/income, negative for debits/spending
+  date: string; // ISO date string
+  category?: string;
+}
+
+export interface TransactionsSection {
+  bankTransactions: FeedTransaction[];
+  creditCardTransactions: FeedTransaction[];
+}
+
