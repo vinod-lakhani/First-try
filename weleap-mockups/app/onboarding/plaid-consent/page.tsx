@@ -20,31 +20,20 @@ export default function PlaidConsentPage() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   const handleAgreeAndConnect = async () => {
-    if (!consentChecked) return;
+    if (!consentChecked) {
+      console.log('Consent not checked');
+      return;
+    }
 
     setIsProcessing(true);
 
     try {
       // Record consent via API
-      const userId = 'current-user-id'; // TODO: Get from auth context
+      const userId = typeof window !== 'undefined' 
+        ? localStorage.getItem('weleap_user_id') || 'current-user-id'
+        : 'current-user-id';
       
-      const response = await fetch('/api/consent/pre-plaid', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId,
-          tosVersion: TOS_VERSION,
-          ppVersion: PRIVACY_POLICY_VERSION,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to record consent');
-      }
-
-      // Store consent locally for now (until backend is fully implemented)
+      // Store consent locally first (until backend is fully implemented)
       const consentData = {
         id: Date.now().toString(),
         userId,
@@ -58,12 +47,34 @@ export default function PlaidConsentPage() {
         localStorage.setItem(`weleap_consent_${userId}_pre_plaid`, JSON.stringify(consentData));
       }
 
-      // Redirect to Plaid connection page
+      // Try to record consent via API (but don't block on failure in development)
+      try {
+        const response = await fetch('/api/consent/pre-plaid', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId,
+            tosVersion: TOS_VERSION,
+            ppVersion: PRIVACY_POLICY_VERSION,
+          }),
+        });
+
+        if (!response.ok) {
+          console.warn('API consent recording failed, but continuing with local storage');
+        }
+      } catch (apiError) {
+        console.warn('API consent recording error (continuing anyway):', apiError);
+      }
+
+      // Always redirect to Plaid connection page
       router.push('/onboarding/plaid');
     } catch (error) {
-      console.error('Error recording consent:', error);
+      console.error('Error in handleAgreeAndConnect:', error);
       setIsProcessing(false);
-      // In a real app, show error message
+      // Still redirect even on error
+      router.push('/onboarding/plaid');
     }
   };
 
@@ -142,10 +153,15 @@ export default function PlaidConsentPage() {
           {/* Action Buttons */}
           <div className="space-y-3 pt-4">
             <Button
-              onClick={handleAgreeAndConnect}
+              onClick={(e) => {
+                e.preventDefault();
+                console.log('Button clicked, consentChecked:', consentChecked);
+                handleAgreeAndConnect();
+              }}
               size="lg"
               className="w-full"
               disabled={!consentChecked || isProcessing}
+              type="button"
             >
               {isProcessing ? (
                 <>Processing...</>
