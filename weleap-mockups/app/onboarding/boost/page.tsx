@@ -12,7 +12,6 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useOnboardingStore } from '@/lib/onboarding/store';
-import { connectWithPlaidAndUpdateStore } from '@/lib/plaid/connect';
 import { CheckCircle2, Circle, Receipt, CreditCard, Target, Shield, AlertTriangle, X, Zap } from 'lucide-react';
 
 interface BoostTile {
@@ -91,17 +90,9 @@ export default function BoostHubPage() {
   const completedCount = requiredTiles.filter(t => t.isComplete()).length;
   const allComplete = completedCount === requiredTiles.length;
 
-  const handleConnectPlaid = async () => {
-    setIsConnecting(true);
-    try {
-      await connectWithPlaidAndUpdateStore(state);
-      // Banner will automatically disappear because plaidConnected is now true
-    } catch (error) {
-      console.error('Plaid connection error:', error);
-      // In a real app, show error message to user
-    } finally {
-      setIsConnecting(false);
-    }
+  const handleConnectPlaid = () => {
+    // Redirect to consent screen first
+    router.push('/onboarding/plaid-consent');
   };
 
   const handleDismissBanner = () => {

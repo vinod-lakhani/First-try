@@ -46,18 +46,18 @@ export default function IncomePage() {
       
       setIncome(incomeState);
     }
-    setCurrentStep('plaid');
-    router.push('/onboarding/plaid');
+    setCurrentStep('plaid-consent');
+    router.push('/onboarding/plaid-consent');
   };
 
   const handleConnectBank = () => {
-    setCurrentStep('plaid');
-    router.push('/onboarding/plaid');
+    setCurrentStep('plaid-consent');
+    router.push('/onboarding/plaid-consent');
   };
 
   const handleSkip = () => {
-    setCurrentStep('plaid');
-    router.push('/onboarding/plaid');
+    setCurrentStep('plaid-consent');
+    router.push('/onboarding/plaid-consent');
   };
 
   return (

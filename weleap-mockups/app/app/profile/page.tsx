@@ -11,10 +11,12 @@ import { useRouter } from 'next/navigation';
 import { useOnboardingStore } from '@/lib/onboarding/store';
 import { buildProfileData } from '@/lib/profile/buildProfileData';
 import type { ProfilePageData } from '@/lib/profile/types';
+import { getMostRecentConsent } from '@/lib/legal/getLatestConsent';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import { CheckCircle2, Clock, AlertCircle, Pencil, X, Check, Shield, Mail, Lock, Link2, Download, Trash2 } from 'lucide-react';
+import { CheckCircle2, Clock, AlertCircle, Pencil, X, Check, Shield, Mail, Lock, Link2, Download, Trash2, FileText } from 'lucide-react';
+import Link from 'next/link';
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -24,6 +26,15 @@ export default function ProfilePage() {
   const profileData = useMemo<ProfilePageData>(() => {
     return buildProfileData(state, 'user@example.com'); // TODO: Get actual user email
   }, [state]);
+
+  // Get consent information
+  const userId = 'current-user-id'; // TODO: Get from auth context
+  const latestConsent = useMemo(() => {
+    if (typeof window !== 'undefined') {
+      return getMostRecentConsent(userId);
+    }
+    return null;
+  }, [userId]);
 
   // Edit states for each section
   const [editingSection, setEditingSection] = useState<string | null>(null);
@@ -209,7 +220,7 @@ export default function ProfilePage() {
                 <Button
                   variant="outline"
                   className="w-full"
-                  onClick={() => router.push('/onboarding/plaid')}
+                  onClick={() => router.push('/onboarding/plaid-consent')}
                 >
                   <Link2 className="mr-2 h-4 w-4" />
                   Connect another account
@@ -422,6 +433,41 @@ export default function ProfilePage() {
                   <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                     Your data is encrypted and secure. We never share your personal information.
                   </p>
+                </div>
+
+                <div className="border-t pt-4">
+                  <h3 className="mb-2 font-medium text-slate-900 dark:text-white">Legal & Consents</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-600 dark:text-slate-400">Terms of Service:</span>
+                      <Link href="/legal/terms" className="text-sm font-medium text-primary hover:underline">
+                        View Terms
+                      </Link>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-600 dark:text-slate-400">Privacy Policy:</span>
+                      <Link href="/legal/privacy" className="text-sm font-medium text-primary hover:underline">
+                        View Policy
+                      </Link>
+                    </div>
+                    {latestConsent && (
+                      <div className="rounded-lg border bg-slate-50 p-3 dark:bg-slate-800">
+                        <p className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                          Last accepted on:
+                        </p>
+                        <p className="text-sm text-slate-900 dark:text-white">
+                          {new Date(latestConsent.createdAt).toLocaleDateString('en-US', {
+                            month: 'long',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          ToS v{latestConsent.tosVersion} · Privacy Policy v{latestConsent.ppVersion}
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="border-t pt-4">
