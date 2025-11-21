@@ -14,8 +14,8 @@ import { useRouter } from 'next/navigation';
 export default function TermsOfServicePage() {
   const router = useRouter();
   
-  const tosVersion = "1.0.0"; // TODO: Auto-version from Git or manual update
-  const lastUpdated = "2025-01-20";
+  const tosVersion = "1.0.0";
+  const lastUpdated = "2025-08-27";
 
   return (
     <div className="flex min-h-[calc(100vh-73px)] flex-col">
@@ -43,88 +43,62 @@ export default function TermsOfServicePage() {
           <Card>
             <CardContent className="prose prose-slate dark:prose-invert max-w-none pt-6">
               <section className="mb-8">
-                <h2 className="mb-4 text-xl font-semibold">1. Acceptance of Terms</h2>
+                <p className="mb-6 text-slate-700 dark:text-slate-300">
+                  <strong>Effective Date: August 27, 2025</strong>
+                </p>
                 <p className="mb-4 text-slate-700 dark:text-slate-300">
-                  By accessing or using WeLeap ("Service"), you agree to be bound by these Terms of Service ("Terms").
-                  If you disagree with any part of these terms, then you may not access the Service.
+                  Welcome to WeLeap! By using our services, you agree to these Terms of Service.
                 </p>
               </section>
 
               <section className="mb-8">
-                <h2 className="mb-4 text-xl font-semibold">2. Description of Service</h2>
+                <h2 className="mb-4 text-xl font-semibold">What We Provide</h2>
                 <p className="mb-4 text-slate-700 dark:text-slate-300">
-                  WeLeap is a financial planning and budgeting application that helps users manage their income,
-                  expenses, savings, and financial goals. The Service includes:
+                  WeLeap offers personalized financial insights, planning assistance, and product suggestions based on the information you provide.
                 </p>
+              </section>
+
+              <section className="mb-8">
+                <h2 className="mb-4 text-xl font-semibold">Not Financial Advice</h2>
+                <p className="mb-4 text-slate-700 dark:text-slate-300">
+                  We are not a registered investment advisor, broker, or tax professional. All insights are for informational purposes only and should not be considered financial advice.
+                </p>
+              </section>
+
+              <section className="mb-8">
+                <h2 className="mb-4 text-xl font-semibold">User Responsibilities</h2>
                 <ul className="ml-6 list-disc space-y-2 text-slate-700 dark:text-slate-300">
-                  <li>Income allocation and budgeting tools</li>
-                  <li>Savings optimization recommendations</li>
-                  <li>Debt payoff planning</li>
-                  <li>Net worth tracking and projections</li>
-                  <li>Financial goal tracking</li>
+                  <li>You agree to provide accurate information to get the best recommendations.</li>
+                  <li>You're responsible for your own financial decisions.</li>
+                  <li>You agree not to misuse the service or share misleading or harmful information.</li>
                 </ul>
               </section>
 
               <section className="mb-8">
-                <h2 className="mb-4 text-xl font-semibold">3. Financial Information</h2>
+                <h2 className="mb-4 text-xl font-semibold">Data Use</h2>
                 <p className="mb-4 text-slate-700 dark:text-slate-300">
-                  WeLeap may connect to your financial accounts through third-party services (such as Plaid) to
-                  provide accurate financial data. You are responsible for maintaining the security of your account
-                  credentials and for all activities that occur under your account.
-                </p>
-                <p className="mb-4 text-slate-700 dark:text-slate-300">
-                  WeLeap provides financial planning tools and recommendations, but does not provide financial,
-                  investment, legal, or tax advice. You should consult with qualified professionals for such advice.
+                  We handle your data according to our Privacy Policy. You retain ownership of your data, and we use it only to serve you better.
                 </p>
               </section>
 
               <section className="mb-8">
-                <h2 className="mb-4 text-xl font-semibold">4. User Responsibilities</h2>
+                <h2 className="mb-4 text-xl font-semibold">Service Changes</h2>
                 <p className="mb-4 text-slate-700 dark:text-slate-300">
-                  You are responsible for:
-                </p>
-                <ul className="ml-6 list-disc space-y-2 text-slate-700 dark:text-slate-300">
-                  <li>Providing accurate and complete information</li>
-                  <li>Maintaining the security of your account</li>
-                  <li>All activities under your account</li>
-                  <li>Compliance with all applicable laws and regulations</li>
-                </ul>
-              </section>
-
-              <section className="mb-8">
-                <h2 className="mb-4 text-xl font-semibold">5. Privacy and Data</h2>
-                <p className="mb-4 text-slate-700 dark:text-slate-300">
-                  Your use of the Service is also governed by our Privacy Policy. Please review our Privacy Policy
-                  to understand our practices regarding the collection and use of your information.
+                  We may modify or discontinue our services at any time. We'll notify you of significant changes.
                 </p>
               </section>
 
               <section className="mb-8">
-                <h2 className="mb-4 text-xl font-semibold">6. Limitation of Liability</h2>
+                <h2 className="mb-4 text-xl font-semibold">Limitation of Liability</h2>
                 <p className="mb-4 text-slate-700 dark:text-slate-300">
-                  WeLeap and its affiliates shall not be liable for any indirect, incidental, special, consequential,
-                  or punitive damages, including without limitation, loss of profits, data, use, goodwill, or other
-                  intangible losses, resulting from your use of the Service.
+                  WeLeap is not liable for any financial loss, missed opportunity, or decision made based on our recommendations.
                 </p>
               </section>
 
               <section className="mb-8">
-                <h2 className="mb-4 text-xl font-semibold">7. Changes to Terms</h2>
+                <h2 className="mb-4 text-xl font-semibold">Questions?</h2>
                 <p className="mb-4 text-slate-700 dark:text-slate-300">
-                  We reserve the right to modify these Terms at any time. If we make material changes, we will notify
-                  you through the Service or by email. Your continued use of the Service after such modifications
-                  constitutes your acceptance of the updated Terms.
-                </p>
-              </section>
-
-              <section className="mb-8">
-                <h2 className="mb-4 text-xl font-semibold">8. Contact Information</h2>
-                <p className="mb-4 text-slate-700 dark:text-slate-300">
-                  If you have any questions about these Terms, please contact us at:
-                </p>
-                <p className="mb-4 text-slate-700 dark:text-slate-300">
-                  Email: legal@weleap.com<br />
-                  Address: WeLeap, Inc., San Francisco, CA
+                  Contact us at <a href="mailto:support@weleap.ai" className="text-primary hover:underline">support@weleap.ai</a>
                 </p>
               </section>
             </CardContent>

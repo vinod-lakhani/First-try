@@ -9,6 +9,6 @@ export const TOS_VERSION = "1.0.0";
 export const PRIVACY_POLICY_VERSION = "1.0.0";
 
 // Last updated dates
-export const TOS_LAST_UPDATED = "2025-01-20";
-export const PRIVACY_POLICY_LAST_UPDATED = "2025-01-20";
+export const TOS_LAST_UPDATED = "2025-08-27";
+export const PRIVACY_POLICY_LAST_UPDATED = "2025-08-27";
 
