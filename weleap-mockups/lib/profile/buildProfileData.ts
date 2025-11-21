@@ -74,30 +74,30 @@ export function buildProfileData(state: OnboardingState, userEmail: string = 'us
   }
 
   // Goals & Priorities
-  const safetyStrategy = state.safetyStrategy || {};
+  const safetyStrategy = state.safetyStrategy;
   const hasHighAprDebt = state.debts.some(d => d.isHighApr || d.aprPct > 10);
   
   const goals: GoalSettings = {
     emergencyFundEnabled: true, // Always enabled
-    emergencyFundMonths: (safetyStrategy.efTargetMonths || 3) as 3 | 6 | 9,
+    emergencyFundMonths: (safetyStrategy?.efTargetMonths || 3) as 3 | 6 | 9,
     highInterestDebtEnabled: hasHighAprDebt,
-    debtStrategy: safetyStrategy.debtPayoffStrategy === 'snowball' ? 'snowball' : 'avalanche',
+    debtStrategy: safetyStrategy?.debtPayoffStrategy === 'snowball' ? 'snowball' : 'avalanche',
     retirementEnabled: true,
-    retirementFocus: (safetyStrategy.retirementFocus?.toLowerCase() || 'medium') as "low" | "medium" | "high",
+    retirementFocus: (safetyStrategy?.retirementFocus?.toLowerCase() || 'medium') as "low" | "medium" | "high",
     bigPurchaseEnabled: false, // Would be determined from goals
-    liquidityNeed: (safetyStrategy.liquidity?.toLowerCase() || 'medium') as "low" | "medium" | "high",
+    liquidityNeed: (safetyStrategy?.liquidity?.toLowerCase() || 'medium') as "low" | "medium" | "high",
   };
 
   // Plan Settings
-  const riskConstraints = state.riskConstraints || {};
-  const savingsTargetPct = riskConstraints.targets?.savingsPct || 0.20;
-  const shiftLimitPct = riskConstraints.shiftLimitPct || 0.04;
+  const riskConstraints = state.riskConstraints;
+  const savingsTargetPct = riskConstraints?.targets?.savingsPct || 0.20;
+  const shiftLimitPct = riskConstraints?.shiftLimitPct || 0.04;
   
   let changeAggressiveness: "gentle" | "balanced" | "aggressive" = "balanced";
   if (shiftLimitPct <= 0.02) changeAggressiveness = "gentle";
   else if (shiftLimitPct >= 0.06) changeAggressiveness = "aggressive";
   
-  const wantsFloorPct = riskConstraints.targets?.wantsPct || 0.30;
+  const wantsFloorPct = riskConstraints?.targets?.wantsPct || 0.30;
 
   const plan: PlanSettings = {
     savingsTargetPct,
@@ -106,12 +106,12 @@ export function buildProfileData(state: OnboardingState, userEmail: string = 'us
   };
 
   // Notifications & Nudges
-  const pulsePreferences = state.pulsePreferences || {};
+  const pulsePreferences = state.pulsePreferences;
   const notifications: NotificationSettings = {
     channels: {
-      email: pulsePreferences.channels?.includes('email') || false,
-      sms: pulsePreferences.channels?.includes('sms') || false,
-      push: pulsePreferences.channels?.includes('push') || false,
+      email: pulsePreferences?.channels?.includes('email') || false,
+      sms: pulsePreferences?.channels?.includes('sms') || false,
+      push: pulsePreferences?.channels?.includes('push') || false,
     },
     types: {
       criticalAlerts: true, // Always on
@@ -119,12 +119,12 @@ export function buildProfileData(state: OnboardingState, userEmail: string = 'us
       opportunities: true,
       education: false,
     },
-    frequency: pulsePreferences.frequency === 'daily' ? 'frequent' : pulsePreferences.frequency === 'weekly' ? 'weekly' : 'important_only',
+    frequency: pulsePreferences?.frequency === 'daily' ? 'frequent' : pulsePreferences?.frequency === 'weekly' ? 'weekly' : 'important_only',
   };
 
   // Investment & Risk Preferences
-  const riskScore = riskConstraints.riskScore1to5 || 3;
-  const dominantHorizon = riskConstraints.dominantTimeHorizon || 'medium';
+  const riskScore = riskConstraints?.riskScore1to5 || 3;
+  const dominantHorizon = riskConstraints?.dominantTimeHorizon || 'medium';
   
   let riskComfort: "conservative" | "balanced" | "growth" = "balanced";
   if (riskScore <= 2) riskComfort = "conservative";

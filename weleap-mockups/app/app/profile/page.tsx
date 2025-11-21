@@ -328,11 +328,15 @@ export default function ProfilePage() {
               onUpdate={(updates) => {
                 // Update store
                 if (updates.frequency) {
-                  const frequencyMap = { important_only: 'monthly', weekly: 'weekly', frequent: 'daily' } as const;
+                  const frequencyMap: Record<"important_only" | "weekly" | "frequent", "monthly" | "weekly" | "daily"> = { 
+                    important_only: 'monthly', 
+                    weekly: 'weekly', 
+                    frequent: 'daily' 
+                  };
                   const channels = updates.channels || localData.notifications.channels;
                   state.updatePulsePreferences({
                     enabled: true,
-                    frequency: frequencyMap[updates.frequency],
+                    frequency: frequencyMap[updates.frequency as keyof typeof frequencyMap],
                     channels: Object.entries(channels).filter(([_, enabled]) => enabled).map(([key, _]) => key as any),
                   });
                 }
