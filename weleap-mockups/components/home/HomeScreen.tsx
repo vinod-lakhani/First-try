@@ -236,7 +236,7 @@ export function HomeScreen({ data }: HomeScreenProps) {
                 </span>
               </Button>
               <Button
-                onClick={() => router.push('/app/tools/net-worth-analyzer')}
+                onClick={() => router.push('/app/tools/configurable-demo')}
                 variant="outline"
                 className="h-auto flex-col items-start p-4"
               >

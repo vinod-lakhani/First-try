@@ -161,6 +161,8 @@ export interface RiskConstraints {
   minCheckingBuffer$?: number;
   /** Minimum cash percentage (0-100) */
   minCashPct?: number;
+  /** If true, bypass the minimum wants floor (25%) to allow manual slider overrides */
+  bypassWantsFloor?: boolean;
 }
 
 /**

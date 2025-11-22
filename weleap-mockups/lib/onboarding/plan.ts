@@ -751,10 +751,29 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
     // Normalize targets if needed
     const targetSum = targets.needsPct + targets.wantsPct + targets.savingsPct;
     if (Math.abs(targetSum - 100) < 1 && Math.abs(targetSum - 1.0) > 0.1) {
+      // They're in whole number format (50, 30, 20), convert to decimals (0.5, 0.3, 0.2)
       targets = {
         needsPct: targets.needsPct / 100,
         wantsPct: targets.wantsPct / 100,
         savingsPct: targets.savingsPct / 100,
+      };
+    } else if (Math.abs(targetSum - 1.0) > 0.001) {
+      // They're already in decimal format but don't sum to 1.0 - normalize them
+      targets = {
+        needsPct: targets.needsPct / targetSum,
+        wantsPct: targets.wantsPct / targetSum,
+        savingsPct: targets.savingsPct / targetSum,
+      };
+    }
+    
+    // Final validation - ensure targets sum to exactly 1.0 (within tolerance)
+    const finalTargetSum = targets.needsPct + targets.wantsPct + targets.savingsPct;
+    if (Math.abs(finalTargetSum - 1.0) > 0.0001) {
+      // Force exact sum by using savings as remainder
+      targets = {
+        needsPct: targets.needsPct,
+        wantsPct: targets.wantsPct,
+        savingsPct: Math.max(0, Math.min(1.0, 1.0 - targets.needsPct - targets.wantsPct)),
       };
     }
 
@@ -810,11 +829,27 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
       };
     }
 
+  // Check if we should bypass the wants floor (for manual slider overrides in tools)
+  const bypassWantsFloor = riskConstraints?.bypassWantsFloor || false;
+  
+  // Final validation before calling allocateIncome - ensure actuals3m sums to 1.0
+  // (targets already validated above at line 770)
+  const finalActualsSum = actuals3m.needsPct + actuals3m.wantsPct + actuals3m.savingsPct;
+  if (Math.abs(finalActualsSum - 1.0) > 0.0001) {
+    // Force actuals3m to sum to exactly 1.0
+    actuals3m = {
+      needsPct: actuals3m.needsPct,
+      wantsPct: actuals3m.wantsPct,
+      savingsPct: Math.max(0, Math.min(1.0, 1.0 - actuals3m.needsPct - actuals3m.wantsPct)),
+    };
+  }
+  
   const incomeAlloc = allocateIncome({
       incomePeriod$,
       targets,
       actuals3m,
       shiftLimitPct,
+      bypassWantsFloor,
     });
   
   console.log('[buildFinalPlanData] Income allocation calculated from engine', {

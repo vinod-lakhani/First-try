@@ -14,6 +14,8 @@ export interface IncomeInputs {
   actuals3m: { needsPct: number; wantsPct: number; savingsPct: number; };
   /** Maximum shift percentage per period (default: 0.04 = 4%) */
   shiftLimitPct?: number;
+  /** If true, bypass the minimum wants floor (25%) to allow manual slider overrides */
+  bypassWantsFloor?: boolean;
 }
 
 export interface IncomeAllocation {
@@ -46,7 +48,7 @@ export function round2(n: number): number {
  * 6. Output dollars that sum to incomePeriod$; reconcile rounding on savings
  */
 export function allocateIncome(i: IncomeInputs): IncomeAllocation {
-  const { incomePeriod$, targets, actuals3m, shiftLimitPct = 0.04 } = i;
+  const { incomePeriod$, targets, actuals3m, shiftLimitPct = 0.04, bypassWantsFloor = false } = i;
   
   // Validate inputs
   const targetSum = targets.needsPct + targets.wantsPct + targets.savingsPct;
@@ -89,7 +91,8 @@ export function allocateIncome(i: IncomeInputs): IncomeAllocation {
   const savingsGap$ = targetSavings$ - actualSavings$;
   
   // Enforce minimum wants floor (at least 25% of income, or target wants if lower)
-  const minWants$ = round2(Math.min(incomePeriod$ * 0.25, targetWants$));
+  // Unless bypassWantsFloor is true (for manual slider overrides)
+  const minWants$ = bypassWantsFloor ? 0 : round2(Math.min(incomePeriod$ * 0.25, targetWants$));
   
   if (savingsGap$ > 0.01) { // Only adjust if gap is meaningful (> 1 cent)
     // Calculate shift amount: min(savings gap %, shift limit %)
