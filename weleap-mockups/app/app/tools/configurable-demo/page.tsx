@@ -613,11 +613,11 @@ function createConfigureYourOwnConfig(
       
       if (expenseSliders.length > 0 || debtSliders.length > 0) {
         // Update individual expenses/debts in the store
-        if (store.updateFixedExpenses) {
-          store.updateFixedExpenses(scenarioState.fixedExpenses);
+        if (store.setFixedExpenses) {
+          store.setFixedExpenses(scenarioState.fixedExpenses);
         }
-        if (store.updateDebts && debtSliders.length > 0) {
-          store.updateDebts(scenarioState.debts);
+        if (store.setDebts && debtSliders.length > 0) {
+          store.setDebts(scenarioState.debts);
         }
       }
       
