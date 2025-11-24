@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { IncomeDistributionChart } from '@/components/charts/IncomeDistributionChart';
 import { useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 
 // Helper to get paychecks per month (internal use only)
 function getPaychecksPerMonth(frequency: string | undefined): number {
@@ -29,6 +30,7 @@ function getPaychecksPerMonth(frequency: string | undefined): number {
 }
 
 export default function IncomePage() {
+  const router = useRouter();
   const state = useOnboardingStore();
   const planData = usePlanData(); // Use centralized hook for consistency
 
@@ -243,7 +245,11 @@ export default function IncomePage() {
             size={280}
           />
           <div className="mt-4 flex justify-center">
-            <Button variant="outline" size="sm">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => router.push('/app/tools/savings-optimizer')}
+            >
               Edit Income Distribution
             </Button>
           </div>

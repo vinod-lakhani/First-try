@@ -26,11 +26,13 @@ export default function AppLayout({
   const { isComplete } = useOnboardingStore();
 
   useEffect(() => {
-    if (!isComplete) {
+    // Only redirect if we're on an app page and onboarding is not complete
+    // Don't redirect if we're already on a tools page or profile page
+    if (!isComplete && pathname?.startsWith('/app') && !pathname?.startsWith('/app/tools') && pathname !== '/app/profile') {
       // Redirect to onboarding if not completed
       router.push('/onboarding');
     }
-  }, [isComplete, router]);
+  }, [isComplete, router, pathname]);
 
   // Show onboarding prompt if not complete
   if (!isComplete) {
