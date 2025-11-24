@@ -5,6 +5,7 @@
  */
 
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import type {
   OnboardingState,
   IncomeState,
@@ -130,10 +131,13 @@ export interface OnboardingStore extends OnboardingState {
 }
 
 /**
- * Create the onboarding store
+ * Create the onboarding store with persistence
+ * State is saved to localStorage so it persists across page navigations
  */
-export const useOnboardingStore = create<OnboardingStore>((set) => ({
-  ...defaultState,
+export const useOnboardingStore = create<OnboardingStore>()(
+  persist(
+    (set) => ({
+      ...defaultState,
   
   // Income setters
   setIncome: (income) => set({ income }),
@@ -266,5 +270,30 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
       ...defaultState,
       startedAt: new Date().toISOString(),
     }),
-}));
+    }),
+    {
+      name: 'weleap-onboarding-storage', // unique name for localStorage key
+      storage: createJSONStorage(() => localStorage), // use localStorage for persistence
+      // Only persist certain fields to avoid storing large objects
+      partialize: (state) => ({
+        isComplete: state.isComplete,
+        completedAt: state.completedAt,
+        currentStep: state.currentStep,
+        plaidConnected: state.plaidConnected,
+        income: state.income,
+        fixedExpenses: state.fixedExpenses,
+        debts: state.debts,
+        assets: state.assets,
+        goals: state.goals,
+        primaryGoal: state.primaryGoal,
+        riskConstraints: state.riskConstraints,
+        safetyStrategy: state.safetyStrategy,
+        pulsePreferences: state.pulsePreferences,
+        startedAt: state.startedAt,
+        // Don't persist large computed objects that can be regenerated
+        // initialPaycheckPlan, boostedPaycheckPlan, baselineNetWorth, projectedNetWorth
+      }),
+    }
+  )
+);
 
