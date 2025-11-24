@@ -3,10 +3,9 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // Enable static export for GitHub Pages
   output: 'export',
-  // Set base path for GitHub Pages
-  // If deploying to user.github.io (root domain), leave empty
-  // If deploying to user.github.io/repo-name (project page), use '/repo-name'
-  basePath: process.env.NEXT_PUBLIC_BASE_PATH || '',
+  // Set base path for GitHub Pages (repo name is "First-try")
+  // Deployed to vinod-lakhani.github.io/First-try (project page)
+  basePath: process.env.NODE_ENV === 'production' ? '/First-try' : '',
   // Disable image optimization for static export
   images: {
     unoptimized: true,
