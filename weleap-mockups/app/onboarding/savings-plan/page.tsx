@@ -11,10 +11,12 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useOnboardingStore } from '@/lib/onboarding/store';
+import { usePlanData } from '@/lib/onboarding/usePlanData';
 import { allocateSavings, type SavingsInputs, type SavingsAllocation } from '@/lib/alloc/savings';
 import { Info, Shield, CreditCard, TrendingUp, Building2, PiggyBank } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { OnboardingChat } from '@/components/onboarding/OnboardingChat';
+import { getPaychecksPerMonth } from '@/lib/onboarding/usePlanData';
 
 interface SavingsCategory {
   id: string;
@@ -41,6 +43,10 @@ export default function SavingsPlanPage() {
     updateSafetyStrategy,
   } = state;
 
+  // Use planData (from buildFinalPlanData) instead of initialPaycheckPlan
+  // This works for both Plaid-connected and manual entry flows
+  const planData = usePlanData();
+
   const [savingsAlloc, setSavingsAlloc] = useState<SavingsAllocation | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -54,25 +60,32 @@ export default function SavingsPlanPage() {
   const [efAllocationPct, setEfAllocationPct] = useState<number>(0);
   const [hasAdjustedEfSlider, setHasAdjustedEfSlider] = useState<boolean>(false);
 
-  // Helper to get paychecks per month
-  const getPaychecksPerMonth = (frequency: string): number => {
-    switch (frequency) {
-      case 'weekly': return 4.33;
-      case 'biweekly': return 2.17;
-      case 'semimonthly': return 2;
-      case 'monthly': return 1;
-      default: return 2.17;
-    }
-  };
-
-  // Get savings budget from paycheck plan and convert to monthly
+  // Get savings budget from planData (preferred) or initialPaycheckPlan (fallback)
+  // Convert per-paycheck to monthly
   const savingsBudget$ = useMemo(() => {
-    const perPaycheckSavings = initialPaycheckPlan?.savings$ || 0;
+    let perPaycheckSavings = 0;
+    
+    // Prefer planData (works for Plaid-connected flow)
+    if (planData && planData.paycheckCategories) {
+      // Sum all savings categories from planData
+      const savingsCategories = planData.paycheckCategories.filter((cat: any) => 
+        cat.key === 'emergency' || cat.key === 'long_term_investing' || cat.key === 'debt_extra' ||
+        cat.key === 'short_term_goals' || cat.key === '401k_match' || cat.key === 'retirement_tax_advantaged' ||
+        cat.key === 'brokerage'
+      );
+      perPaycheckSavings = savingsCategories.reduce((sum: number, cat: any) => sum + (cat.amount || 0), 0);
+    } 
+    // Fallback to initialPaycheckPlan (for manual entry flow)
+    else if (initialPaycheckPlan?.savings$) {
+      perPaycheckSavings = initialPaycheckPlan.savings$;
+    }
+    
     if (perPaycheckSavings === 0) return 0;
+    
     // Convert per-paycheck to monthly
     const paychecksPerMonth = getPaychecksPerMonth(income?.payFrequency || 'biweekly');
     return perPaycheckSavings * paychecksPerMonth;
-  }, [initialPaycheckPlan, income?.payFrequency]);
+  }, [planData, initialPaycheckPlan, income?.payFrequency]);
 
   // Calculate EF target and current balance
   const efTarget$ = useMemo(() => {
