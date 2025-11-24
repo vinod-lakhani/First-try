@@ -135,8 +135,7 @@ function createConfigureYourOwnConfig(
       }
 
       const monthlyAmount = category.amount * paychecksPerMonth;
-      const percentage = monthlyIncome > 0 ? (monthlyAmount / monthlyIncome) * 100 : 0;
-
+      
       // Determine group
       let group: 'needs' | 'wants' | 'savings' = 'savings';
       if (categoryKey === 'essentials' || categoryKey === 'debt_minimums') {
@@ -145,16 +144,21 @@ function createConfigureYourOwnConfig(
         group = 'wants';
       }
 
+      // All sub-category sliders are dollar-based
+      const maxAmount = monthlyIncome; // Reasonable max: up to monthly income
+      
       return {
         id: categoryKey,
         label: category.label || categoryKey,
         description: category.why,
-        unit: '%',
+        unit: '$',
         min: 0,
-        max: 100,
-        step: 0.5,
-        defaultValue: percentage,
+        max: maxAmount,
+        step: 10,
+        defaultValue: monthlyAmount,
         group,
+        formatValue: (value: number) => `$${value.toFixed(0)}`,
+        formatDisplay: (value: number) => `$${value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
       };
     })
     .filter((slider): slider is ToolSlider => slider !== null);
@@ -169,16 +173,21 @@ function createConfigureYourOwnConfig(
     const monthlyNeeds = needsCategories.reduce((sum: number, c: any) => sum + (c.amount || 0), 0) * paychecksPerMonth;
     const needsPercentage = monthlyIncome > 0 ? (monthlyNeeds / monthlyIncome) * 100 : 0;
     
+    // Slider in dollars - reasonable range: 0 to monthly income
+    const maxNeedsAmount = monthlyIncome;
+    
     sliders.unshift({
       id: 'needs',
       label: 'Needs',
       description: 'Adjust Needs allocation (Essentials & Bills + Debt Minimums)',
-      unit: '%',
+      unit: '$',
       min: 0,
-      max: 100,
-      step: 0.5,
-      defaultValue: needsPercentage,
+      max: maxNeedsAmount,
+      step: 10,
+      defaultValue: monthlyNeeds,
       group: 'needs',
+      formatValue: (value: number) => `$${value.toFixed(0)}`,
+      formatDisplay: (value: number) => `$${value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
     });
   }
 
@@ -190,16 +199,21 @@ function createConfigureYourOwnConfig(
     const monthlyWants = wantsCategories.reduce((sum: number, c: any) => sum + (c.amount || 0), 0) * paychecksPerMonth;
     const wantsPercentage = monthlyIncome > 0 ? (monthlyWants / monthlyIncome) * 100 : 0;
     
+    // Slider in dollars - reasonable range: 0 to monthly income
+    const maxWantsAmount = monthlyIncome;
+    
     sliders.unshift({
       id: 'wants',
       label: 'Wants',
       description: 'Adjust Wants allocation (Fun & Flexible)',
-      unit: '%',
+      unit: '$',
       min: 0,
-      max: 100,
-      step: 0.5,
-      defaultValue: wantsPercentage,
+      max: maxWantsAmount,
+      step: 10,
+      defaultValue: monthlyWants,
       group: 'wants',
+      formatValue: (value: number) => `$${value.toFixed(0)}`,
+      formatDisplay: (value: number) => `$${value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
     });
   }
 
@@ -1053,37 +1067,16 @@ function ConfigurableToolDemoContent() {
         
         if (slider.id === 'needs') {
           categoryChanged = needsChanged;
-          if (slider.unit === '%') {
-            // Percentage-based slider - use percentage directly
-            newValue = incomeDistribution.needsPct;
-          } else if (slider.unit === '$') {
-            // Dollar-based slider - use monthly dollar amount directly
-            newValue = incomeDistribution.monthlyNeeds;
-          } else {
-            return; // Skip unknown unit
-          }
+          // All main category sliders are now dollar-based
+          newValue = incomeDistribution.monthlyNeeds;
         } else if (slider.id === 'wants') {
           categoryChanged = wantsChanged;
-          if (slider.unit === '%') {
-            // Percentage-based slider - use percentage directly
-            newValue = incomeDistribution.wantsPct;
-          } else if (slider.unit === '$') {
-            // Dollar-based slider - use monthly dollar amount directly
-            newValue = incomeDistribution.monthlyWants;
-          } else {
-            return; // Skip unknown unit
-          }
+          // All main category sliders are now dollar-based
+          newValue = incomeDistribution.monthlyWants;
         } else if (slider.id === 'savings') {
           categoryChanged = savingsChanged;
-          if (slider.unit === '%') {
-            // Percentage-based slider - use percentage directly
-            newValue = incomeDistribution.savingsPct;
-          } else if (slider.unit === '$') {
-            // Dollar-based slider - use monthly dollar amount directly
-            newValue = incomeDistribution.monthlySavings;
-          } else {
-            return; // Skip unknown unit
-          }
+          // All main category sliders are now dollar-based
+          newValue = incomeDistribution.monthlySavings;
         } else {
           return; // Skip unknown slider
         }
