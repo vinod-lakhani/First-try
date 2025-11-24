@@ -1032,17 +1032,21 @@ function ConfigurableToolDemoContent() {
           return; // Skip unknown slider
         }
 
-        if (!categoryChanged) {
-          return; // Skip if this category didn't change
-        }
+        // CRITICAL: When dollar-based subcategory sliders change (like rent), 
+        // update ALL main category sliders to match income distribution (source of truth)
+        // Don't skip if category didn't change - always sync all sliders when subcategory sliders exist
+        // This ensures sliders always reflect the calculated values from income distribution
 
         // Constrain to slider's min/max
         newValue = Math.max(slider.min, Math.min(slider.max, newValue));
 
-        // Always update if category changed - don't check threshold for sync
-        // This ensures sliders reflect the calculated values from income distribution
-        newSliderValues[slider.id] = newValue;
-        hasChanges = true;
+        // Always update to match income distribution (when subcategory sliders exist)
+        // Only skip if the value hasn't changed significantly (to avoid unnecessary re-renders)
+        const threshold = slider.unit === '$' ? 10 : 0.1; // $10 for dollar, 0.1% for percentage
+        if (Math.abs(newValue - currentValue) > threshold) {
+          newSliderValues[slider.id] = newValue;
+          hasChanges = true;
+        }
       });
 
       // Only update if there are actual changes
