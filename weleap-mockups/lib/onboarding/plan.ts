@@ -785,12 +785,31 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
     let actuals3m = riskConstraints?.actuals3m;
   
   // Check if actuals3m is valid (sums to ~1.0 or ~100)
+  // CRITICAL: If bypassWantsFloor is true, this means actuals3m was explicitly set by a tool
+  // and we should NOT recalculate it from expenses, even if the sum is slightly off
+  const bypassWantsFloor = riskConstraints?.bypassWantsFloor || false;
   const hasValidActuals3m = actuals3m && (
     Math.abs(actuals3m.needsPct + actuals3m.wantsPct + actuals3m.savingsPct - 1.0) < 0.1 ||
     Math.abs(actuals3m.needsPct + actuals3m.wantsPct + actuals3m.savingsPct - 100) < 1
   );
   
-  if (!hasValidActuals3m) {
+  // If bypassWantsFloor is true, actuals3m was explicitly set by a tool - use it as-is
+  if (bypassWantsFloor && actuals3m) {
+    console.log('[buildFinalPlanData] Using explicit actuals3m from tool (bypassWantsFloor=true)', {
+      actuals3m,
+      fixedExpensesCount: fixedExpenses.length,
+    });
+    // Still normalize to ensure exact sum of 1.0
+    const actualsSum = actuals3m.needsPct + actuals3m.wantsPct + actuals3m.savingsPct;
+    if (Math.abs(actualsSum - 1.0) > 0.000001 && Math.abs(actualsSum - 100) > 1) {
+      // Normalize if needed (only if sum is not 1.0 or 100)
+      actuals3m = {
+        needsPct: actuals3m.needsPct / actualsSum,
+        wantsPct: actuals3m.wantsPct / actualsSum,
+        savingsPct: actuals3m.savingsPct / actualsSum,
+      };
+    }
+  } else if (!hasValidActuals3m) {
       try {
       console.log('[buildFinalPlanData] Calculating actuals3m from current expenses', {
         hadCachedActuals3m: !!actuals3m,
@@ -810,38 +829,64 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
     });
     }
 
-    // Normalize actuals3m
-    if (!actuals3m) {
-      actuals3m = { needsPct: 0.5, wantsPct: 0.3, savingsPct: 0.2 };
-    }
-    const actualsSum = actuals3m.needsPct + actuals3m.wantsPct + actuals3m.savingsPct;
-    if (Math.abs(actualsSum - 100) < 1 && Math.abs(actualsSum - 1.0) > 0.1) {
-      actuals3m = {
-        needsPct: actuals3m.needsPct / 100,
-        wantsPct: actuals3m.wantsPct / 100,
-        savingsPct: actuals3m.savingsPct / 100,
-      };
-    } else if (Math.abs(actualsSum - 1.0) > 0.001) {
-      actuals3m = {
-        needsPct: actuals3m.needsPct / actualsSum,
-        wantsPct: actuals3m.wantsPct / actualsSum,
-        savingsPct: actuals3m.savingsPct / actualsSum,
-      };
+    // CRITICAL: If bypassWantsFloor is true, actuals3m was explicitly set by a tool
+    // Skip normalization to preserve the exact values - only ensure sum is exactly 1.0
+    // Normalize actuals3m only if bypassWantsFloor is false
+    if (!bypassWantsFloor) {
+      if (!actuals3m) {
+        actuals3m = { needsPct: 0.5, wantsPct: 0.3, savingsPct: 0.2 };
+      }
+      const actualsSum = actuals3m.needsPct + actuals3m.wantsPct + actuals3m.savingsPct;
+      if (Math.abs(actualsSum - 100) < 1 && Math.abs(actualsSum - 1.0) > 0.1) {
+        actuals3m = {
+          needsPct: actuals3m.needsPct / 100,
+          wantsPct: actuals3m.wantsPct / 100,
+          savingsPct: actuals3m.savingsPct / 100,
+        };
+      } else if (Math.abs(actualsSum - 1.0) > 0.001) {
+        actuals3m = {
+          needsPct: actuals3m.needsPct / actualsSum,
+          wantsPct: actuals3m.wantsPct / actualsSum,
+          savingsPct: actuals3m.savingsPct / actualsSum,
+        };
+      }
+    } else {
+      // bypassWantsFloor is true - actuals3m was explicitly set, only ensure sum is exactly 1.0
+      if (!actuals3m) {
+        actuals3m = { needsPct: 0.5, wantsPct: 0.3, savingsPct: 0.2 };
+      }
+      console.log('[buildFinalPlanData] bypassWantsFloor=true - preserving actuals3m values without normalization', {
+        actuals3mBefore: actuals3m,
+      });
     }
 
-  // Check if we should bypass the wants floor (for manual slider overrides in tools)
-  const bypassWantsFloor = riskConstraints?.bypassWantsFloor || false;
-  
-  // Final validation before calling allocateIncome - ensure actuals3m sums to 1.0
+  // Final validation before calling allocateIncome - ensure actuals3m sums to exactly 1.0
   // (targets already validated above at line 770)
   const finalActualsSum = actuals3m.needsPct + actuals3m.wantsPct + actuals3m.savingsPct;
   if (Math.abs(finalActualsSum - 1.0) > 0.0001) {
-    // Force actuals3m to sum to exactly 1.0
-    actuals3m = {
-      needsPct: actuals3m.needsPct,
-      wantsPct: actuals3m.wantsPct,
-      savingsPct: Math.max(0, Math.min(1.0, 1.0 - actuals3m.needsPct - actuals3m.wantsPct)),
-    };
+    // Force actuals3m to sum to exactly 1.0 (only adjust savings, preserve needs and wants if bypassWantsFloor is true)
+    if (bypassWantsFloor) {
+      // Preserve Needs and Wants, adjust only Savings
+      actuals3m = {
+        needsPct: actuals3m.needsPct,
+        wantsPct: actuals3m.wantsPct,
+        savingsPct: Math.max(0, Math.min(1.0, 1.0 - actuals3m.needsPct - actuals3m.wantsPct)),
+      };
+    } else {
+      // Normal normalization
+      actuals3m = {
+        needsPct: actuals3m.needsPct,
+        wantsPct: actuals3m.wantsPct,
+        savingsPct: Math.max(0, Math.min(1.0, 1.0 - actuals3m.needsPct - actuals3m.wantsPct)),
+      };
+    }
+  }
+  
+  if (bypassWantsFloor) {
+    console.log('[buildFinalPlanData] bypassWantsFloor=true - final actuals3m preserved', {
+      actuals3m,
+      sum: actuals3m.needsPct + actuals3m.wantsPct + actuals3m.savingsPct,
+    });
   }
   
   const incomeAlloc = allocateIncome({
@@ -849,7 +894,7 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
       targets,
       actuals3m,
       shiftLimitPct,
-      bypassWantsFloor,
+      bypassWantsFloor, // Using bypassWantsFloor declared earlier (line 790)
     });
   
   console.log('[buildFinalPlanData] Income allocation calculated from engine', {

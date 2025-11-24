@@ -87,6 +87,40 @@ export function allocateIncome(i: IncomeInputs): IncomeAllocation {
     savings$,
   });
   
+  // CRITICAL: If targets == actuals3m (within tolerance), return as-is without adjustments
+  // This prevents unwanted shifts when tools explicitly set both to the same values
+  const targetsMatchActuals = 
+    Math.abs(targets.needsPct - actuals3m.needsPct) < 0.0001 &&
+    Math.abs(targets.wantsPct - actuals3m.wantsPct) < 0.0001 &&
+    Math.abs(targets.savingsPct - actuals3m.savingsPct) < 0.0001;
+  
+  if (targetsMatchActuals) {
+    console.log('[Income Engine] Targets match actuals3m - returning as-is without adjustments', {
+      targets: {
+        needsPct: targets.needsPct * 100,
+        wantsPct: targets.wantsPct * 100,
+        savingsPct: targets.savingsPct * 100,
+      },
+      actuals3m: {
+        needsPct: actuals3m.needsPct * 100,
+        wantsPct: actuals3m.wantsPct * 100,
+        savingsPct: actuals3m.savingsPct * 100,
+      },
+      bypassWantsFloor,
+      returning: {
+        needs$,
+        wants$,
+        savings$,
+      },
+    });
+    return {
+      needs$,
+      wants$,
+      savings$,
+      notes: ['Targets match actuals - no adjustments made'],
+    };
+  }
+  
   // Check if Savings is below target
   const savingsGap$ = targetSavings$ - actualSavings$;
   

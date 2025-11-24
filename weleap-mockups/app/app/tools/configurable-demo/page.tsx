@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useState, useMemo, Suspense } from 'react';
+import { useState, useMemo, useEffect, useRef, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { useOnboardingStore } from '@/lib/onboarding/store';
 import { usePlanData } from '@/lib/onboarding/usePlanData';
@@ -84,46 +84,53 @@ function createConfigureYourOwnConfig(
       // Find category in plan data
       const category = baselinePlanData.paycheckCategories.find((c: any) => c.key === categoryKey);
       if (!category) {
-        // Handle third-layer items (individual expenses/debts)
-        if (categoryKey.startsWith('expense_')) {
-          const expenseId = categoryKey.replace('expense_', '');
-          const expense = baselineState.fixedExpenses.find(e => e.id === expenseId);
-          if (expense) {
-            const monthlyAmount = expense.amount$;
-            const percentage = monthlyIncome > 0 ? (monthlyAmount / monthlyIncome) * 100 : 0;
-            return {
-              id: categoryKey,
-              label: expense.name,
-              description: 'Individual expense',
-              unit: '%',
-              min: 0,
-              max: 100,
-              step: 0.5,
-              defaultValue: percentage,
-              group: 'needs',
-              parentCategory: 'essentials',
-            };
-          }
-        } else if (categoryKey.startsWith('debt_') && !categoryKey.includes('debt_minimums') && !categoryKey.includes('debt_extra')) {
-          const debtId = categoryKey.replace('debt_', '');
-          const debt = baselineState.debts.find(d => d.id === debtId);
-          if (debt) {
-            const monthlyAmount = debt.minPayment$;
-            const percentage = monthlyIncome > 0 ? (monthlyAmount / monthlyIncome) * 100 : 0;
-            return {
-              id: categoryKey,
-              label: debt.name,
-              description: 'Debt minimum payment',
-              unit: '%',
-              min: 0,
-              max: 100,
-              step: 0.5,
-              defaultValue: percentage,
-              group: 'needs',
-              parentCategory: 'debt_minimums',
-            };
-          }
+      // Handle third-layer items (individual expenses/debts)
+      // These use dollar values, not percentages - delta will be added to Needs
+      if (categoryKey.startsWith('expense_')) {
+        const expenseId = categoryKey.replace('expense_', '');
+        const expense = baselineState.fixedExpenses.find(e => e.id === expenseId);
+        if (expense) {
+          const monthlyAmount = expense.amount$;
+          // Slider in dollars - reasonable range: 0 to 2x current amount, or up to monthly income
+          const maxAmount = Math.max(monthlyAmount * 2, monthlyIncome * 0.5);
+          return {
+            id: categoryKey,
+            label: expense.name,
+            description: 'Individual expense',
+            unit: '$',
+            min: 0,
+            max: maxAmount,
+            step: 10,
+            defaultValue: monthlyAmount,
+            group: 'needs',
+            parentCategory: 'essentials',
+            formatValue: (value: number) => `$${value.toFixed(0)}`,
+            formatDisplay: (value: number) => `$${value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
+          };
         }
+      } else if (categoryKey.startsWith('debt_') && !categoryKey.includes('debt_minimums') && !categoryKey.includes('debt_extra')) {
+        const debtId = categoryKey.replace('debt_', '');
+        const debt = baselineState.debts.find(d => d.id === debtId);
+        if (debt) {
+          const monthlyAmount = debt.minPayment$;
+          // Slider in dollars - reasonable range: 0 to 2x current amount, or up to monthly income
+          const maxAmount = Math.max(monthlyAmount * 2, monthlyIncome * 0.5);
+          return {
+            id: categoryKey,
+            label: debt.name,
+            description: 'Debt minimum payment',
+            unit: '$',
+            min: 0,
+            max: maxAmount,
+            step: 10,
+            defaultValue: monthlyAmount,
+            group: 'needs',
+            parentCategory: 'debt_minimums',
+            formatValue: (value: number) => `$${value.toFixed(0)}`,
+            formatDisplay: (value: number) => `$${value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
+          };
+        }
+      }
         return null;
       }
 
@@ -206,28 +213,391 @@ function createConfigureYourOwnConfig(
       // For savings categories: long_term_investing.amount already includes all subcategories
       return sum + (c.amount || 0);
     }, 0) * paychecksPerMonth;
-    const savingsPercentage = monthlyIncome > 0 ? (monthlySavings / monthlyIncome) * 100 : 0;
+    // Slider in dollars - reasonable range: 0 to monthly income
+    const maxSavingsAmount = monthlyIncome;
     
     sliders.unshift({
       id: 'savings',
       label: 'Savings',
       description: 'Adjust Savings allocation',
-      unit: '%',
+      unit: '$',
       min: 0,
-      max: 100,
-      step: 0.5,
-      defaultValue: savingsPercentage,
+      max: maxSavingsAmount,
+      step: 10,
+      defaultValue: monthlySavings,
       group: 'savings',
+      formatValue: (value: number) => `$${value.toFixed(0)}`,
+      formatDisplay: (value: number) => `$${value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
     });
   }
+
+  // Custom calculateScenarioState that handles dollar-value sliders for expenses/debts
+  // This ensures that when rent (or any expense/debt) changes, we:
+  // 1. Update the actual expense/debt amount in the state
+  // 2. Recalculate Needs/Wants/Savings totals from updated dollar amounts
+  // 3. Convert those totals to percentages based on monthly income
+  // Dollar values should NEVER be treated as percentages
+  const calculateScenarioState = ({ baselineState: state, sliderValues }: { baselineState: OnboardingState; sliderValues: Record<string, number> }): OnboardingState => {
+    // Separate sliders into main category sliders (percentage-based) and expense/debt sliders (dollar-based)
+    const mainCategorySliders = sliders.filter(s => s.id === 'needs' || s.id === 'wants' || s.id === 'savings');
+    const expenseSliders = sliders.filter(s => s.id.startsWith('expense_'));
+    const debtSliders = sliders.filter(s => s.id.startsWith('debt_') && !s.id.includes('debt_minimums') && !s.id.includes('debt_extra'));
+    
+    // Clone the state to avoid mutating the baseline
+    const updatedState: OnboardingState = { ...state };
+    
+    // Step 1: Apply dollar-value changes to individual expenses/debts
+    // Update expenses with dollar values (NOT percentages)
+    if (expenseSliders.length > 0) {
+      updatedState.fixedExpenses = state.fixedExpenses.map(expense => {
+        const sliderId = `expense_${expense.id}`;
+        const slider = expenseSliders.find(s => s.id === sliderId);
+        if (slider && sliderValues[sliderId] !== undefined) {
+          // sliderValues[sliderId] is in DOLLARS, not percentage
+          const newAmount = sliderValues[sliderId];
+          return { ...expense, amount$: newAmount };
+        }
+        return expense;
+      });
+    }
+    
+    // Update debts with dollar values (NOT percentages)
+    if (debtSliders.length > 0) {
+      updatedState.debts = state.debts.map(debt => {
+        const sliderId = `debt_${debt.id}`;
+        const slider = debtSliders.find(s => s.id === sliderId);
+        if (slider && sliderValues[sliderId] !== undefined) {
+          // sliderValues[sliderId] is in DOLLARS, not percentage
+          const newAmount = sliderValues[sliderId];
+          return { ...debt, minPayment$: newAmount };
+        }
+        return debt;
+      });
+    }
+    
+    // Step 2: Calculate monthly income
+    const paychecksPerMonth = getPaychecksPerMonth(state.income?.payFrequency || 'biweekly');
+    const monthlyIncome = (state.income?.netIncome$ || state.income?.grossIncome$ || 0) * paychecksPerMonth;
+    
+    // Step 3: Recalculate Needs/Wants/Savings totals from updated dollar amounts
+    // CRITICAL: When only needs expenses change (like rent), preserve Wants and Savings baseline amounts
+    // This ensures Wants doesn't drop to zero when we only adjust needs expenses
+    
+    // Needs: sum of needs expenses + all debt minimum payments (use updated amounts)
+    const needsExpenses = updatedState.fixedExpenses
+      .filter(exp => exp.category === 'needs' || !exp.category)
+      .reduce((sum, exp) => sum + exp.amount$, 0);
+    const debtMinPayments = updatedState.debts
+      .reduce((sum, debt) => sum + debt.minPayment$, 0);
+    const newMonthlyNeeds = needsExpenses + debtMinPayments;
+    
+    // CRITICAL: Get baseline amounts from PLAN DATA, not from actuals3m
+    // actuals3m might not match the plan (e.g., if it was recalculated from expenses)
+    // We need to preserve the actual dollar amounts from the baseline plan
+    // Calculate baseline monthly amounts from baseline plan data (if available)
+    let baselineMonthlyNeeds: number;
+    let baselineMonthlyWants: number;
+    let baselineMonthlySavings: number;
+    
+    // Try to get from baseline plan data first (source of truth)
+    if (baselinePlanData && baselinePlanData.paycheckCategories) {
+      const paychecksPerMonth = getPaychecksPerMonth(state.income?.payFrequency || 'biweekly');
+      const needsCategories = baselinePlanData.paycheckCategories.filter((c: any) => 
+        c.key === 'essentials' || c.key === 'debt_minimums'
+      );
+      const wantsCategories = baselinePlanData.paycheckCategories.filter((c: any) => 
+        c.key === 'fun_flexible'
+      );
+      const savingsCategories = baselinePlanData.paycheckCategories.filter((c: any) => 
+        c.key === 'emergency' || c.key === 'long_term_investing' || c.key === 'debt_extra' ||
+        c.key === 'short_term_goals' || c.key === '401k_match' || c.key === 'retirement_tax_advantaged' ||
+        c.key === 'brokerage'
+      );
+      
+      baselineMonthlyNeeds = needsCategories.reduce((sum: number, c: any) => sum + (c.amount || 0), 0) * paychecksPerMonth;
+      baselineMonthlyWants = wantsCategories.reduce((sum: number, c: any) => sum + (c.amount || 0), 0) * paychecksPerMonth;
+      baselineMonthlySavings = savingsCategories.reduce((sum: number, c: any) => sum + (c.amount || 0), 0) * paychecksPerMonth;
+    } else {
+      // Fallback to actuals3m if plan data not available
+      const baselineActuals = state.riskConstraints?.actuals3m || {
+        needsPct: 0.5,
+        wantsPct: 0.3,
+        savingsPct: 0.2,
+      };
+      baselineMonthlyNeeds = baselineActuals.needsPct * monthlyIncome;
+      baselineMonthlyWants = baselineActuals.wantsPct * monthlyIncome;
+      baselineMonthlySavings = baselineActuals.savingsPct * monthlyIncome;
+    }
+    
+    console.log('[Configure Your Own] Baseline amounts from plan data:', {
+      baselineMonthlyNeeds,
+      baselineMonthlyWants,
+      baselineMonthlySavings,
+      monthlyIncome,
+      wantsPct: (baselineMonthlyWants / monthlyIncome) * 100,
+    });
+    
+    // Check which categories have dollar-based sliders (expenses/debts)
+    const hasWantsDollarSliders = expenseSliders.some(s => {
+      const expenseId = s.id.replace('expense_', '');
+      const expense = updatedState.fixedExpenses.find(e => e.id === expenseId);
+      return expense && expense.category === 'wants';
+    });
+    
+    // Wants: use updated wants expenses if wants sliders exist, otherwise preserve baseline amount
+    // CRITICAL: When only needs expenses change (like rent), preserve Wants at baseline dollar amount
+    let newMonthlyWants: number;
+    if (hasWantsDollarSliders) {
+      // Wants sliders were adjusted - use updated wants expenses
+      const wantsExpenses = updatedState.fixedExpenses
+        .filter(exp => exp.category === 'wants')
+        .reduce((sum, exp) => sum + exp.amount$, 0);
+      newMonthlyWants = wantsExpenses;
+    } else {
+      // No wants sliders - preserve baseline wants amount (dollars) from actuals3m
+      // This ensures Wants doesn't change when only Needs expenses (like rent) change
+      newMonthlyWants = baselineMonthlyWants;
+    }
+    
+    // Step 4: Check if main category sliders are set BEFORE calculating Savings as remainder
+    // CRITICAL: Main category sliders take precedence - if they're set, use those values directly
+    const needsSlider = mainCategorySliders.find(s => s.id === 'needs');
+    const wantsSlider = mainCategorySliders.find(s => s.id === 'wants');
+    const savingsSlider = mainCategorySliders.find(s => s.id === 'savings');
+    
+    // Check if main category sliders were explicitly changed (more than 0.1 from default)
+    const needsSliderSet = needsSlider && sliderValues['needs'] !== undefined && 
+      Math.abs(sliderValues['needs'] - (needsSlider.defaultValue || 0)) > (needsSlider.unit === '$' ? 10 : 0.1);
+    const wantsSliderSet = wantsSlider && sliderValues['wants'] !== undefined && 
+      Math.abs(sliderValues['wants'] - (wantsSlider.defaultValue || 0)) > (wantsSlider.unit === '$' ? 10 : 0.1);
+    const savingsSliderSet = savingsSlider && sliderValues['savings'] !== undefined && 
+      Math.abs(sliderValues['savings'] - (savingsSlider.defaultValue || 0)) > (savingsSlider.unit === '$' ? 10 : 0.1);
+    
+    // Step 5: Calculate monthly amounts - prioritize main category sliders if they're set
+    let finalMonthlyNeeds = newMonthlyNeeds;
+    let finalMonthlyWants = newMonthlyWants;
+    let finalMonthlySavings: number;
+    
+    // If main category sliders are set, use those values (they take precedence)
+    if (needsSliderSet && needsSlider && sliderValues['needs'] !== undefined) {
+      if (needsSlider.unit === '$') {
+        // Dollar-based slider - use the dollar amount directly
+        finalMonthlyNeeds = sliderValues['needs'];
+      } else if (needsSlider.unit === '%') {
+        // Percentage-based slider - convert to dollars
+        finalMonthlyNeeds = (sliderValues['needs'] / 100) * monthlyIncome;
+      }
+    }
+    
+    if (wantsSliderSet && wantsSlider && sliderValues['wants'] !== undefined) {
+      if (wantsSlider.unit === '$') {
+        // Dollar-based slider - use the dollar amount directly
+        finalMonthlyWants = sliderValues['wants'];
+      } else if (wantsSlider.unit === '%') {
+        // Percentage-based slider - convert to dollars
+        finalMonthlyWants = (sliderValues['wants'] / 100) * monthlyIncome;
+      }
+    }
+    
+    if (savingsSliderSet && savingsSlider && sliderValues['savings'] !== undefined) {
+      if (savingsSlider.unit === '$') {
+        // Dollar-based slider - use the dollar amount directly
+        finalMonthlySavings = sliderValues['savings'];
+      } else if (savingsSlider.unit === '%') {
+        // Percentage-based slider - convert to dollars
+        finalMonthlySavings = (sliderValues['savings'] / 100) * monthlyIncome;
+      } else {
+        // Fallback: calculate as remainder
+        finalMonthlySavings = Math.max(0, monthlyIncome - finalMonthlyNeeds - finalMonthlyWants);
+      }
+    } else {
+      // Savings slider not set - calculate as remainder
+      finalMonthlySavings = Math.max(0, monthlyIncome - finalMonthlyNeeds - finalMonthlyWants);
+    }
+    
+    // Step 6: Convert dollar totals to percentages and normalize
+    let finalNeedsPct = monthlyIncome > 0 ? finalMonthlyNeeds / monthlyIncome : 0;
+    let finalWantsPct = monthlyIncome > 0 ? finalMonthlyWants / monthlyIncome : 0;
+    let finalSavingsPct = monthlyIncome > 0 ? finalMonthlySavings / monthlyIncome : 0;
+    
+    // Step 7: Normalize to ensure they sum to exactly 1.0
+    // CRITICAL: When only dollar-based subcategory sliders change (like rent), preserve Wants and adjust Savings as remainder
+    // Only normalize if main category sliders are explicitly set
+    const total = finalNeedsPct + finalWantsPct + finalSavingsPct;
+    
+    // Check if any expense/debt sliders were changed (this means we're adjusting subcategories, not main categories)
+    const hasExpenseOrDebtSliders = expenseSliders.length > 0 || debtSliders.length > 0;
+    const anyExpenseDebtChanged = hasExpenseOrDebtSliders && (
+      expenseSliders.some(s => {
+        const expenseId = s.id.replace('expense_', '');
+        const expense = state.fixedExpenses.find(e => e.id === expenseId);
+        if (!expense) return false;
+        const currentValue = sliderValues[s.id];
+        if (currentValue === undefined) return false;
+        return Math.abs(currentValue - expense.amount$) > 1; // Changed by more than $1
+      }) ||
+      debtSliders.some(s => {
+        const debtId = s.id.replace('debt_', '');
+        const debt = state.debts.find(d => d.id === debtId);
+        if (!debt) return false;
+        const currentValue = sliderValues[s.id];
+        if (currentValue === undefined) return false;
+        return Math.abs(currentValue - debt.minPayment$) > 1; // Changed by more than $1
+      })
+    );
+    
+    // If only expense/debt sliders changed (and no main category sliders are set), 
+    // preserve Wants at baseline dollar amount and adjust Savings as remainder
+    if (anyExpenseDebtChanged && !needsSliderSet && !wantsSliderSet && !savingsSliderSet) {
+      // CRITICAL: When rent increases, Needs increases by that amount, Wants stays the same (dollar amount),
+      // and Savings decreases by that amount
+      // Recalculate Savings as remainder to ensure exact sum
+      finalMonthlySavings = Math.max(0, monthlyIncome - finalMonthlyNeeds - finalMonthlyWants);
+      // Recalculate percentages from updated dollar amounts (NOT from normalized percentages)
+      finalNeedsPct = monthlyIncome > 0 ? finalMonthlyNeeds / monthlyIncome : 0;
+      finalWantsPct = monthlyIncome > 0 ? finalMonthlyWants / monthlyIncome : 0;
+      finalSavingsPct = monthlyIncome > 0 ? finalMonthlySavings / monthlyIncome : 0;
+      
+      // CRITICAL: Ensure these percentages are used (don't normalize further)
+      // Skip the normalization logic below for this case
+    } else if (total > 0.001 && Math.abs(total - 1.0) > 0.001) {
+      // Main category sliders are involved - normalize accordingly
+      if (savingsSliderSet && !needsSliderSet && !wantsSliderSet) {
+        // Savings is set - adjust Needs and Wants proportionally to fit
+        const remaining = 1.0 - finalSavingsPct;
+        const needsWantsTotal = finalNeedsPct + finalWantsPct;
+        if (needsWantsTotal > 0) {
+          finalNeedsPct = (finalNeedsPct / needsWantsTotal) * remaining;
+          finalWantsPct = (finalWantsPct / needsWantsTotal) * remaining;
+        } else {
+          // If no needs/wants, split evenly
+          finalNeedsPct = remaining / 2;
+          finalWantsPct = remaining / 2;
+        }
+      } else if (needsSliderSet && !savingsSliderSet) {
+        // Needs is set - adjust Savings as remainder (preserve Wants if not set)
+        finalSavingsPct = Math.max(0, Math.min(1.0, 1.0 - finalNeedsPct - finalWantsPct));
+      } else if (wantsSliderSet && !savingsSliderSet) {
+        // Wants is set - adjust Savings as remainder (preserve Needs if not set)
+        finalSavingsPct = Math.max(0, Math.min(1.0, 1.0 - finalNeedsPct - finalWantsPct));
+      } else {
+        // Default: adjust Savings as remainder (preserves Needs and Wants)
+        finalSavingsPct = Math.max(0, Math.min(1.0, 1.0 - finalNeedsPct - finalWantsPct));
+      }
+    }
+    
+    // Final validation to ensure exact sum of 1.0
+    // CRITICAL: If only expense/debt sliders changed, we already calculated correctly above
+    // For all other cases, normalize as needed
+    if (!anyExpenseDebtChanged || needsSliderSet || wantsSliderSet || savingsSliderSet) {
+      if (!savingsSliderSet && !anyExpenseDebtChanged) {
+        // Savings not explicitly set and no expense/debt changes - adjust as remainder
+        finalSavingsPct = Math.max(0, Math.min(1.0, 1.0 - finalNeedsPct - finalWantsPct));
+      } else if (savingsSliderSet && !needsSliderSet && !wantsSliderSet && !anyExpenseDebtChanged) {
+        // Savings is set, but Needs and Wants are not - adjust them proportionally
+        const remaining = 1.0 - finalSavingsPct;
+        const needsWantsTotal = finalNeedsPct + finalWantsPct;
+        if (needsWantsTotal > 0) {
+          finalNeedsPct = (finalNeedsPct / needsWantsTotal) * remaining;
+          finalWantsPct = (finalWantsPct / needsWantsTotal) * remaining;
+        } else {
+          // If no needs/wants, split evenly
+          finalNeedsPct = remaining / 2;
+          finalWantsPct = remaining / 2;
+        }
+      }
+    }
+    
+    // Step 8: Return updated state with new percentages
+    // CRITICAL: Set both targets and actuals3m to the SAME values to prevent allocateIncome from adjusting
+    // When targets == actuals3m, allocateIncome will keep them the same (no shifts)
+    // This ensures Wants stays at its preserved baseline when only rent changes
+    // Ensure exact sum of 1.0 (fix floating point precision)
+    const finalSum = finalNeedsPct + finalWantsPct + finalSavingsPct;
+    let finalNeedsPctFinal = finalNeedsPct;
+    let finalWantsPctFinal = finalWantsPct;
+    let finalSavingsPctFinal = finalSavingsPct;
+    
+    if (Math.abs(finalSum - 1.0) > 0.0001) {
+      // Adjust Savings as remainder to preserve Needs and Wants
+      finalSavingsPctFinal = Math.max(0, Math.min(1.0, 1.0 - finalNeedsPctFinal - finalWantsPctFinal));
+    }
+    
+    // CRITICAL: Round to 6 decimal places to avoid floating point precision issues
+    // that might cause buildFinalPlanData to reject our actuals3m
+    finalNeedsPctFinal = Math.round(finalNeedsPctFinal * 1000000) / 1000000;
+    finalWantsPctFinal = Math.round(finalWantsPctFinal * 1000000) / 1000000;
+    finalSavingsPctFinal = Math.round(finalSavingsPctFinal * 1000000) / 1000000;
+    
+    // Final validation - ensure exact sum of 1.0
+    const validatedSum = finalNeedsPctFinal + finalWantsPctFinal + finalSavingsPctFinal;
+    if (Math.abs(validatedSum - 1.0) > 0.000001) {
+      // Force exact sum by adjusting savings
+      finalSavingsPctFinal = 1.0 - finalNeedsPctFinal - finalWantsPctFinal;
+    }
+    
+    console.log('[Configure Your Own] Setting actuals3m to preserve Wants:', {
+      anyExpenseDebtChanged,
+      needsSliderSet,
+      wantsSliderSet,
+      savingsSliderSet,
+      baselineMonthlyWants,
+      finalMonthlyWants,
+      finalWantsPctFinal: finalWantsPctFinal * 100,
+      finalNeedsPctFinal: finalNeedsPctFinal * 100,
+      finalSavingsPctFinal: finalSavingsPctFinal * 100,
+      sum: (finalNeedsPctFinal + finalWantsPctFinal + finalSavingsPctFinal) * 100,
+      targets: {
+        needsPct: finalNeedsPctFinal,
+        wantsPct: finalWantsPctFinal,
+        savingsPct: finalSavingsPctFinal,
+      },
+      actuals3m: {
+        needsPct: finalNeedsPctFinal,
+        wantsPct: finalWantsPctFinal,
+        savingsPct: finalSavingsPctFinal,
+      },
+    });
+    
+    return {
+      ...updatedState,
+      initialPaycheckPlan: undefined, // Clear to force recalculation
+      riskConstraints: updatedState.riskConstraints ? {
+        ...updatedState.riskConstraints,
+        targets: {
+          needsPct: finalNeedsPctFinal,
+          wantsPct: finalWantsPctFinal,
+          savingsPct: finalSavingsPctFinal,
+        },
+        actuals3m: {
+          needsPct: finalNeedsPctFinal,
+          wantsPct: finalWantsPctFinal,
+          savingsPct: finalSavingsPctFinal,
+        },
+        bypassWantsFloor: true, // Critical: bypass wants floor to preserve manual adjustments
+      } : {
+        targets: {
+          needsPct: finalNeedsPctFinal,
+          wantsPct: finalWantsPctFinal,
+          savingsPct: finalSavingsPctFinal,
+        },
+        actuals3m: {
+          needsPct: finalNeedsPctFinal,
+          wantsPct: finalWantsPctFinal,
+          savingsPct: finalSavingsPctFinal,
+        },
+        bypassWantsFloor: true, // Critical: bypass wants floor to preserve manual adjustments
+        shiftLimitPct: 0.04,
+      },
+    };
+  };
 
   return {
     id: 'configure-your-own',
     title: 'Configure Your Own',
     description: 'Adjust selected categories to see impact on your financial plan',
     sliders,
-    calculateScenarioState: ({ baselineState: state, sliderValues }) => 
-      calculateScenarioStateFromSliders(state, sliderValues, sliders),
+    calculateScenarioState,
     chart: {
       type: 'net_worth',
       title: 'Net Worth Impact',
@@ -236,6 +606,21 @@ function createConfigureYourOwnConfig(
     onApply: async ({ sliderValues, scenarioState, baselineState }) => {
       // Update store with new allocations - use the store from useOnboardingStore
       const store = useOnboardingStore.getState();
+      
+      // Also update individual expenses/debts if they were changed
+      const expenseSliders = sliders.filter(s => s.id.startsWith('expense_'));
+      const debtSliders = sliders.filter(s => s.id.startsWith('debt_') && !s.id.includes('debt_minimums') && !s.id.includes('debt_extra'));
+      
+      if (expenseSliders.length > 0 || debtSliders.length > 0) {
+        // Update individual expenses/debts in the store
+        if (store.updateFixedExpenses) {
+          store.updateFixedExpenses(scenarioState.fixedExpenses);
+        }
+        if (store.updateDebts && debtSliders.length > 0) {
+          store.updateDebts(scenarioState.debts);
+        }
+      }
+      
       if (store.updateRiskConstraints) {
         store.updateRiskConstraints({
           actuals3m: scenarioState.riskConstraints?.actuals3m || {
@@ -309,9 +694,24 @@ function ConfigurableToolDemoContent() {
       });
       
       // Build plan data from scenario state
+      // This already handles dollar-based sliders correctly (calculateScenarioState updated expenses,
+      // and buildFinalPlanData recalculates percentages from those updated expenses)
       const plan = buildFinalPlanData(scenarioState);
       
-      // For grouped sliders, scale plan data to match slider values (same as savings-optimizer)
+      // CRITICAL: Check if we have dollar-based sliders (expense/debt sliders)
+      // Dollar-based sliders should NOT be included in percentage scaling logic
+      // They are already handled correctly in calculateScenarioState -> buildFinalPlanData
+      const hasDollarBasedSliders = config.sliders.some(s => 
+        s.id.startsWith('expense_') || (s.id.startsWith('debt_') && !s.id.includes('debt_minimums') && !s.id.includes('debt_extra'))
+      );
+      
+      // If we have dollar-based sliders, skip scaling - the plan is already correct
+      // buildFinalPlanData already recalculated percentages from updated dollar amounts
+      if (hasDollarBasedSliders) {
+        return plan;
+      }
+      
+      // For percentage-based sliders only, scale plan data to match slider values
       // Only scale categories that have sliders - preserve baseline for categories without sliders
       const hasGroupedSliders = config.sliders.some(s => s.group === 'needs' || s.group === 'wants' || s.group === 'savings');
       const hasSliderChanges = Object.keys(currentSliderValues).length > 0 && 
@@ -324,10 +724,36 @@ function ConfigurableToolDemoContent() {
         const paychecksPerMonth = getPaychecksPerMonth(baselineState.income?.payFrequency || 'biweekly');
         const monthlyIncome = plan.paycheckAmount * paychecksPerMonth;
         
-        // Get slider values for groups - only for sliders that exist
-        const needsSliders = config.sliders.filter(s => s.group === 'needs');
-        const wantsSliders = config.sliders.filter(s => s.group === 'wants');
-        const savingsSliders = config.sliders.filter(s => s.group === 'savings');
+        // CRITICAL: Separate percentage-based sliders (main categories) from dollar-based sliders (expenses/debts)
+        // Dollar-based sliders (expense_*, debt_*) should NOT be included in percentage scaling
+        // They are already handled in calculateScenarioState which updates expenses directly
+        // buildFinalPlanData will recalculate percentages from updated expenses
+        
+        // Only include MAIN CATEGORY sliders (needs, wants, savings) that are percentage-based
+        // NOT expense/debt sliders which are dollar-based
+        const needsSliders = config.sliders.filter(s => 
+          s.group === 'needs' && (s.id === 'needs' || s.id === 'wants' || s.id === 'savings')
+        );
+        const wantsSliders = config.sliders.filter(s => 
+          s.group === 'wants' && (s.id === 'needs' || s.id === 'wants' || s.id === 'savings')
+        );
+        const savingsSliders = config.sliders.filter(s => 
+          s.group === 'savings' && (s.id === 'needs' || s.id === 'wants' || s.id === 'savings')
+        );
+        
+        // Check if we have dollar-based sliders (expense/debt sliders)
+        // If so, skip the scaling logic - buildFinalPlanData already handled it correctly
+        const hasDollarBasedSliders = config.sliders.some(s => 
+          s.id.startsWith('expense_') || (s.id.startsWith('debt_') && !s.id.includes('debt_minimums') && !s.id.includes('debt_extra'))
+        );
+        
+        // If we have dollar-based sliders, don't scale - the plan data from buildFinalPlanData is already correct
+        // because calculateScenarioState updated the expenses, and buildFinalPlanData recalculated percentages
+        if (hasDollarBasedSliders && needsSliders.length === 0 && wantsSliders.length === 0 && savingsSliders.length === 0) {
+          // Only dollar-based sliders exist, no percentage-based sliders
+          // The plan data from buildFinalPlanData is already correct - return it as-is
+          return plan;
+        }
         
         // Get baseline percentages for categories without sliders (preserve current plan)
         const baselineNeedsCategories = baselinePlanData.paycheckCategories.filter((c: any) => 
@@ -346,7 +772,8 @@ function ConfigurableToolDemoContent() {
         const baselineWantsMonthly = baselineWantsCategories.reduce((sum: number, c: any) => sum + (c.amount || 0), 0) * paychecksPerMonth;
         const baselineSavingsMonthly = baselineSavingsCategories.reduce((sum: number, c: any) => sum + (c.amount || 0), 0) * paychecksPerMonth;
         
-        // Use slider values if sliders exist, otherwise use baseline percentages
+        // Use slider values ONLY for main category sliders (percentage-based)
+        // Dollar-based sliders are already reflected in plan via updated expenses
         const needsPct = needsSliders.length > 0
           ? needsSliders.reduce((sum, s) => sum + (sliderValuesForScenario[s.id] ?? s.defaultValue), 0)
           : (baselineNeedsMonthly / monthlyIncome) * 100;
@@ -435,7 +862,10 @@ function ConfigurableToolDemoContent() {
     const hasSliderChanges = Object.keys(currentSliderValues).length > 0 && 
       config.sliders.some(s => {
         const currentValue = currentSliderValues[s.id];
-        return currentValue !== undefined && Math.abs(currentValue - s.defaultValue) > 0.1;
+        if (currentValue === undefined) return false;
+        // For dollar-based sliders, use $10 threshold; for percentage-based, use 0.1%
+        const threshold = s.unit === '$' ? 10 : 0.1;
+        return Math.abs(currentValue - s.defaultValue) > threshold;
       });
     const planToUse = (hasSliderChanges && scenarioPlanDataForDistribution) ? scenarioPlanDataForDistribution : baselinePlanData;
     if (!planToUse || !planToUse.paycheckCategories || planToUse.paycheckCategories.length === 0) {
@@ -491,6 +921,137 @@ function ConfigurableToolDemoContent() {
       savingsPct,
     };
   }, [scenarioPlanDataForDistribution, baselinePlanData, baselineState.income?.payFrequency, baselineState.income?.netIncome$, baselineState.income?.grossIncome$, currentSliderValues, config.sliders]);
+
+  // Track previous income distribution to detect changes
+  const prevIncomeDistributionRef = useRef<{ needsPct: number; wantsPct: number; savingsPct: number } | null>(null);
+
+  // Sync main category sliders (both percentage and dollar-based) with income distribution when dollar-based subcategory sliders change
+  // This ensures that when rent (dollar-based) changes, the Savings slider updates to reflect the new value
+  useEffect(() => {
+    if (!incomeDistribution || !config.sliders || config.sliders.length === 0) {
+      if (incomeDistribution) {
+        prevIncomeDistributionRef.current = incomeDistribution;
+      }
+      return;
+    }
+
+    // Get main category sliders (needs, wants, savings) - can be either percentage or dollar-based
+    // NOT dollar-based subcategory sliders (expense_*, debt_*)
+    const mainCategorySliders = config.sliders.filter(s => 
+      s.id === 'needs' || s.id === 'wants' || s.id === 'savings'
+    );
+
+    if (mainCategorySliders.length === 0) {
+      if (incomeDistribution) {
+        prevIncomeDistributionRef.current = incomeDistribution;
+      }
+      return; // No main category sliders to update
+    }
+
+    // Check if dollar-based subcategory sliders exist - only auto-update main category sliders if subcategory sliders exist
+    const hasDollarBasedSubcategorySliders = config.sliders.some(s => 
+      s.id.startsWith('expense_') || (s.id.startsWith('debt_') && !s.id.includes('debt_minimums') && !s.id.includes('debt_extra'))
+    );
+
+    if (!hasDollarBasedSubcategorySliders) {
+      // No dollar-based subcategory sliders, don't auto-update main category sliders (user controls them)
+      if (incomeDistribution) {
+        prevIncomeDistributionRef.current = incomeDistribution;
+      }
+      return;
+    }
+
+    // Only update if income distribution actually changed (not just on initial render)
+    const prevDist = prevIncomeDistributionRef.current;
+    if (!prevDist) {
+      // Initial render - store current distribution
+      prevIncomeDistributionRef.current = incomeDistribution;
+      return;
+    }
+
+    // Check if any percentage changed significantly
+    const needsChanged = Math.abs(prevDist.needsPct - incomeDistribution.needsPct) > 0.1;
+    const wantsChanged = Math.abs(prevDist.wantsPct - incomeDistribution.wantsPct) > 0.1;
+    const savingsChanged = Math.abs(prevDist.savingsPct - incomeDistribution.savingsPct) > 0.1;
+
+    if (!needsChanged && !wantsChanged && !savingsChanged) {
+      // No significant change, skip update
+      prevIncomeDistributionRef.current = incomeDistribution;
+      return;
+    }
+
+    // Calculate monthly income for dollar conversions
+    const paychecksPerMonth = getPaychecksPerMonth(baselineState.income?.payFrequency || 'biweekly');
+    const monthlyIncome = (baselineState.income?.netIncome$ || baselineState.income?.grossIncome$ || 0) * paychecksPerMonth;
+
+    // Get the corresponding values from income distribution and convert to slider units
+    // Batch all slider updates together
+    setCurrentSliderValues(prev => {
+      const newSliderValues: Record<string, number> = { ...prev };
+      let hasChanges = false;
+
+      mainCategorySliders.forEach(slider => {
+        const currentValue = prev[slider.id] ?? slider.defaultValue;
+        let newValue: number;
+        let categoryChanged = false;
+        
+        if (slider.id === 'needs') {
+          categoryChanged = needsChanged;
+          if (slider.unit === '%') {
+            // Percentage-based slider - use percentage directly
+            newValue = incomeDistribution.needsPct;
+          } else if (slider.unit === '$') {
+            // Dollar-based slider - use monthly dollar amount directly
+            newValue = incomeDistribution.monthlyNeeds;
+          } else {
+            return; // Skip unknown unit
+          }
+        } else if (slider.id === 'wants') {
+          categoryChanged = wantsChanged;
+          if (slider.unit === '%') {
+            // Percentage-based slider - use percentage directly
+            newValue = incomeDistribution.wantsPct;
+          } else if (slider.unit === '$') {
+            // Dollar-based slider - use monthly dollar amount directly
+            newValue = incomeDistribution.monthlyWants;
+          } else {
+            return; // Skip unknown unit
+          }
+        } else if (slider.id === 'savings') {
+          categoryChanged = savingsChanged;
+          if (slider.unit === '%') {
+            // Percentage-based slider - use percentage directly
+            newValue = incomeDistribution.savingsPct;
+          } else if (slider.unit === '$') {
+            // Dollar-based slider - use monthly dollar amount directly
+            newValue = incomeDistribution.monthlySavings;
+          } else {
+            return; // Skip unknown unit
+          }
+        } else {
+          return; // Skip unknown slider
+        }
+
+        if (!categoryChanged) {
+          return; // Skip if this category didn't change
+        }
+
+        // Constrain to slider's min/max
+        newValue = Math.max(slider.min, Math.min(slider.max, newValue));
+
+        // Always update if category changed - don't check threshold for sync
+        // This ensures sliders reflect the calculated values from income distribution
+        newSliderValues[slider.id] = newValue;
+        hasChanges = true;
+      });
+
+      // Only update if there are actual changes
+      return hasChanges ? newSliderValues : prev;
+    });
+
+    // Update ref to track current income distribution
+    prevIncomeDistributionRef.current = incomeDistribution;
+  }, [incomeDistribution, config.sliders, baselineState.income?.payFrequency, baselineState.income?.netIncome$, baselineState.income?.grossIncome$]); // Don't include currentSliderValues to avoid infinite loop
 
   // Calculate baseline allocation (always from baselinePlanData, never changes)
   const baselineIncomeDistribution = useMemo(() => {
