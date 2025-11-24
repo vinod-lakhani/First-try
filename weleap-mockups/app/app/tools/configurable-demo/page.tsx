@@ -774,16 +774,45 @@ function ConfigurableToolDemoContent() {
         
         // Use slider values ONLY for main category sliders (percentage-based)
         // Dollar-based sliders are already reflected in plan via updated expenses
+        // CRITICAL: Calculate percentages correctly based on slider unit
+        // Dollar-based sliders need to be converted to percentages, percentage-based sliders are already percentages
         const needsPct = needsSliders.length > 0
-          ? needsSliders.reduce((sum, s) => sum + (sliderValuesForScenario[s.id] ?? s.defaultValue), 0)
+          ? needsSliders.reduce((sum, s) => {
+              const value = sliderValuesForScenario[s.id] ?? s.defaultValue;
+              if (s.unit === '$') {
+                // Dollar-based slider - convert to percentage
+                return sum + ((value / monthlyIncome) * 100);
+              } else {
+                // Percentage-based slider - use directly
+                return sum + value;
+              }
+            }, 0)
           : (baselineNeedsMonthly / monthlyIncome) * 100;
         
         const wantsPct = wantsSliders.length > 0
-          ? wantsSliders.reduce((sum, s) => sum + (sliderValuesForScenario[s.id] ?? s.defaultValue), 0)
+          ? wantsSliders.reduce((sum, s) => {
+              const value = sliderValuesForScenario[s.id] ?? s.defaultValue;
+              if (s.unit === '$') {
+                // Dollar-based slider - convert to percentage
+                return sum + ((value / monthlyIncome) * 100);
+              } else {
+                // Percentage-based slider - use directly
+                return sum + value;
+              }
+            }, 0)
           : (baselineWantsMonthly / monthlyIncome) * 100;
         
         const savingsPct = savingsSliders.length > 0
-          ? savingsSliders.reduce((sum, s) => sum + (sliderValuesForScenario[s.id] ?? s.defaultValue), 0)
+          ? savingsSliders.reduce((sum, s) => {
+              const value = sliderValuesForScenario[s.id] ?? s.defaultValue;
+              if (s.unit === '$') {
+                // Dollar-based slider - convert to percentage
+                return sum + ((value / monthlyIncome) * 100);
+              } else {
+                // Percentage-based slider - use directly
+                return sum + value;
+              }
+            }, 0)
           : (baselineSavingsMonthly / monthlyIncome) * 100;
         
         const targetNeedsMonthly = (needsPct / 100) * monthlyIncome;
