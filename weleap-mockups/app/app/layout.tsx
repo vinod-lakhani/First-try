@@ -28,9 +28,19 @@ export default function AppLayout({
   useEffect(() => {
     // Only redirect if we're on an app page and onboarding is not complete
     // Don't redirect if we're already on a tools page or profile page
+    // Also avoid redirect loops by checking if we're already navigating
     if (!isComplete && pathname?.startsWith('/app') && !pathname?.startsWith('/app/tools') && pathname !== '/app/profile') {
-      // Redirect to onboarding if not completed
-      router.push('/onboarding');
+      // Small delay to avoid race conditions during navigation
+      // This gives time for setComplete(true) to propagate when saving plan
+      const timeoutId = setTimeout(() => {
+        // Double-check isComplete hasn't changed during the delay
+        const currentState = useOnboardingStore.getState();
+        if (!currentState.isComplete) {
+          router.push('/onboarding');
+        }
+      }, 150);
+      
+      return () => clearTimeout(timeoutId);
     }
   }, [isComplete, router, pathname]);
 

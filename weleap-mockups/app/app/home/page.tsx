@@ -20,7 +20,12 @@ export default function HomePage() {
   // Build home screen data
   const homeData = useMemo(() => {
     if (!planData) return null;
-    return buildHomeData(planData, state);
+    try {
+      return buildHomeData(planData, state);
+    } catch (error) {
+      console.error('[HomePage] Error building home data:', error);
+      return null;
+    }
   }, [planData, state]);
 
   if (!planData || !homeData) {

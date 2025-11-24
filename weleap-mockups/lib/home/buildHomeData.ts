@@ -111,12 +111,15 @@ export function buildHomeData(
   }
 
   // Insight 3: Emergency fund progress
-  const efProgress = (planData.emergencyFund.current / planData.emergencyFund.target) * 100;
+  // Add safety check for emergencyFund
+  const emergencyFund = planData.emergencyFund || { current: 0, target: 0, monthsTarget: 0, monthsToTarget: 0 };
+  const efTarget = emergencyFund.target || 1; // Avoid division by zero
+  const efProgress = efTarget > 0 ? (emergencyFund.current / efTarget) * 100 : 0;
   if (efProgress > 50 && efProgress < 100) {
     insights.push({
       id: 'insight-ef-progress',
       title: 'Emergency fund is making progress',
-      body: `Your EF is ${efProgress.toFixed(0)}% funded. You're ${planData.emergencyFund.monthsToTarget} months away from your target.`,
+      body: `Your EF is ${efProgress.toFixed(0)}% funded. You're ${emergencyFund.monthsToTarget || 0} months away from your target.`,
       ctaLabel: 'Boost this goal',
       ctaAction: {
         kind: 'open_optimizer',
@@ -126,9 +129,11 @@ export function buildHomeData(
   }
 
   // Build net worth snapshot
-  const netWorthHistory = planData.netWorthChartData.netWorth.slice(-12); // Last 12 months
-  const currentNetWorth = netWorthHistory[netWorthHistory.length - 1] || 0;
-  const lastMonthNetWorth = netWorthHistory[netWorthHistory.length - 2] || currentNetWorth;
+  // Add safety checks for netWorthChartData
+  const netWorthData = planData.netWorthChartData || { netWorth: [], assets: [], liabilities: [], labels: [] };
+  const netWorthHistory = (netWorthData.netWorth || []).slice(-12); // Last 12 months
+  const currentNetWorth = netWorthHistory.length > 0 ? netWorthHistory[netWorthHistory.length - 1] || 0 : 0;
+  const lastMonthNetWorth = netWorthHistory.length > 1 ? netWorthHistory[netWorthHistory.length - 2] || currentNetWorth : currentNetWorth;
   const deltaVsLastMonth = currentNetWorth - lastMonthNetWorth;
 
   const netWorth: NetWorthSnapshot = {
@@ -149,8 +154,8 @@ export function buildHomeData(
   goals.push({
     id: 'goal-ef',
     label: 'Emergency Fund',
-    current$: planData.emergencyFund.current,
-    target$: planData.emergencyFund.target,
+    current$: emergencyFund.current,
+    target$: emergencyFund.target,
     contributedThisMonth$: efMonthly * paychecksPerMonth,
   });
 

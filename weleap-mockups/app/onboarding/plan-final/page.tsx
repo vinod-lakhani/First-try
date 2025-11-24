@@ -76,10 +76,27 @@ export default function PlanFinalPage() {
     amount: cat.amount * paychecksPerMonth, // Convert to monthly
   })) : [];
 
-  const handleSavePlan = () => {
-    // Mark onboarding as complete and redirect to app
-    setComplete(true);
-    router.push('/app/home');
+  const handleSavePlan = async () => {
+    try {
+      // Mark onboarding as complete first
+      setComplete(true);
+      
+      // Wait a brief moment to ensure state update propagates
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Then navigate to app home
+      router.push('/app/home');
+    } catch (error) {
+      console.error('[Plan Final] Error saving plan:', error);
+      // Fallback: try navigation even if there's an error
+      try {
+        router.push('/app/home');
+      } catch (navError) {
+        console.error('[Plan Final] Error navigating to home:', navError);
+        // Last resort: reload the page
+        window.location.href = '/app/home';
+      }
+    }
   };
 
   const handleEnablePulse = () => {
