@@ -643,35 +643,66 @@ function createConfigureYourOwnConfig(
         savingsPct: 0,
       };
       
-      // CRITICAL: Create new object references to ensure Zustand detects the change
-      // Zustand uses shallow equality, so we need new object references
-      const newTargets = {
+      // CRITICAL: Update riskConstraints to trigger usePlanData recalculation
+      // The income page displays planData.paycheckCategories which comes from buildFinalPlanData
+      // buildFinalPlanData uses riskConstraints.actuals3m to calculate the plan
+      // When we update riskConstraints, usePlanData hook should detect the change and recalculate
+      
+      // CRITICAL: Create completely new object references
+      // Zustand uses shallow equality - the riskConstraints object reference must change
+      // AND the nested actuals3m/targets objects must be new references too
+      const newActuals3m = {
         needsPct: actuals3m.needsPct,
         wantsPct: actuals3m.wantsPct,
         savingsPct: actuals3m.savingsPct,
       };
-      const newActuals3m = {
+      const newTargets = {
         needsPct: actuals3m.needsPct,
         wantsPct: actuals3m.wantsPct,
         savingsPct: actuals3m.savingsPct,
       };
       
       if (store.updateRiskConstraints) {
-        // Update riskConstraints with new object references
-        // This ensures Zustand subscribers (like usePlanData) detect the change
+        // Update riskConstraints with completely new object references
+        // This ensures Zustand detects the change and triggers usePlanData hook
         store.updateRiskConstraints({
-          targets: newTargets, // Targets should match actuals after applying
-          actuals3m: newActuals3m,
-          bypassWantsFloor: true, // Preserve the bypass flag
+          targets: newTargets, // New object reference
+          actuals3m: newActuals3m, // New object reference
+          bypassWantsFloor: true, // Preserve the bypass flag - this ensures buildFinalPlanData uses our actuals3m
         });
         
-        // Force Zustand to notify all subscribers by calling getState
-        // This ensures usePlanData hook detects the change immediately
+        // Wait a moment for Zustand to propagate the change
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
+        // Verify the store was updated correctly
         const currentState = useOnboardingStore.getState();
-        console.log('[Configure Your Own] Store updated - verifying:', {
-          riskConstraints: currentState.riskConstraints,
+        console.log('[Configure Your Own] Store updated:', {
           actuals3m: currentState.riskConstraints?.actuals3m,
+          targets: currentState.riskConstraints?.targets,
+          bypassWantsFloor: currentState.riskConstraints?.bypassWantsFloor,
         });
+        
+        // Force a recalculation by calling buildFinalPlanData directly to verify
+        try {
+          const updatedPlanData = buildFinalPlanData(currentState);
+          const needsPct = updatedPlanData.paycheckCategories
+            .filter(c => c.key === 'essentials' || c.key === 'debt_minimums')
+            .reduce((sum, c) => sum + c.percent, 0);
+          const wantsPct = updatedPlanData.paycheckCategories
+            .find(c => c.key === 'fun_flexible')?.percent || 0;
+          const savingsPct = updatedPlanData.paycheckCategories
+            .filter(c => c.key === 'emergency' || c.key === 'long_term_investing' || c.key === 'debt_extra')
+            .reduce((sum, c) => sum + c.percent, 0);
+          
+          console.log('[Configure Your Own] Plan recalculated - Income page will show:', {
+            needsPct: needsPct.toFixed(1) + '%',
+            wantsPct: wantsPct.toFixed(1) + '%',
+            savingsPct: savingsPct.toFixed(1) + '%',
+            total: (needsPct + wantsPct + savingsPct).toFixed(1) + '%',
+          });
+        } catch (error) {
+          console.error('[Configure Your Own] Error recalculating plan:', error);
+        }
       }
       
       // Clear initialPaycheckPlan to force recalculation from updated state
