@@ -922,15 +922,29 @@ function ConfigurableToolDemoContent() {
     };
   }, [scenarioPlanDataForDistribution, baselinePlanData, baselineState.income?.payFrequency, baselineState.income?.netIncome$, baselineState.income?.grossIncome$, currentSliderValues, config.sliders]);
 
-  // Track previous income distribution to detect changes
-  const prevIncomeDistributionRef = useRef<{ needsPct: number; wantsPct: number; savingsPct: number } | null>(null);
+  // Track previous income distribution to detect changes (store full object to compare monthly amounts too)
+  const prevIncomeDistributionRef = useRef<{ needsPct: number; wantsPct: number; savingsPct: number; monthlyNeeds: number; monthlyWants: number; monthlySavings: number } | null>(null);
 
   // Sync main category sliders (both percentage and dollar-based) with income distribution when dollar-based subcategory sliders change
   // This ensures that when rent (dollar-based) changes, the Savings slider updates to reflect the new value
   useEffect(() => {
+    // Helper to store full income distribution in ref
+    const storeIncomeDistribution = (dist: typeof incomeDistribution) => {
+      if (dist) {
+        prevIncomeDistributionRef.current = {
+          needsPct: dist.needsPct,
+          wantsPct: dist.wantsPct,
+          savingsPct: dist.savingsPct,
+          monthlyNeeds: dist.monthlyNeeds,
+          monthlyWants: dist.monthlyWants,
+          monthlySavings: dist.monthlySavings,
+        };
+      }
+    };
+
     if (!incomeDistribution || !config.sliders || config.sliders.length === 0) {
       if (incomeDistribution) {
-        prevIncomeDistributionRef.current = incomeDistribution;
+        storeIncomeDistribution(incomeDistribution);
       }
       return;
     }
@@ -943,7 +957,7 @@ function ConfigurableToolDemoContent() {
 
     if (mainCategorySliders.length === 0) {
       if (incomeDistribution) {
-        prevIncomeDistributionRef.current = incomeDistribution;
+        storeIncomeDistribution(incomeDistribution);
       }
       return; // No main category sliders to update
     }
@@ -956,7 +970,7 @@ function ConfigurableToolDemoContent() {
     if (!hasDollarBasedSubcategorySliders) {
       // No dollar-based subcategory sliders, don't auto-update main category sliders (user controls them)
       if (incomeDistribution) {
-        prevIncomeDistributionRef.current = incomeDistribution;
+        storeIncomeDistribution(incomeDistribution);
       }
       return;
     }
@@ -965,18 +979,31 @@ function ConfigurableToolDemoContent() {
     const prevDist = prevIncomeDistributionRef.current;
     if (!prevDist) {
       // Initial render - store current distribution
-      prevIncomeDistributionRef.current = incomeDistribution;
+      storeIncomeDistribution(incomeDistribution);
       return;
     }
 
-    // Check if any percentage changed significantly
-    const needsChanged = Math.abs(prevDist.needsPct - incomeDistribution.needsPct) > 0.1;
-    const wantsChanged = Math.abs(prevDist.wantsPct - incomeDistribution.wantsPct) > 0.1;
-    const savingsChanged = Math.abs(prevDist.savingsPct - incomeDistribution.savingsPct) > 0.1;
+    // Check if any percentage changed (use very small threshold to catch all changes)
+    const needsChanged = Math.abs(prevDist.needsPct - incomeDistribution.needsPct) > 0.01;
+    const wantsChanged = Math.abs(prevDist.wantsPct - incomeDistribution.wantsPct) > 0.01;
+    const savingsChanged = Math.abs(prevDist.savingsPct - incomeDistribution.savingsPct) > 0.01;
 
-    if (!needsChanged && !wantsChanged && !savingsChanged) {
-      // No significant change, skip update
-      prevIncomeDistributionRef.current = incomeDistribution;
+    // When dollar-based subcategory sliders exist, always sync sliders to income distribution
+    // Don't skip even if percentages didn't change much - sliders should always match the source of truth
+    // Only skip if absolutely nothing changed (to avoid infinite loops)
+    if (!needsChanged && !wantsChanged && !savingsChanged && 
+        Math.abs(prevDist.monthlyNeeds - incomeDistribution.monthlyNeeds) < 0.01 &&
+        Math.abs(prevDist.monthlyWants - incomeDistribution.monthlyWants) < 0.01 &&
+        Math.abs(prevDist.monthlySavings - incomeDistribution.monthlySavings) < 0.01) {
+      // No change at all, skip update (but update ref with full object)
+      prevIncomeDistributionRef.current = {
+        needsPct: incomeDistribution.needsPct,
+        wantsPct: incomeDistribution.wantsPct,
+        savingsPct: incomeDistribution.savingsPct,
+        monthlyNeeds: incomeDistribution.monthlyNeeds,
+        monthlyWants: incomeDistribution.monthlyWants,
+        monthlySavings: incomeDistribution.monthlySavings,
+      };
       return;
     }
 
@@ -1034,15 +1061,15 @@ function ConfigurableToolDemoContent() {
 
         // CRITICAL: When dollar-based subcategory sliders change (like rent), 
         // update ALL main category sliders to match income distribution (source of truth)
-        // Don't skip if category didn't change - always sync all sliders when subcategory sliders exist
-        // This ensures sliders always reflect the calculated values from income distribution
+        // Always sync sliders to income distribution - it's the single source of truth
+        // Don't use thresholds - always update to ensure sliders match the bar chart and table
 
         // Constrain to slider's min/max
         newValue = Math.max(slider.min, Math.min(slider.max, newValue));
 
         // Always update to match income distribution (when subcategory sliders exist)
-        // Only skip if the value hasn't changed significantly (to avoid unnecessary re-renders)
-        const threshold = slider.unit === '$' ? 10 : 0.1; // $10 for dollar, 0.1% for percentage
+        // Use a very small threshold (0.01) to avoid floating-point precision issues, but always update if different
+        const threshold = slider.unit === '$' ? 0.01 : 0.01; // Very small threshold just for floating-point precision
         if (Math.abs(newValue - currentValue) > threshold) {
           newSliderValues[slider.id] = newValue;
           hasChanges = true;
@@ -1053,8 +1080,15 @@ function ConfigurableToolDemoContent() {
       return hasChanges ? newSliderValues : prev;
     });
 
-    // Update ref to track current income distribution
-    prevIncomeDistributionRef.current = incomeDistribution;
+    // Update ref to track current income distribution (store full object)
+    prevIncomeDistributionRef.current = {
+      needsPct: incomeDistribution.needsPct,
+      wantsPct: incomeDistribution.wantsPct,
+      savingsPct: incomeDistribution.savingsPct,
+      monthlyNeeds: incomeDistribution.monthlyNeeds,
+      monthlyWants: incomeDistribution.monthlyWants,
+      monthlySavings: incomeDistribution.monthlySavings,
+    };
   }, [incomeDistribution, config.sliders, baselineState.income?.payFrequency, baselineState.income?.netIncome$, baselineState.income?.grossIncome$]); // Don't include currentSliderValues to avoid infinite loop
 
   // Calculate baseline allocation (always from baselinePlanData, never changes)
@@ -1098,28 +1132,47 @@ function ConfigurableToolDemoContent() {
   const hasIncome = baselineState.income && (baselineState.income.netIncome$ || baselineState.income.grossIncome$);
 
   // Conditional return after all hooks
-  // Check if income is missing first (this is why buildFinalPlanData failed)
-  if (!hasIncome) {
-    return (
-      <div className="flex min-h-[calc(100vh-73px)] items-center justify-center p-4">
-        <Card>
-          <CardContent className="py-12 text-center space-y-4">
-            <p className="text-red-600 dark:text-red-400 font-medium">
-              Income information is required to generate a plan.
-            </p>
-            <Button
-              onClick={() => router.push('/onboarding/income')}
-              variant="outline"
-            >
-              Go to Income Step
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-  
+  // Only show income error if income is actually missing AND we're not loading
+  // If baselinePlanData is null but income exists, it might still be loading or there's a different error
+  // So show loading state first, then check for income error only if it's still missing after loading
   if (!baselinePlanData) {
+    // If we're loading but income exists, show loading state
+    if (hasIncome || baselineState.plaidConnected) {
+      return (
+        <div className="flex min-h-[calc(100vh-73px)] items-center justify-center p-4">
+          <Card>
+            <CardContent className="py-12 text-center">
+              <p className="text-slate-600 dark:text-slate-400">
+                Loading optimizer...
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+    
+    // If no income and not loading (no Plaid connection), show error
+    if (!hasIncome) {
+      return (
+        <div className="flex min-h-[calc(100vh-73px)] items-center justify-center p-4">
+          <Card>
+            <CardContent className="py-12 text-center space-y-4">
+              <p className="text-red-600 dark:text-red-400 font-medium">
+                Income information is required to generate a plan.
+              </p>
+              <Button
+                onClick={() => router.push('/onboarding/income')}
+                variant="outline"
+              >
+                Go to Income Step
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+    
+    // Fallback loading state
     return (
       <div className="flex min-h-[calc(100vh-73px)] items-center justify-center p-4">
         <Card>
