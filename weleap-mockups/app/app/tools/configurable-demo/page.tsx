@@ -643,25 +643,67 @@ function createConfigureYourOwnConfig(
         savingsPct: 0,
       };
       
+      // CRITICAL: Create new object references to ensure Zustand detects the change
+      // Zustand uses shallow equality, so we need new object references
+      const newTargets = {
+        needsPct: actuals3m.needsPct,
+        wantsPct: actuals3m.wantsPct,
+        savingsPct: actuals3m.savingsPct,
+      };
+      const newActuals3m = {
+        needsPct: actuals3m.needsPct,
+        wantsPct: actuals3m.wantsPct,
+        savingsPct: actuals3m.savingsPct,
+      };
+      
       if (store.updateRiskConstraints) {
+        // Update riskConstraints with new object references
+        // This ensures Zustand subscribers (like usePlanData) detect the change
         store.updateRiskConstraints({
-          targets: actuals3m, // Targets should match actuals after applying
-          actuals3m: actuals3m,
+          targets: newTargets, // Targets should match actuals after applying
+          actuals3m: newActuals3m,
           bypassWantsFloor: true, // Preserve the bypass flag
+        });
+        
+        // Force Zustand to notify all subscribers by calling getState
+        // This ensures usePlanData hook detects the change immediately
+        const currentState = useOnboardingStore.getState();
+        console.log('[Configure Your Own] Store updated - verifying:', {
+          riskConstraints: currentState.riskConstraints,
+          actuals3m: currentState.riskConstraints?.actuals3m,
         });
       }
       
       // Clear initialPaycheckPlan to force recalculation from updated state
+      // This is critical - it ensures buildFinalPlanData recalculates from actuals3m instead of cached plan
       if (store.setInitialPaycheckPlan) {
         store.setInitialPaycheckPlan(undefined as any);
       }
       
-      // Rebuild the plan after state updates to ensure it's recalculated
+      // Ensure all updates are applied to the store before proceeding
+      // Get the updated state to verify changes were applied
+      const updatedState = useOnboardingStore.getState();
+      console.log('[Configure Your Own] Store updated with:', {
+        actuals3m: updatedState.riskConstraints?.actuals3m,
+        targets: updatedState.riskConstraints?.targets,
+        bypassWantsFloor: updatedState.riskConstraints?.bypassWantsFloor,
+        initialPaycheckPlan: updatedState.initialPaycheckPlan,
+      });
+      
+      // Rebuild the plan after state updates to verify it's recalculated correctly
       // This ensures the plan is available when navigating to other pages
       try {
-        const updatedState = useOnboardingStore.getState();
         const updatedPlanData = buildFinalPlanData(updatedState);
-        console.log('[Configure Your Own] Plan updated successfully:', updatedPlanData);
+        console.log('[Configure Your Own] Plan rebuilt successfully:', {
+          needsPct: updatedPlanData.paycheckCategories
+            .filter(c => c.key === 'essentials' || c.key === 'debt_minimums')
+            .reduce((sum, c) => sum + c.percent, 0),
+          wantsPct: updatedPlanData.paycheckCategories
+            .find(c => c.key === 'fun_flexible')?.percent || 0,
+          savingsPct: updatedPlanData.paycheckCategories
+            .filter(c => c.key === 'emergency' || c.key === 'long_term_investing' || c.key === 'debt_extra')
+            .reduce((sum, c) => sum + c.percent, 0),
+        });
       } catch (error) {
         console.error('[Configure Your Own] Error rebuilding plan after update:', error);
       }

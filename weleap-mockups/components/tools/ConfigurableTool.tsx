@@ -162,16 +162,26 @@ export function ConfigurableTool({ config, onSliderValuesChange, incomeDistribut
     e?.stopPropagation?.();
     setIsProcessing(true);
     try {
+      // Apply changes to store (this updates the source of truth)
       await config.onApply({
         sliderValues,
         scenarioState,
         baselineState,
       });
+      
+      // Wait a brief moment to ensure store updates have propagated
+      // This ensures Zustand subscribers (like usePlanData) have time to react
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       setShowConfirmDialog(false);
+      
       // Navigate to home after applying changes so user can see updated plan
       // Use push instead of back to ensure the page reloads and shows updated data
+      // The usePlanData hook will automatically recalculate when riskConstraints changes
       try {
         router.push('/app/home');
+        // Force a small delay to ensure navigation completes and new page renders
+        await new Promise(resolve => setTimeout(resolve, 50));
       } catch (navError) {
         console.error('[ConfigurableTool] Error navigating:', navError);
         // Fallback: try router.back() if push fails
