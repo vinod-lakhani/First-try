@@ -150,12 +150,16 @@ export function ConfigurableTool({ config, onSliderValuesChange, incomeDistribut
   }, [sliderValues, originalSliderValues, config.sliders]);
 
   // Handle apply button click
-  const handleApply = async () => {
+  const handleApply = (e?: React.MouseEvent) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
     setShowConfirmDialog(true);
   };
 
   // Handle confirm apply
-  const handleConfirmApply = async () => {
+  const handleConfirmApply = async (e?: React.MouseEvent) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
     setIsProcessing(true);
     try {
       await config.onApply({
@@ -164,14 +168,32 @@ export function ConfigurableTool({ config, onSliderValuesChange, incomeDistribut
         baselineState,
       });
       setShowConfirmDialog(false);
-      if (config.onBack) {
-        config.onBack();
-      } else {
-        router.back();
+      // Navigate after applying changes
+      try {
+        if (config.onBack) {
+          config.onBack();
+        } else {
+          router.back();
+        }
+      } catch (navError) {
+        console.error('[ConfigurableTool] Error navigating:', navError);
+        // Fallback: navigate to home if back navigation fails
+        try {
+          router.push('/app/home');
+        } catch (pushError) {
+          console.error('[ConfigurableTool] Error with fallback navigation:', pushError);
+        }
       }
     } catch (error) {
       console.error('[ConfigurableTool] Error applying changes:', error);
       setIsProcessing(false);
+      // Don't re-throw - just log and reset state
+      // If it's an event object or non-Error, convert to proper error message
+      if (error && typeof error === 'object' && !(error instanceof Error)) {
+        const errorMessage = 'toString' in error ? String(error) : 'An error occurred while applying changes';
+        console.error('[ConfigurableTool] Non-Error object caught:', errorMessage, error);
+      }
+      // Keep dialog open so user can try again
     }
   };
 
