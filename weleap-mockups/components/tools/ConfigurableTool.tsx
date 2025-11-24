@@ -168,20 +168,21 @@ export function ConfigurableTool({ config, onSliderValuesChange, incomeDistribut
         baselineState,
       });
       setShowConfirmDialog(false);
-      // Navigate after applying changes
+      // Navigate to home after applying changes so user can see updated plan
+      // Use push instead of back to ensure the page reloads and shows updated data
       try {
-        if (config.onBack) {
-          config.onBack();
-        } else {
-          router.back();
-        }
+        router.push('/app/home');
       } catch (navError) {
         console.error('[ConfigurableTool] Error navigating:', navError);
-        // Fallback: navigate to home if back navigation fails
+        // Fallback: try router.back() if push fails
         try {
-          router.push('/app/home');
-        } catch (pushError) {
-          console.error('[ConfigurableTool] Error with fallback navigation:', pushError);
+          if (config.onBack) {
+            config.onBack();
+          } else {
+            router.back();
+          }
+        } catch (backError) {
+          console.error('[ConfigurableTool] Error with fallback navigation:', backError);
         }
       }
     } catch (error) {

@@ -635,18 +635,37 @@ function createConfigureYourOwnConfig(
         }
       }
       
+      // Update both targets and actuals3m to match the scenario state
+      // This ensures the plan is updated correctly when viewed elsewhere
+      const actuals3m = scenarioState.riskConstraints?.actuals3m || {
+        needsPct: 0,
+        wantsPct: 0,
+        savingsPct: 0,
+      };
+      
       if (store.updateRiskConstraints) {
         store.updateRiskConstraints({
-          actuals3m: scenarioState.riskConstraints?.actuals3m || {
-            needsPct: 0,
-            wantsPct: 0,
-            savingsPct: 0,
-          },
+          targets: actuals3m, // Targets should match actuals after applying
+          actuals3m: actuals3m,
+          bypassWantsFloor: true, // Preserve the bypass flag
         });
       }
+      
+      // Clear initialPaycheckPlan to force recalculation from updated state
       if (store.setInitialPaycheckPlan) {
         store.setInitialPaycheckPlan(undefined as any);
       }
+      
+      // Rebuild the plan after state updates to ensure it's recalculated
+      // This ensures the plan is available when navigating to other pages
+      try {
+        const updatedState = useOnboardingStore.getState();
+        const updatedPlanData = buildFinalPlanData(updatedState);
+        console.log('[Configure Your Own] Plan updated successfully:', updatedPlanData);
+      } catch (error) {
+        console.error('[Configure Your Own] Error rebuilding plan after update:', error);
+      }
+      
       console.log('[Configure Your Own] Applied changes:', sliderValues);
     },
   };
