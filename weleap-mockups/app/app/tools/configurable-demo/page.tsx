@@ -1094,7 +1094,31 @@ function ConfigurableToolDemoContent() {
     };
   }, [baselinePlanData, baselineState.income?.payFrequency, baselineState.income?.netIncome$, baselineState.income?.grossIncome$]);
 
+  // Check if income data is available (after all hooks)
+  const hasIncome = baselineState.income && (baselineState.income.netIncome$ || baselineState.income.grossIncome$);
+
   // Conditional return after all hooks
+  // Check if income is missing first (this is why buildFinalPlanData failed)
+  if (!hasIncome) {
+    return (
+      <div className="flex min-h-[calc(100vh-73px)] items-center justify-center p-4">
+        <Card>
+          <CardContent className="py-12 text-center space-y-4">
+            <p className="text-red-600 dark:text-red-400 font-medium">
+              Income information is required to generate a plan.
+            </p>
+            <Button
+              onClick={() => router.push('/onboarding/income')}
+              variant="outline"
+            >
+              Go to Income Step
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+  
   if (!baselinePlanData) {
     return (
       <div className="flex min-h-[calc(100vh-73px)] items-center justify-center p-4">
