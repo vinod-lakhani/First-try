@@ -26,6 +26,11 @@ interface OnboardingChatProps {
 
 export function OnboardingChat({ context, inline = false }: OnboardingChatProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [imageSrc, setImageSrc] = useState('/images/ribbit.png');
+  
+  useEffect(() => {
+    setImageSrc(withBasePath('images/ribbit.png'));
+  }, []);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -104,7 +109,7 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
           aria-label="Ask Ribbit a question"
         >
           <img
-            src={withBasePath('images/ribbit.png')}
+            src={imageSrc}
             alt="Ribbit"
             className="w-10 h-10 object-contain"
             loading="lazy"

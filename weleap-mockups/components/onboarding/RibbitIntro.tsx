@@ -7,6 +7,7 @@
 
 'use client';
 
+import { useState, useEffect } from 'react';
 import { Link, Wallet, Target, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -21,6 +22,13 @@ const RibbitIntro: React.FC<RibbitIntroProps> = ({
   onPrimaryClick,
   onSecondaryClick,
 }) => {
+  // Set image src after component mounts to avoid hydration issues
+  const [imageSrc, setImageSrc] = useState('/images/ribbit.png');
+  
+  useEffect(() => {
+    setImageSrc(withBasePath('images/ribbit.png'));
+  }, []);
+
   return (
     <div className="w-full flex items-center justify-center p-4">
       <div className="w-full max-w-sm px-6 py-8 flex flex-col gap-6">
@@ -36,7 +44,7 @@ const RibbitIntro: React.FC<RibbitIntroProps> = ({
           <div className="mx-auto h-32 w-32 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center mb-2 overflow-hidden p-2">
             {/* Using regular img tag for static export compatibility with loading optimization */}
             <img
-              src={withBasePath('images/ribbit.png')}
+              src={imageSrc}
               alt="Ribbit, your financial sidekick"
               className="w-full h-full object-contain"
               loading="lazy"
