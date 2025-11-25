@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useOnboardingStore } from '@/lib/onboarding/store';
 import { usePlanData } from '@/lib/onboarding/usePlanData';
@@ -15,6 +15,8 @@ import type { UserSnapshot, TransactionsSection, FeedTransaction } from '@/lib/f
 import { FeedCardRenderer } from '@/components/feed/cards';
 import { TransactionsSection as TransactionsSectionComponent } from '@/components/feed/TransactionsSection';
 import type { FeedCard } from '@/lib/feed/types';
+import { Card, CardContent } from '@/components/ui/card';
+import { ChevronDown, ChevronUp, Bell, AlertCircle, Sparkles, BookOpen } from 'lucide-react';
 
 // Helper to get paychecks per month
 function getPaychecksPerMonth(frequency: string): number {
@@ -133,11 +135,193 @@ export default function FeedPage() {
     };
   }, [planData, state]);
 
-  // Build feed cards
+  // Build feed cards - we only need the Pulse card from buildFeed
   const feedCards = useMemo(() => {
     if (!userSnapshot) return [];
-    return buildFeed(userSnapshot);
+    const allCards = buildFeed(userSnapshot);
+    // Only extract the pulse card (first card)
+    return allCards.filter(card => card.type === 'pulse');
   }, [userSnapshot]);
+
+  // Create representative feed examples (2 from each category)
+  const representativeCards = useMemo((): FeedCard[] => {
+    const now = new Date().toISOString();
+    
+    return [
+      // 1. Notifications (2 examples)
+      {
+        id: 'notification-1',
+        type: 'notification',
+        priority: 2,
+        createdAt: now,
+        title: 'New paycheck detected',
+        body: 'We noticed a new deposit of $2,341 from Tesla, Inc.',
+        metadata: {
+          category: 'income',
+          timestamp: now,
+        },
+      },
+      {
+        id: 'notification-2',
+        type: 'notification',
+        priority: 2,
+        createdAt: now,
+        title: 'Goal progress update',
+        body: "You're 22% of the way toward your $5,000 emergency fund.",
+        metadata: {
+          category: 'goals',
+          timestamp: now,
+        },
+      },
+      
+      // 2. Alerts (2 examples)
+      {
+        id: 'alert-1',
+        type: 'alert',
+        priority: 1,
+        createdAt: now,
+        title: 'Upcoming bill due in 3 days',
+        body: 'Your Capital One payment of $142.38 is due soon.',
+        ctaLabel: 'View bill details',
+        ctaAction: {
+          kind: 'open_view',
+          payload: { view: 'bills' },
+        },
+        metadata: {
+          severity: 'high',
+          category: 'bills',
+        },
+      },
+      {
+        id: 'alert-2',
+        type: 'alert',
+        priority: 1,
+        createdAt: now,
+        title: 'Low account balance',
+        body: 'Your checking account balance is below $200.',
+        ctaLabel: 'Review budget',
+        ctaAction: {
+          kind: 'open_view',
+          payload: { view: 'cashflow' },
+        },
+        metadata: {
+          severity: 'high',
+          category: 'balance',
+        },
+      },
+      
+      // 3. Recommendations (2 examples)
+      {
+        id: 'recommendation-1',
+        type: 'recommendation',
+        priority: 2,
+        createdAt: now,
+        title: "Let's review your savings allocation",
+        body: "Your savings distribution may not match your goals. Tap to review and optimize.",
+        ctaLabel: 'Review allocation',
+        ctaAction: {
+          kind: 'open_optimizer',
+          payload: { tool: 'savings_allocator' },
+        },
+        metadata: {
+          category: 'savings',
+          impact: 'Optimize savings distribution',
+        },
+      },
+      {
+        id: 'recommendation-2',
+        type: 'recommendation',
+        priority: 2,
+        createdAt: now,
+        title: 'Move $60 to savings?',
+        body: 'You spent less than usual on dining this week. Tap to transfer $60 into your savings.',
+        ctaLabel: 'Move to savings',
+        ctaAction: {
+          kind: 'open_optimizer',
+          payload: { tool: 'savings_allocator' },
+        },
+        metadata: {
+          category: 'savings',
+          impact: 'Extra savings opportunity',
+        },
+      },
+      
+      // 4. Informational Content (2 examples)
+      {
+        id: 'informational-1',
+        type: 'informational',
+        priority: 3,
+        createdAt: now,
+        title: 'Needs vs. Wants',
+        body: 'Understanding your spending helps you optimize your financial plan.',
+        ctaLabel: 'Learn more',
+        ctaAction: {
+          kind: 'show_education',
+          payload: { topic: 'needs_vs_wants' },
+        },
+        metadata: {
+          topic: 'Needs vs. Wants',
+          category: 'spending',
+        },
+      },
+      {
+        id: 'informational-2',
+        type: 'informational',
+        priority: 3,
+        createdAt: now,
+        title: 'Savings philosophy',
+        body: 'Small consistent changes beat strict budgeting.',
+        ctaLabel: 'Learn more',
+        ctaAction: {
+          kind: 'show_education',
+          payload: { topic: 'savings_philosophy' },
+        },
+        metadata: {
+          topic: 'Savings philosophy',
+          category: 'savings',
+        },
+      },
+    ];
+  }, []);
+
+  // Group cards by category
+  const cardsByCategory = useMemo(() => {
+    const grouped: Record<string, FeedCard[]> = {
+      notifications: [],
+      alerts: [],
+      recommendations: [],
+      informational: [],
+    };
+
+    representativeCards.forEach((card) => {
+      if (card.type === 'notification') {
+        grouped.notifications.push(card);
+      } else if (card.type === 'alert') {
+        grouped.alerts.push(card);
+      } else if (card.type === 'recommendation') {
+        grouped.recommendations.push(card);
+      } else if (card.type === 'informational') {
+        grouped.informational.push(card);
+      }
+    });
+
+    return grouped;
+  }, [representativeCards]);
+
+  // State for collapsed/expanded categories (all expanded by default)
+  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
+    notifications: true,
+    alerts: true,
+    recommendations: true,
+    informational: true,
+  });
+
+  const toggleCategory = (category: string) => {
+    setExpandedCategories((prev) => ({
+      ...prev,
+      [category]: !prev[category],
+    }));
+  };
 
   // TODO: Replace with real data from Plaid transaction APIs via backend
   // Static transaction data created once to avoid regeneration and improve performance
@@ -277,68 +461,169 @@ export default function FeedPage() {
     }
   };
 
-  if (!planData || !userSnapshot) {
-    return (
-      <div className="flex min-h-[calc(100vh-73px)] flex-col">
-        <div className="flex-1 overflow-y-auto px-4 py-6">
-          <div className="mx-auto w-full max-w-lg">
-            <p className="text-center text-slate-600 dark:text-slate-400">
-              Loading your feed...
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Separate cards by priority for better layout
-  const highPriorityCards = feedCards.filter(card => card.priority <= 2);
-  const mediumPriorityCards = feedCards.filter(card => card.priority === 3);
-  const lowPriorityCards = feedCards.filter(card => card.priority >= 4);
+  // Get the pulse card (should be the only one from buildFeed now)
+  const pulseCard = feedCards.find(card => card.type === 'pulse');
 
   return (
     <div className="flex min-h-[calc(100vh-73px)] flex-col">
       <div className="flex-1 overflow-y-auto px-4 py-6">
         <div className="mx-auto w-full max-w-lg space-y-4">
-          {feedCards.length === 0 ? (
-            <p className="text-center text-slate-600 dark:text-slate-400">
-              No feed items available. Complete your onboarding to see personalized insights.
-            </p>
-          ) : (
-            <>
-              {/* High Priority Cards (Alerts, Actions) */}
-              {highPriorityCards.map((card) => (
-                <FeedCardRenderer
-                  key={card.id}
-                  card={card}
-                  onAction={handleCardAction}
-                />
-              ))}
-
-              {/* Recent Activity Section - placed after high-priority cards */}
-              <TransactionsSectionComponent data={mockTransactions} />
-
-              {/* Medium Priority Cards (Progress, Opportunities) */}
-              {mediumPriorityCards.map((card) => (
-                <FeedCardRenderer
-                  key={card.id}
-                  card={card}
-                  onAction={handleCardAction}
-                />
-              ))}
-
-              {/* Low Priority Cards (Education, Weekly Summary) */}
-              {lowPriorityCards.map((card) => (
-                <FeedCardRenderer
-                  key={card.id}
-                  card={card}
-                  onAction={handleCardAction}
-                />
-              ))}
-            </>
+          {/* Monthly Pulse - Always at the top (if available) */}
+          {pulseCard && (
+            <FeedCardRenderer
+              key={pulseCard.id}
+              card={pulseCard}
+              onAction={handleCardAction}
+            />
           )}
+
+          {/* Show loading message if no pulse card but still show representative cards */}
+          {!pulseCard && !planData && (
+            <p className="text-center text-slate-600 dark:text-slate-400">
+              Loading your feed...
+            </p>
+          )}
+
+          {/* Representative Feed Cards - Grouped by category with collapse/expand */}
+          
+          {/* Notifications Category */}
+          {cardsByCategory.notifications.length > 0 && (
+            <CategorySection
+              title="Notifications"
+              icon={<Bell className="h-5 w-5" />}
+              count={cardsByCategory.notifications.length}
+              isExpanded={expandedCategories.notifications}
+              onToggle={() => toggleCategory('notifications')}
+            >
+              {expandedCategories.notifications &&
+                cardsByCategory.notifications.map((card) => (
+                  <FeedCardRenderer
+                    key={card.id}
+                    card={card}
+                    onAction={handleCardAction}
+                  />
+                ))
+              }
+            </CategorySection>
+          )}
+
+          {/* Alerts Category */}
+          {cardsByCategory.alerts.length > 0 && (
+            <CategorySection
+              title="Alerts"
+              icon={<AlertCircle className="h-5 w-5" />}
+              count={cardsByCategory.alerts.length}
+              isExpanded={expandedCategories.alerts}
+              onToggle={() => toggleCategory('alerts')}
+            >
+              {expandedCategories.alerts &&
+                cardsByCategory.alerts.map((card) => (
+                  <FeedCardRenderer
+                    key={card.id}
+                    card={card}
+                    onAction={handleCardAction}
+                  />
+                ))
+              }
+            </CategorySection>
+          )}
+
+          {/* Recommendations Category */}
+          {cardsByCategory.recommendations.length > 0 && (
+            <CategorySection
+              title="Recommendations"
+              icon={<Sparkles className="h-5 w-5" />}
+              count={cardsByCategory.recommendations.length}
+              isExpanded={expandedCategories.recommendations}
+              onToggle={() => toggleCategory('recommendations')}
+            >
+              {expandedCategories.recommendations &&
+                cardsByCategory.recommendations.map((card) => (
+                  <FeedCardRenderer
+                    key={card.id}
+                    card={card}
+                    onAction={handleCardAction}
+                  />
+                ))
+              }
+            </CategorySection>
+          )}
+
+          {/* Informational Category */}
+          {cardsByCategory.informational.length > 0 && (
+            <CategorySection
+              title="Informational"
+              icon={<BookOpen className="h-5 w-5" />}
+              count={cardsByCategory.informational.length}
+              isExpanded={expandedCategories.informational}
+              onToggle={() => toggleCategory('informational')}
+            >
+              {expandedCategories.informational &&
+                cardsByCategory.informational.map((card) => (
+                  <FeedCardRenderer
+                    key={card.id}
+                    card={card}
+                    onAction={handleCardAction}
+                  />
+                ))
+              }
+            </CategorySection>
+          )}
+
+          {/* Transactions - Always at the bottom */}
+          <TransactionsSectionComponent data={mockTransactions} />
         </div>
       </div>
+    </div>
+  );
+}
+
+// Category Section Component with Collapse/Expand
+interface CategorySectionProps {
+  title: string;
+  icon: React.ReactNode;
+  count: number;
+  isExpanded: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}
+
+function CategorySection({ title, icon, count, isExpanded, onToggle, children }: CategorySectionProps) {
+  return (
+    <div className="space-y-2">
+      {/* Category Header */}
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between rounded-lg bg-black dark:bg-black px-4 py-2.5 hover:bg-slate-900 dark:hover:bg-slate-900 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <div className="text-white">
+            {icon}
+          </div>
+          <div className="text-left">
+            <h3 className="text-sm font-semibold text-white">
+              {title}
+            </h3>
+            <p className="text-xs text-slate-300">
+              {count} {count === 1 ? 'item' : 'items'}
+            </p>
+          </div>
+        </div>
+        <div className="text-white">
+          {isExpanded ? (
+            <ChevronUp className="h-4 w-4" />
+          ) : (
+            <ChevronDown className="h-4 w-4" />
+          )}
+        </div>
+      </button>
+
+      {/* Category Content */}
+      {isExpanded && (
+        <div className="space-y-4">
+          {children}
+        </div>
+      )}
     </div>
   );
 }

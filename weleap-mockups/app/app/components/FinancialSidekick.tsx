@@ -10,41 +10,44 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { X, ArrowRight, Search, Zap } from 'lucide-react';
+import { X, ArrowRight, Search, Zap, Sparkles } from 'lucide-react';
 
 const quickQuestions = [
   {
-    id: 'save',
-    label: 'How much can I save?',
-    scenario: 'save_more',
-  },
-  {
-    id: 'rent',
-    label: 'How much rent can I afford?',
-    scenario: 'rent',
-  },
-  {
-    id: 'allocate_income',
-    label: 'Help me allocate my income',
-    scenario: 'allocate_income',
+    id: 'savings_helper',
+    label: 'Help me figure out how much I can save',
+    scenario: 'savings_helper',
+    path: '/app/tools/savings-helper',
   },
   {
     id: 'allocate_savings',
-    label: 'Help me allocate my savings',
+    label: 'Help me figure out what to do with my savings',
     scenario: 'allocate_savings',
+    path: '/app/tools/savings-allocator',
+  },
+  {
+    id: 'custom_scenario',
+    label: 'Help me analyze a custom scenario',
+    scenario: 'custom_scenario',
+    path: '/app/tools/configurable-demo',
   },
 ];
 
-const openCards = [
+// Recommendations from Feed Page
+const recommendations = [
   {
-    id: 'hysa',
-    title: 'Create HYSA',
-    description: 'In just 1 year, you could earn over $500 with ~5% interest and a $200 signup bonus.',
+    id: 'recommendation-1',
+    title: "Let's review your savings allocation",
+    body: "Your savings distribution may not match your goals. Tap to review and optimize.",
+    ctaLabel: 'Review allocation',
+    path: '/app/tools/savings-allocator',
   },
   {
-    id: '401k',
-    title: '401K Advisor',
-    description: 'Increase your 401k 3% over the next oc in order to gain a co',
+    id: 'recommendation-2',
+    title: 'Move $60 to savings?',
+    body: 'You spent less than usual on dining this week. Tap to transfer $60 into your savings.',
+    ctaLabel: 'Move to savings',
+    path: '/app/tools/savings-allocator',
   },
 ];
 
@@ -57,18 +60,13 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
   const [chatInput, setChatInput] = useState('');
   const router = useRouter();
 
-  const handleQuestionClick = (scenario: string) => {
-    if (scenario === 'rent') {
-      router.push(`/app/tools/net-worth-analyzer?scenario=rent`);
-    } else if (scenario === 'save_more') {
-      router.push(`/app/tools/savings-optimizer`);
-    } else if (scenario === 'allocate_savings') {
-      router.push(`/app/tools/savings-allocator`);
-    } else if (scenario === 'allocate_income') {
-      router.push(`/app/tools/income-allocator`);
-    } else if (scenario === 'debt_extra') {
-      router.push(`/app/tools/net-worth-analyzer?scenario=debt_extra`);
-    }
+  const handleQuestionClick = (path: string) => {
+    router.push(path);
+    setIsOpen(false);
+  };
+
+  const handleRecommendationClick = (path: string) => {
+    router.push(path);
     setIsOpen(false);
   };
 
@@ -123,22 +121,38 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
 
         {/* Main Content */}
         <div className="flex-1 overflow-y-auto p-4">
-          {/* Open Cards Section */}
+          {/* Recommendations Section */}
           <div className="mb-6">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="font-semibold text-slate-900 dark:text-white">Open Cards</h3>
+              <h3 className="font-semibold text-slate-900 dark:text-white">Recommendations</h3>
               <ArrowRight className="h-5 w-5 text-slate-600 dark:text-slate-400" />
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {openCards.map((card) => (
-                <Card key={card.id} className="cursor-pointer transition-all hover:shadow-md">
+            <div className="space-y-3">
+              {recommendations.map((rec) => (
+                <Card 
+                  key={rec.id} 
+                  className="cursor-pointer border-blue-200 bg-blue-50 transition-all hover:shadow-md dark:border-blue-800 dark:bg-blue-950/20"
+                  onClick={() => handleRecommendationClick(rec.path)}
+                >
                   <CardContent className="p-4">
-                    <h4 className="mb-2 font-semibold text-slate-900 dark:text-white">
-                      {card.title}
-                    </h4>
-                    <p className="text-sm text-slate-600 dark:text-slate-400">
-                      {card.description}
-                    </p>
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0 mt-0.5">
+                        <Sparkles className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <div className="flex-1 space-y-1">
+                        <h4 className="font-semibold text-slate-900 dark:text-white">
+                          {rec.title}
+                        </h4>
+                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                          {rec.body}
+                        </p>
+                        {rec.ctaLabel && (
+                          <p className="pt-1 text-sm font-medium text-blue-600 dark:text-blue-400">
+                            {rec.ctaLabel} →
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
               ))}
@@ -154,7 +168,7 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
               {quickQuestions.map((question) => (
                 <button
                   key={question.id}
-                  onClick={() => handleQuestionClick(question.scenario)}
+                  onClick={() => handleQuestionClick(question.path)}
                   className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white p-4 text-left transition-all hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700"
                 >
                   <span className="text-slate-900 dark:text-white">{question.label}</span>

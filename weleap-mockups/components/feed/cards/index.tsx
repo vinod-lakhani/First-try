@@ -29,6 +29,10 @@ import {
   ProgressSavingsStreakCard,
 } from './ProgressCard';
 import { EducationCard } from './EducationCard';
+import { NotificationCard } from './NotificationCard';
+import { GenericAlertCard } from './GenericAlertCard';
+import { RecommendationCard } from './RecommendationCard';
+import { InformationalCard } from './InformationalCard';
 
 interface FeedCardRendererProps {
   card: FeedCard;
@@ -70,6 +74,18 @@ export function FeedCardRenderer({ card, onAction }: FeedCardRendererProps) {
     
     case 'education':
       return <EducationCard card={card} onAction={onAction} />;
+    
+    case 'notification':
+      return <NotificationCard card={card} />;
+    
+    case 'alert':
+      return <GenericAlertCard card={card} onAction={onAction} />;
+    
+    case 'recommendation':
+      return <RecommendationCard card={card} onAction={onAction} />;
+    
+    case 'informational':
+      return <InformationalCard card={card} onAction={onAction} />;
     
     default:
       console.warn(`Unknown card type: ${(card as any).type}`);

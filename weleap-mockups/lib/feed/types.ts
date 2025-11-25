@@ -20,7 +20,11 @@ export type FeedCardType =
   | "progress_savings_streak"
   | "education"
   | "weekly_summary"
-  | "seasonal";
+  | "seasonal"
+  | "notification"
+  | "alert"
+  | "recommendation"
+  | "informational";
 
 export interface FeedCardBase {
   id: string;
@@ -148,6 +152,26 @@ export interface SeasonalMetadata {
   impact: string;
 }
 
+export interface NotificationMetadata {
+  category: string;
+  timestamp: string;
+}
+
+export interface AlertMetadata {
+  severity: "high" | "medium";
+  category: string;
+}
+
+export interface RecommendationMetadata {
+  category: string;
+  impact?: string;
+}
+
+export interface InformationalMetadata {
+  topic: string;
+  category: string;
+}
+
 // Union type for all card metadata
 export type FeedCardMetadata =
   | PulseCardMetadata
@@ -165,7 +189,11 @@ export type FeedCardMetadata =
   | ProgressSavingsStreakMetadata
   | EducationMetadata
   | WeeklySummaryMetadata
-  | SeasonalMetadata;
+  | SeasonalMetadata
+  | NotificationMetadata
+  | AlertMetadata
+  | RecommendationMetadata
+  | InformationalMetadata;
 
 export interface FeedCard extends FeedCardBase {
   metadata?: FeedCardMetadata;

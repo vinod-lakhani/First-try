@@ -9,10 +9,9 @@
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, TrendingUp, TrendingDown } from 'lucide-react';
+import { ArrowRight, TrendingUp, TrendingDown, PiggyBank, Target } from 'lucide-react';
 import type { HomeScreenData } from '@/lib/home/types';
 import { formatCurrency, formatPercent } from '@/lib/feed/utils';
-import { NetWorthSparkline } from './NetWorthSparkline';
 
 interface HomeScreenProps {
   data: HomeScreenData;
@@ -187,7 +186,6 @@ export function HomeScreen({ data }: HomeScreenProps) {
                   </span>
                 </div>
               </div>
-              <NetWorthSparkline data={netWorth.history} />
               <Button
                 onClick={() => router.push('/app/tools/savings-optimizer')}
                 variant="outline"
@@ -206,43 +204,29 @@ export function HomeScreen({ data }: HomeScreenProps) {
             </h2>
             <div className="grid grid-cols-2 gap-3">
               <Button
-                onClick={() => router.push('/app/tools/savings-optimizer')}
+                onClick={() => router.push('/app/tools/savings-helper')}
                 variant="outline"
-                className="h-auto flex-col items-start p-4"
+                className="h-auto !flex-col !items-start p-4 !whitespace-normal"
               >
-                <span className="font-semibold mb-1">Optimize my savings</span>
-                <span className="text-xs text-slate-600 dark:text-slate-400 text-left">
+                <div className="flex items-start gap-2 mb-1.5 w-full min-w-0">
+                  <PiggyBank className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                  <span className="font-semibold text-left leading-tight text-sm min-w-0 flex-1 break-words overflow-wrap-anywhere">Help me figure out how much I can save?</span>
+                </div>
+                <span className="text-xs text-slate-600 dark:text-slate-400 text-left w-full">
                   Adjust your monthly savings rate
                 </span>
               </Button>
               <Button
                 onClick={() => router.push('/app/tools/savings-allocator')}
                 variant="outline"
-                className="h-auto flex-col items-start p-4"
+                className="h-auto !flex-col !items-start p-4 !whitespace-normal"
               >
-                <span className="font-semibold mb-1">Improve savings mix</span>
-                <span className="text-xs text-slate-600 dark:text-slate-400 text-left">
+                <div className="flex items-start gap-2 mb-1.5 w-full min-w-0">
+                  <Target className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                  <span className="font-semibold text-left leading-tight text-sm min-w-0 flex-1 break-words overflow-wrap-anywhere">Help me figure out what to do with my savings?</span>
+                </div>
+                <span className="text-xs text-slate-600 dark:text-slate-400 text-left w-full">
                   Rebalance EF, debt, retirement
-                </span>
-              </Button>
-              <Button
-                onClick={() => router.push('/onboarding/boost/bills')}
-                variant="outline"
-                className="h-auto flex-col items-start p-4"
-              >
-                <span className="font-semibold mb-1">Check fixed expenses</span>
-                <span className="text-xs text-slate-600 dark:text-slate-400 text-left">
-                  See how rent affects your plan
-                </span>
-              </Button>
-              <Button
-                onClick={() => router.push('/app/tools/configurable-demo')}
-                variant="outline"
-                className="h-auto flex-col items-start p-4"
-              >
-                <span className="font-semibold mb-1">Try a what-if scenario</span>
-                <span className="text-xs text-slate-600 dark:text-slate-400 text-left">
-                  Play with income and savings
                 </span>
               </Button>
             </div>

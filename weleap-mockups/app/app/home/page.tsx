@@ -11,7 +11,6 @@ import { useOnboardingStore } from '@/lib/onboarding/store';
 import { usePlanData } from '@/lib/onboarding/usePlanData';
 import { buildHomeData } from '@/lib/home/buildHomeData';
 import { HomeScreen } from '@/components/home/HomeScreen';
-import { SidekickButton } from '@/components/common/SidekickButton';
 
 export default function HomePage() {
   const state = useOnboardingStore();
@@ -38,7 +37,6 @@ export default function HomePage() {
             </p>
           </div>
         </div>
-        <SidekickButton />
       </div>
     );
   }
@@ -46,7 +44,6 @@ export default function HomePage() {
   return (
     <>
       <HomeScreen data={homeData} />
-      <SidekickButton />
     </>
   );
 }

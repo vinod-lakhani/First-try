@@ -14,7 +14,6 @@ import type { ProfilePageData } from '@/lib/profile/types';
 import { getMostRecentConsent } from '@/lib/legal/getLatestConsent';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
 import { CheckCircle2, Clock, AlertCircle, Pencil, X, Check, Shield, Mail, Lock, Link2, Download, Trash2, FileText } from 'lucide-react';
 import Link from 'next/link';
 
@@ -100,27 +99,6 @@ export default function ProfilePage() {
                   </p>
                 )}
               </div>
-
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                Update your answers anytime to refresh your plan.
-              </p>
-
-              <div className="space-y-2 pt-2">
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => router.push('/onboarding')}
-                >
-                  Re-run onboarding
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => router.push('/app/home')}
-                >
-                  View your plan
-                </Button>
-              </div>
             </CardContent>
           </Card>
 
@@ -141,35 +119,7 @@ export default function ProfilePage() {
             />
           </ProfileSection>
 
-          {/* 3. Income & Housing */}
-          <ProfileSection
-            title="Income & Housing"
-            description="Define the key recurring cash flow assumptions."
-            summary={`Take-home: ${formatCurrency(localData.incomeHousing.monthlyNetIncome$)}, Rent: ${formatCurrency(localData.incomeHousing.rentOrHousing$)}, Other fixed needs: ${formatCurrency(localData.incomeHousing.otherFixedNeeds$)}`}
-            note="These numbers power your Needs/Wants/Savings plan and rent impact simulations."
-            isEditing={editingSection === 'income'}
-            onEdit={() => setEditingSection('income')}
-            onCancel={() => setEditingSection(null)}
-            onSave={(updates) => handleSave('income', { incomeHousing: { ...localData.incomeHousing, ...updates } })}
-          >
-            <IncomeHousingEditor
-              data={localData.incomeHousing}
-              onUpdate={(updates) => {
-                // Update store
-                if (updates.monthlyNetIncome$) {
-                  const paychecksPerMonth = state.income ? 
-                    (state.income.payFrequency === 'weekly' ? 4.33 :
-                     state.income.payFrequency === 'biweekly' ? 2.17 :
-                     state.income.payFrequency === 'semimonthly' ? 2 : 1) : 1;
-                  const perPaycheck = updates.monthlyNetIncome$ / paychecksPerMonth;
-                  state.updateIncome({ netIncome$: perPaycheck });
-                }
-                handleSave('income', { incomeHousing: { ...localData.incomeHousing, ...updates } });
-              }}
-            />
-          </ProfileSection>
-
-          {/* 4. Financial Connections */}
+          {/* 3. Financial Connections */}
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Financial Connections</CardTitle>
@@ -253,7 +203,6 @@ export default function ProfilePage() {
               if (localData.goals.emergencyFundEnabled) goals.push(`EF: ${localData.goals.emergencyFundMonths}mo`);
               if (localData.goals.highInterestDebtEnabled) goals.push('Debt payoff');
               if (localData.goals.retirementEnabled) goals.push('Retirement');
-              if (localData.goals.bigPurchaseEnabled) goals.push('Big purchase');
               return goals.join(' · ') || 'No goals set';
             })()}
             note="Your goals guide how we prioritize emergency savings, debt payoff, retirement, and investing in your plan."
@@ -276,115 +225,12 @@ export default function ProfilePage() {
                 if (updates.retirementFocus) {
                   state.updateSafetyStrategy({ retirementFocus: updates.retirementFocus.charAt(0).toUpperCase() + updates.retirementFocus.slice(1) as any });
                 }
-                if (updates.liquidityNeed) {
-                  state.updateSafetyStrategy({ liquidity: updates.liquidityNeed.charAt(0).toUpperCase() + updates.liquidityNeed.slice(1) as any });
-                }
                 handleSave('goals', { goals: { ...localData.goals, ...updates } });
               }}
             />
           </ProfileSection>
 
-          {/* 6. Plan Settings */}
-          <ProfileSection
-            title="Plan Settings (Engine Knobs)"
-            description="Tune how aggressive the system is with changes."
-            summary={`Savings target: ${formatPercent(localData.plan.savingsTargetPct)}, Change aggressiveness: ${localData.plan.changeAggressiveness}, Min wants: ${formatPercent(localData.plan.wantsFloorPct)}`}
-            note="We'll never exceed your comfort settings when adjusting your plan month-to-month."
-            isEditing={editingSection === 'plan'}
-            onEdit={() => setEditingSection('plan')}
-            onCancel={() => setEditingSection(null)}
-            onSave={(updates) => handleSave('plan', { plan: { ...localData.plan, ...updates } })}
-          >
-            <PlanSettingsEditor
-              data={localData.plan}
-              state={state}
-              onUpdate={(updates) => {
-                // Update store
-                if (updates.savingsTargetPct !== undefined) {
-                  const currentTargets = state.riskConstraints?.targets || { needsPct: 0.5, wantsPct: 0.3, savingsPct: 0.2 };
-                  state.updateRiskConstraints({
-                    targets: { ...currentTargets, savingsPct: updates.savingsTargetPct }
-                  });
-                }
-                if (updates.changeAggressiveness) {
-                  const shiftLimit = updates.changeAggressiveness === 'gentle' ? 0.02 :
-                                   updates.changeAggressiveness === 'balanced' ? 0.04 : 0.06;
-                  state.updateRiskConstraints({ shiftLimitPct: shiftLimit });
-                }
-                if (updates.wantsFloorPct !== undefined) {
-                  const currentTargets = state.riskConstraints?.targets || { needsPct: 0.5, wantsPct: 0.3, savingsPct: 0.2 };
-                  state.updateRiskConstraints({
-                    targets: { ...currentTargets, wantsPct: updates.wantsFloorPct }
-                  });
-                }
-                handleSave('plan', { plan: { ...localData.plan, ...updates } });
-              }}
-            />
-          </ProfileSection>
-
-          {/* 7. Notifications & Nudges */}
-          <ProfileSection
-            title="Notifications & Nudges"
-            description="Control how, what, and how often WeLeap reaches out."
-            summary={`${localData.notifications.channels.email ? 'Email' : ''} ${localData.notifications.channels.sms ? 'SMS' : ''} ${localData.notifications.channels.push ? 'Push' : ''} · ${localData.notifications.frequency.replace('_', ' ')}`}
-            note="We'll respect your notification preferences while still making sure you don't miss critical updates."
-            isEditing={editingSection === 'notifications'}
-            onEdit={() => setEditingSection('notifications')}
-            onCancel={() => setEditingSection(null)}
-            onSave={(updates) => handleSave('notifications', { notifications: { ...localData.notifications, ...updates } })}
-          >
-            <NotificationsEditor
-              data={localData.notifications}
-              state={state}
-              onUpdate={(updates) => {
-                // Update store
-                if (updates.frequency) {
-                  const frequencyMap: Record<"important_only" | "weekly" | "frequent", "monthly" | "weekly" | "daily"> = { 
-                    important_only: 'monthly', 
-                    weekly: 'weekly', 
-                    frequent: 'daily' 
-                  };
-                  const channels = updates.channels || localData.notifications.channels;
-                  state.updatePulsePreferences({
-                    enabled: true,
-                    frequency: frequencyMap[updates.frequency as keyof typeof frequencyMap],
-                    channels: Object.entries(channels).filter(([_, enabled]) => enabled).map(([key, _]) => key as any),
-                  });
-                }
-                handleSave('notifications', { notifications: { ...localData.notifications, ...updates } });
-              }}
-            />
-          </ProfileSection>
-
-          {/* 8. Investment & Risk Preferences */}
-          <ProfileSection
-            title="Investment & Risk Preferences"
-            description="Capture user comfort with market risk and time horizon."
-            summary={`Risk: ${localData.risk.riskComfort}, Horizon: ${localData.risk.mainHorizon}, Crypto: ${localData.risk.cryptoStance || 'avoid'}`}
-            note="We use this to align investment recommendations and projections with your comfort level and timeline."
-            isEditing={editingSection === 'risk'}
-            onEdit={() => setEditingSection('risk')}
-            onCancel={() => setEditingSection(null)}
-            onSave={(updates) => handleSave('risk', { risk: { ...localData.risk, ...updates } })}
-          >
-            <RiskPreferencesEditor
-              data={localData.risk}
-              state={state}
-              onUpdate={(updates) => {
-                // Update store
-                if (updates.riskComfort) {
-                  const riskScore = updates.riskComfort === 'conservative' ? 2 : updates.riskComfort === 'balanced' ? 3 : 4;
-                  state.updateRiskConstraints({ riskScore1to5: riskScore });
-                }
-                if (updates.mainHorizon) {
-                  state.updateRiskConstraints({ dominantTimeHorizon: updates.mainHorizon });
-                }
-                handleSave('risk', { risk: { ...localData.risk, ...updates } });
-              }}
-            />
-          </ProfileSection>
-
-          {/* 9. Security & Data */}
+          {/* 6. Security & Data */}
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Security & Data</CardTitle>
@@ -622,48 +468,6 @@ function PersonalLifeStageEditor({ data, onUpdate }: { data: any; onUpdate: (upd
   );
 }
 
-function IncomeHousingEditor({ data, onUpdate }: { data: any; onUpdate: (updates: any) => void }) {
-  const [formData, setFormData] = useState(data);
-  
-  return (
-    <div className="space-y-4">
-      <div>
-        <label className="mb-1 block text-sm font-medium">Monthly Net Income</label>
-        <input
-          type="number"
-          value={formData.monthlyNetIncome$}
-          onChange={(e) => setFormData({ ...formData, monthlyNetIncome$: parseFloat(e.target.value) })}
-          className="w-full rounded border px-3 py-2"
-        />
-      </div>
-      <div>
-        <label className="mb-1 block text-sm font-medium">Income Source</label>
-        <select
-          value={formData.incomeSource}
-          onChange={(e) => setFormData({ ...formData, incomeSource: e.target.value })}
-          className="w-full rounded border px-3 py-2"
-        >
-          <option value="salary">Salary</option>
-          <option value="hourly">Hourly</option>
-          <option value="gig">Gig</option>
-          <option value="mixed">Mixed</option>
-          <option value="other">Other</option>
-        </select>
-      </div>
-      <div>
-        <label className="mb-1 block text-sm font-medium">Rent or Housing Payment</label>
-        <input
-          type="number"
-          value={formData.rentOrHousing$}
-          onChange={(e) => setFormData({ ...formData, rentOrHousing$: parseFloat(e.target.value) })}
-          className="w-full rounded border px-3 py-2"
-        />
-      </div>
-      <Button onClick={() => onUpdate(formData)} className="w-full">Save Changes</Button>
-    </div>
-  );
-}
-
 function GoalsEditor({ data, onUpdate, state }: { data: any; onUpdate: (updates: any) => void; state: any }) {
   const [formData, setFormData] = useState(data);
   
@@ -746,257 +550,8 @@ function GoalsEditor({ data, onUpdate, state }: { data: any; onUpdate: (updates:
         )}
       </div>
 
-      <div className="space-y-2">
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={formData.bigPurchaseEnabled}
-            onChange={(e) => setFormData({ ...formData, bigPurchaseEnabled: e.target.checked })}
-            className="h-4 w-4"
-          />
-          <span>Save for a home down payment / big purchase</span>
-        </label>
-        {formData.bigPurchaseEnabled && (
-          <div className="ml-6">
-            <label className="mb-1 block text-sm">Liquidity need:</label>
-            <select
-              value={formData.liquidityNeed}
-              onChange={(e) => setFormData({ ...formData, liquidityNeed: e.target.value })}
-              className="w-full rounded border px-3 py-2"
-            >
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-            </select>
-          </div>
-        )}
-      </div>
-
       <Button onClick={() => onUpdate(formData)} className="w-full">Save Changes</Button>
     </div>
   );
 }
 
-function PlanSettingsEditor({ data, onUpdate, state }: { data: any; onUpdate: (updates: any) => void; state: any }) {
-  const [formData, setFormData] = useState(data);
-  
-  return (
-    <div className="space-y-6">
-      <div>
-        <div className="mb-2 flex items-center justify-between">
-          <label className="text-sm font-medium">Savings Target</label>
-          <span className="text-sm font-semibold">{(formData.savingsTargetPct * 100).toFixed(0)}%</span>
-        </div>
-        <Slider
-          value={[formData.savingsTargetPct * 100]}
-          onValueChange={([value]) => setFormData({ ...formData, savingsTargetPct: value / 100 })}
-          min={10}
-          max={30}
-          step={1}
-          className="w-full"
-        />
-        <p className="mt-1 text-xs text-slate-500">How much of your income would you like to save over time?</p>
-      </div>
-
-      <div>
-        <label className="mb-2 block text-sm font-medium">Change Aggressiveness</label>
-        <select
-          value={formData.changeAggressiveness}
-          onChange={(e) => setFormData({ ...formData, changeAggressiveness: e.target.value })}
-          className="w-full rounded border px-3 py-2"
-        >
-          <option value="gentle">Gentle</option>
-          <option value="balanced">Balanced</option>
-          <option value="aggressive">Aggressive</option>
-        </select>
-        <p className="mt-1 text-xs text-slate-500">How bold should we be when nudging your plan?</p>
-      </div>
-
-      <div>
-        <div className="mb-2 flex items-center justify-between">
-          <label className="text-sm font-medium">Minimum Wants Floor</label>
-          <span className="text-sm font-semibold">{(formData.wantsFloorPct * 100).toFixed(0)}%</span>
-        </div>
-        <Slider
-          value={[formData.wantsFloorPct * 100]}
-          onValueChange={([value]) => setFormData({ ...formData, wantsFloorPct: value / 100 })}
-          min={10}
-          max={30}
-          step={1}
-          className="w-full"
-        />
-        <p className="mt-1 text-xs text-slate-500">Minimum share for fun & flexibility</p>
-      </div>
-
-      <Button onClick={() => onUpdate(formData)} className="w-full">Save Changes</Button>
-    </div>
-  );
-}
-
-function NotificationsEditor({ data, onUpdate, state }: { data: any; onUpdate: (updates: any) => void; state: any }) {
-  const [formData, setFormData] = useState(data);
-  
-  return (
-    <div className="space-y-4">
-      <div>
-        <label className="mb-2 block text-sm font-medium">Channels</label>
-        <div className="space-y-2">
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={formData.channels.email}
-              onChange={(e) => setFormData({
-                ...formData,
-                channels: { ...formData.channels, email: e.target.checked }
-              })}
-              className="h-4 w-4"
-            />
-            <span>Email</span>
-          </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={formData.channels.sms}
-              onChange={(e) => setFormData({
-                ...formData,
-                channels: { ...formData.channels, sms: e.target.checked }
-              })}
-              className="h-4 w-4"
-            />
-            <span>SMS (future)</span>
-          </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={formData.channels.push}
-              onChange={(e) => setFormData({
-                ...formData,
-                channels: { ...formData.channels, push: e.target.checked }
-              })}
-              className="h-4 w-4"
-            />
-            <span>Push notifications (future mobile app)</span>
-          </label>
-        </div>
-      </div>
-
-      <div>
-        <label className="mb-2 block text-sm font-medium">Types of notifications</label>
-        <div className="space-y-2">
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={formData.types.criticalAlerts}
-              onChange={(e) => setFormData({
-                ...formData,
-                types: { ...formData.types, criticalAlerts: e.target.checked }
-              })}
-              className="h-4 w-4"
-            />
-            <span>Critical alerts (cashflow risk, missed payments)</span>
-          </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={formData.types.savingsProgress}
-              onChange={(e) => setFormData({
-                ...formData,
-                types: { ...formData.types, savingsProgress: e.target.checked }
-              })}
-              className="h-4 w-4"
-            />
-            <span>Savings & goal progress</span>
-          </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={formData.types.opportunities}
-              onChange={(e) => setFormData({
-                ...formData,
-                types: { ...formData.types, opportunities: e.target.checked }
-              })}
-              className="h-4 w-4"
-            />
-            <span>Opportunities & optimizations</span>
-          </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={formData.types.education}
-              onChange={(e) => setFormData({
-                ...formData,
-                types: { ...formData.types, education: e.target.checked }
-              })}
-              className="h-4 w-4"
-            />
-            <span>Education & tips</span>
-          </label>
-        </div>
-      </div>
-
-      <div>
-        <label className="mb-2 block text-sm font-medium">Frequency</label>
-        <select
-          value={formData.frequency}
-          onChange={(e) => setFormData({ ...formData, frequency: e.target.value })}
-          className="w-full rounded border px-3 py-2"
-        >
-          <option value="important_only">Only important stuff</option>
-          <option value="weekly">Weekly recap</option>
-          <option value="frequent">More frequent nudges</option>
-        </select>
-      </div>
-
-      <Button onClick={() => onUpdate(formData)} className="w-full">Save Changes</Button>
-    </div>
-  );
-}
-
-function RiskPreferencesEditor({ data, onUpdate, state }: { data: any; onUpdate: (updates: any) => void; state: any }) {
-  const [formData, setFormData] = useState(data);
-  
-  return (
-    <div className="space-y-4">
-      <div>
-        <label className="mb-1 block text-sm font-medium">Risk Comfort</label>
-        <select
-          value={formData.riskComfort}
-          onChange={(e) => setFormData({ ...formData, riskComfort: e.target.value })}
-          className="w-full rounded border px-3 py-2"
-        >
-          <option value="conservative">Conservative</option>
-          <option value="balanced">Balanced</option>
-          <option value="growth">Growth-oriented</option>
-        </select>
-      </div>
-
-      <div>
-        <label className="mb-1 block text-sm font-medium">Time Horizon for Major Goals</label>
-        <select
-          value={formData.mainHorizon}
-          onChange={(e) => setFormData({ ...formData, mainHorizon: e.target.value })}
-          className="w-full rounded border px-3 py-2"
-        >
-          <option value="short">&lt;5 years</option>
-          <option value="medium">5–15 years</option>
-          <option value="long">15+ years</option>
-        </select>
-      </div>
-
-      <div>
-        <label className="mb-1 block text-sm font-medium">Crypto Stance (Optional)</label>
-        <select
-          value={formData.cryptoStance || 'avoid'}
-          onChange={(e) => setFormData({ ...formData, cryptoStance: e.target.value })}
-          className="w-full rounded border px-3 py-2"
-        >
-          <option value="avoid">No crypto</option>
-          <option value="ok">Crypto is OK</option>
-          <option value="friendly">Crypto-friendly</option>
-        </select>
-      </div>
-
-      <Button onClick={() => onUpdate(formData)} className="w-full">Save Changes</Button>
-    </div>
-  );
-}
