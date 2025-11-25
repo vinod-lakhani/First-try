@@ -103,7 +103,7 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
           aria-label="Ask Ribbit a question"
         >
           <img
-            src="/images/ribbit.png"
+            src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/images/ribbit.png`}
             alt="Ribbit"
             className="w-10 h-10 object-contain"
             loading="lazy"
