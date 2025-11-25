@@ -10,6 +10,7 @@
 import { Link, Wallet, Target, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { withBasePath } from '@/lib/utils/basePath';
 
 export type RibbitIntroProps = {
   onPrimaryClick?: () => void;
@@ -35,7 +36,7 @@ const RibbitIntro: React.FC<RibbitIntroProps> = ({
           <div className="mx-auto h-32 w-32 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center mb-2 overflow-hidden p-2">
             {/* Using regular img tag for static export compatibility with loading optimization */}
             <img
-              src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/images/ribbit.png`}
+              src={withBasePath('images/ribbit.png')}
               alt="Ribbit, your financial sidekick"
               className="w-full h-full object-contain"
               loading="lazy"

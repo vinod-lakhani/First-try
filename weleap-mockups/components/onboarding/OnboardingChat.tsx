@@ -10,6 +10,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { X, Send } from 'lucide-react';
+import { withBasePath } from '@/lib/utils/basePath';
 
 interface Message {
   id: string;
@@ -103,7 +104,7 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
           aria-label="Ask Ribbit a question"
         >
           <img
-            src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/images/ribbit.png`}
+            src={withBasePath('images/ribbit.png')}
             alt="Ribbit"
             className="w-10 h-10 object-contain"
             loading="lazy"
