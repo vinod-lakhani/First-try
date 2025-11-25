@@ -35,8 +35,6 @@ jobs:
 
       - name: Build
         working-directory: ./weleap-mockups
-        env:
-          NEXT_PUBLIC_BASE_PATH: '/First-try'
         run: npm run build
 
       - name: Setup Pages
