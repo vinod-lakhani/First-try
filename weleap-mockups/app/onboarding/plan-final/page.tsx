@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -76,6 +76,29 @@ export default function PlanFinalPage() {
     amount: cat.amount * paychecksPerMonth, // Convert to monthly
   })) : [];
 
+  // Responsive chart size
+  const [chartSize, setChartSize] = useState(280);
+  
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    const updateSize = () => {
+      const width = window.innerWidth;
+      if (width < 640) {
+        setChartSize(240); // Mobile
+      } else if (width < 1024) {
+        setChartSize(280); // Tablet
+      } else {
+        setChartSize(320); // Desktop
+      }
+    };
+    
+    updateSize();
+    window.addEventListener('resize', updateSize);
+    return () => window.removeEventListener('resize', updateSize);
+  }, []);
+
+
   const handleSavePlan = async () => {
     try {
       // Mark onboarding as complete first
@@ -99,14 +122,6 @@ export default function PlanFinalPage() {
     }
   };
 
-  const handleEnablePulse = () => {
-    router.push('/onboarding/pulse');
-  };
-
-  const handleSkip = () => {
-    router.push('/onboarding/pulse');
-  };
-
   if (isGenerating) {
     return (
       <Card className="w-full">
@@ -123,12 +138,9 @@ export default function PlanFinalPage() {
     return (
       <Card className="w-full">
         <CardHeader className="space-y-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-2xl sm:text-3xl font-bold">
-              Your personalized financial plan is ready.
-            </CardTitle>
-            <OnboardingChat context="plan-final" inline />
-          </div>
+          <CardTitle className="text-2xl sm:text-3xl font-bold text-center">
+            Your personalized financial plan is ready.
+          </CardTitle>
         </CardHeader>
         <CardContent className="py-12 text-center space-y-4">
           <p className="text-red-600 dark:text-red-400 font-medium">
@@ -143,16 +155,13 @@ export default function PlanFinalPage() {
   }
 
   return (
-    <div className="flex w-full min-w-0 max-w-full flex-col space-y-6 overflow-x-hidden">
+    <div className="flex w-full min-w-0 max-w-2xl mx-auto flex-col space-y-4 sm:space-y-6 px-4 sm:px-6 py-4 sm:py-8">
       {/* SECTION 1 – Header Summary */}
       <Card className="min-w-0">
         <CardHeader className="space-y-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-2xl sm:text-3xl font-bold">
-              Your personalized financial plan is ready.
-            </CardTitle>
-            <OnboardingChat context="plan-final" inline />
-          </div>
+          <CardTitle className="text-2xl sm:text-3xl font-bold text-center">
+            Your personalized financial plan is ready.
+          </CardTitle>
           <CardDescription className="text-base space-y-1">
             <p>We've combined your income, bills, debts, and goals.</p>
             <p>Here's how your money can grow with a smarter allocation.</p>
@@ -165,24 +174,23 @@ export default function PlanFinalPage() {
         <CardHeader>
           <CardTitle className="text-xl font-semibold">Income Distribution</CardTitle>
         </CardHeader>
-        <CardContent className="overflow-hidden">
-          <div className="flex justify-center">
-            <IncomeDistributionChart
-              takeHomePay={monthlyTakeHomePay}
-              grossIncome={state.income?.grossIncome$ ? 
-                state.income.grossIncome$ * getPaychecksPerMonth(state.income.payFrequency || 'biweekly') : 
-                undefined
-              }
-              categories={monthlyCategories.map((cat) => ({
-                label: cat.label,
-                amount: cat.amount,
-                percent: cat.percent,
-                color: categoryColors[cat.key] || '#6b7280',
-                description: cat.why,
-              }))}
-              size={280}
-            />
-          </div>
+        <CardContent>
+          <IncomeDistributionChart
+            key={chartSize}
+            takeHomePay={monthlyTakeHomePay}
+            grossIncome={state.income?.grossIncome$ ? 
+              state.income.grossIncome$ * getPaychecksPerMonth(state.income.payFrequency || 'biweekly') : 
+              undefined
+            }
+            categories={monthlyCategories.map((cat) => ({
+              label: cat.label,
+              amount: cat.amount,
+              percent: cat.percent,
+              color: categoryColors[cat.key] || '#6b7280',
+              description: cat.why,
+            }))}
+            size={chartSize}
+          />
           <div className="mt-6 space-y-1 text-sm text-slate-600 dark:text-slate-400">
             <p>This plan updates automatically if your income or spending changes.</p>
             <p>You can adjust categories anytime.</p>
@@ -347,16 +355,16 @@ export default function PlanFinalPage() {
           </div>
 
           {/* Key Milestones */}
-          <div className="grid grid-cols-2 gap-4 overflow-x-auto sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-4">
             {planData.netWorthProjection.map((projection) => (
               <div
                 key={projection.label}
-                className="rounded-lg border bg-white p-4 text-center dark:bg-slate-800"
+                className="rounded-lg border bg-white p-3 sm:p-4 text-center dark:bg-slate-800 min-w-0 overflow-hidden"
               >
-                <p className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-400">
+                <p className="mb-1 sm:mb-2 text-xs sm:text-sm font-medium text-slate-600 dark:text-slate-400">
                   {projection.label}
                 </p>
-                <p className={`text-2xl font-bold ${
+                <p className={`text-base sm:text-lg font-bold leading-tight ${
                   projection.value >= 0 
                     ? 'text-green-600 dark:text-green-400' 
                     : 'text-red-600 dark:text-red-400'
@@ -370,108 +378,27 @@ export default function PlanFinalPage() {
             ))}
           </div>
           {planData.netWorthInsight && (
-            <p className="text-sm text-slate-600 dark:text-slate-400">
+            <p className="text-sm sm:text-base lg:text-lg text-slate-600 dark:text-slate-400">
               {planData.netWorthInsight}
             </p>
           )}
         </CardContent>
       </Card>
 
-      {/* SECTION 6 – Key Protection Settings */}
+      {/* SECTION 6 – Final CTA */}
       <Card className="min-w-0">
-        <CardHeader>
-          <CardTitle className="text-xl font-semibold">Your Safety Settings</CardTitle>
-        </CardHeader>
-        <CardContent className="overflow-x-hidden min-w-0">
-          <div className="space-y-3">
-            {planData.protection.minCheckingBuffer !== undefined && (
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600 dark:text-slate-400">
-                  Minimum checking buffer
-                </span>
-                <span className="font-semibold text-slate-900 dark:text-white">
-                  ${planData.protection.minCheckingBuffer.toLocaleString('en-US', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                </span>
-              </div>
-            )}
-            {planData.protection.minCashPct !== undefined && (
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600 dark:text-slate-400">
-                  Minimum cash %
-                </span>
-                <span className="font-semibold text-slate-900 dark:text-white">
-                  {planData.protection.minCashPct}%
-                </span>
-              </div>
-            )}
-            {planData.protection.riskTolerance !== undefined && (
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600 dark:text-slate-400">
-                  Risk tolerance
-                </span>
-                <span className="font-semibold text-slate-900 dark:text-white">
-                  {planData.protection.riskTolerance} / 5
-                </span>
-              </div>
-            )}
-            {planData.protection.timeHorizonLabel && (
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600 dark:text-slate-400">
-                  Time horizon
-                </span>
-                <span className="font-semibold text-slate-900 dark:text-white">
-                  {planData.protection.timeHorizonLabel}
-                </span>
-              </div>
-            )}
-            {planData.protection.debtStrategyLabel && (
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600 dark:text-slate-400">
-                  Debt strategy
-                </span>
-                <span className="font-semibold text-slate-900 dark:text-white">
-                  {planData.protection.debtStrategyLabel}
-                </span>
-              </div>
-            )}
+        <CardContent className="pt-6 overflow-x-hidden min-w-0">
+          <div className="flex justify-center">
+            <Button onClick={handleSavePlan} size="lg" className="w-full sm:w-auto">
+              Save this plan
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* SECTION 7 – Final CTA */}
-      <Card className="min-w-0 border-primary/20 bg-primary/5 dark:bg-primary/10">
-        <CardContent className="pt-6 overflow-x-hidden min-w-0">
-          <div className="space-y-4 text-center">
-            <h3 className="text-xl font-bold text-slate-900 dark:text-white">
-              Lock in this plan & stay on track automatically.
-            </h3>
-            <div className="space-y-1 text-sm text-slate-600 dark:text-slate-400">
-              <p>Weekly insights + smart recommendations.</p>
-              <p>We'll notify you when it's time to take action.</p>
-            </div>
-            <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:justify-center">
-              <Button onClick={handleSavePlan} size="lg" className="w-full sm:w-auto">
-                Save this plan
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-              <Button onClick={handleEnablePulse} size="lg" variant="outline" className="w-full sm:w-auto">
-                Enable Pulse
-              </Button>
-              <Button
-                onClick={handleSkip}
-                variant="ghost"
-                size="lg"
-                className="w-full sm:w-auto"
-              >
-                Skip for now
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Floating Ribbit Chat Button */}
+      <OnboardingChat context="plan-final" />
 
       {/* Dev Debug Section */}
       {process.env.NODE_ENV === 'development' && (

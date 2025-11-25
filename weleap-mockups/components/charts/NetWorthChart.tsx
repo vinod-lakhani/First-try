@@ -355,7 +355,7 @@ export function NetWorthChart({
         </div>
         <div className="flex flex-col gap-2">
           <div
-            className={`flex items-center gap-1.5 text-base font-semibold ${
+            className={`flex items-center gap-1.5 text-sm sm:text-base lg:text-lg font-semibold ${
               change >= 0
                 ? 'text-green-600 dark:text-green-400'
                 : 'text-red-600 dark:text-red-400'

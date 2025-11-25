@@ -239,9 +239,9 @@ export function IncomeDistributionChart({
   const fontSize = getFontSize(takeHomePayText, 28);
 
   return (
-    <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start">
+    <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start w-full">
       {/* Chart */}
-      <div className="relative flex-shrink-0">
+      <div className="relative flex-shrink-0" style={{ width: `${size}px`, height: `${size}px` }}>
         <canvas ref={canvasRef} width={size} height={size} />
         {/* Center text */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -285,19 +285,19 @@ export function IncomeDistributionChart({
                   className="mt-1 h-4 w-4 shrink-0 rounded-full"
                   style={{ backgroundColor: cat.color }}
                 />
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-slate-900 dark:text-white">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-slate-900 dark:text-white truncate">
                       {cat.label}
                     </span>
-                    <div className="text-right">
-                      <div className="font-bold text-slate-900 dark:text-white">
+                    <div className="text-right flex-shrink-0">
+                      <div className="font-bold text-slate-900 dark:text-white whitespace-nowrap">
                         ${cat.amount.toLocaleString('en-US', {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2,
                         })}
                       </div>
-                      <div className="text-sm text-slate-600 dark:text-slate-400">
+                      <div className="text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">
                         {cat.percent.toFixed(1)}%
                       </div>
                     </div>

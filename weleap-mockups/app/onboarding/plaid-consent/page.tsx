@@ -10,7 +10,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Shield, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Shield, AlertCircle, CheckCircle2, ShieldCheck, Lock, Building } from 'lucide-react';
 import Link from 'next/link';
 import { TOS_VERSION, PRIVACY_POLICY_VERSION } from '@/lib/legal/constants';
 
@@ -91,17 +91,44 @@ export default function PlaidConsentPage() {
             Before we connect your accounts
           </CardTitle>
           <CardDescription className="text-base">
-            We'll now connect your financial accounts securely through Plaid.
+            We connect your accounts using Plaid — a trusted service used by apps like Venmo, Robinhood, Coinbase, and Chime. WeLeap never sees or stores your bank username or password.
           </CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-6">
+          {/* Plaid Trust Block */}
+          <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-4 space-y-3">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">
+              Why Plaid?
+            </h3>
+            <div className="space-y-2">
+              <div className="flex items-start gap-3">
+                <Building className="h-5 w-5 text-slate-600 dark:text-slate-400 shrink-0 mt-0.5" />
+                <p className="text-sm text-slate-700 dark:text-slate-300">
+                  Plaid securely connects to over 12,000 banks and credit unions.
+                </p>
+              </div>
+              <div className="flex items-start gap-3">
+                <ShieldCheck className="h-5 w-5 text-slate-600 dark:text-slate-400 shrink-0 mt-0.5" />
+                <p className="text-sm text-slate-700 dark:text-slate-300">
+                  Tens of millions of people use Plaid to link their accounts.
+                </p>
+              </div>
+              <div className="flex items-start gap-3">
+                <Lock className="h-5 w-5 text-slate-600 dark:text-slate-400 shrink-0 mt-0.5" />
+                <p className="text-sm text-slate-700 dark:text-slate-300">
+                  Your data is encrypted end-to-end, and you stay in control.
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Information Box */}
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
             <div className="flex items-start gap-3">
               <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
               <p className="text-sm text-blue-900 dark:text-blue-200">
-                To continue, please confirm that you agree to our{' '}
+                Please confirm that you agree to our{' '}
                 <Link href="/legal/terms" className="font-semibold underline hover:no-underline">
                   Terms of Service
                 </Link>
@@ -109,7 +136,7 @@ export default function PlaidConsentPage() {
                 <Link href="/legal/privacy" className="font-semibold underline hover:no-underline">
                   Privacy Policy
                 </Link>
-                .
+                {' '}to continue.
               </p>
             </div>
           </div>
@@ -127,11 +154,19 @@ export default function PlaidConsentPage() {
                 I agree to the Terms of Service and Privacy Policy
               </p>
               <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-                By checking this box, you acknowledge that you have read, understood, and agree to be bound by
-                our Terms of Service and Privacy Policy.
+                By checking this box, you acknowledge that you have read and agree to our Terms of Service and Privacy Policy.
               </p>
             </div>
           </label>
+
+          {/* Security Explanation Link */}
+          <div className="text-center text-xs text-slate-500 dark:text-slate-400">
+            Curious how your data is protected?{' '}
+            <Link href="/security" className="underline hover:text-slate-700 dark:hover:text-slate-300">
+              Learn more
+            </Link>
+            .
+          </div>
 
           {/* Links to Legal Documents */}
           <div className="flex justify-center gap-4 text-sm">
@@ -168,7 +203,7 @@ export default function PlaidConsentPage() {
               ) : (
                 <>
                   <CheckCircle2 className="mr-2 h-5 w-5" />
-                  Agree & Connect Accounts
+                  Agree & Continue with Plaid
                 </>
               )}
             </Button>

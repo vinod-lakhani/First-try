@@ -88,6 +88,14 @@ export async function mockPlaidConnect(): Promise<MockPlaidData> {
       isSubscription: true,
       nextDueDate: nextMonth.toISOString().split('T')[0],
     },
+    {
+      id: 'exp-7',
+      name: 'Dining & Entertainment',
+      amount$: 2323.02,
+      frequency: 'monthly',
+      category: 'wants',
+      nextDueDate: nextMonth.toISOString().split('T')[0],
+    },
   ];
 
   // Mock debts

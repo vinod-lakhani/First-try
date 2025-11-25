@@ -208,12 +208,9 @@ export default function SavingsPlanPage() {
     return (
       <Card className="w-full">
         <CardHeader className="space-y-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-2xl sm:text-3xl font-bold">
-              Your Savings Plan
-            </CardTitle>
-            <OnboardingChat context="savings-plan" inline />
-          </div>
+          <CardTitle className="text-2xl sm:text-3xl font-bold text-center">
+            Your Savings Plan
+          </CardTitle>
         </CardHeader>
         <CardContent className="py-12 text-center">
           <p className="text-slate-600 dark:text-slate-400">
@@ -228,12 +225,9 @@ export default function SavingsPlanPage() {
     return (
       <Card className="w-full">
         <CardHeader className="space-y-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-2xl sm:text-3xl font-bold">
-              Your Savings Plan
-            </CardTitle>
-            <OnboardingChat context="savings-plan" inline />
-          </div>
+          <CardTitle className="text-2xl sm:text-3xl font-bold text-center">
+            Your Savings Plan
+          </CardTitle>
         </CardHeader>
         <CardContent className="py-12 text-center space-y-4">
           {savingsBudget$ <= 0 ? (
@@ -316,14 +310,11 @@ export default function SavingsPlanPage() {
 
   return (
     <>
-    <Card className="w-full min-w-0 max-w-full overflow-x-hidden">
+    <Card className="w-full min-w-0 max-w-md sm:max-w-lg lg:max-w-xl mx-auto overflow-x-hidden">
       <CardHeader className="space-y-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-2xl sm:text-3xl font-bold">
-            Your Savings Plan
-          </CardTitle>
-          <OnboardingChat context="savings-plan" inline />
-        </div>
+        <CardTitle className="text-2xl sm:text-3xl font-bold text-center">
+          Your Savings Plan
+        </CardTitle>
         <CardDescription className="text-base">
           Here's how we suggest allocating your ${savingsBudget$.toLocaleString('en-US', {
             minimumFractionDigits: 2,
@@ -585,20 +576,6 @@ export default function SavingsPlanPage() {
           )}
         </div>
 
-        {/* Notes */}
-        {savingsAlloc.notes && savingsAlloc.notes.length > 0 && (
-          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
-            <p className="text-sm font-medium text-blue-900 dark:text-blue-200">
-              Allocation Notes:
-            </p>
-            <ul className="mt-1 list-disc list-inside space-y-1 text-sm text-blue-800 dark:text-blue-300">
-              {savingsAlloc.notes.map((note, idx) => (
-                <li key={idx}>{note}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-
         {/* Routing Info */}
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800">
           <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -617,6 +594,9 @@ export default function SavingsPlanPage() {
           </Button>
         </div>
       </CardContent>
+
+      {/* Floating Ribbit Chat Button */}
+      <OnboardingChat context="savings-plan" />
     </Card>
     </>
   );

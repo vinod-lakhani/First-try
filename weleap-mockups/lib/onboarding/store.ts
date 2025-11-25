@@ -273,7 +273,13 @@ export const useOnboardingStore = create<OnboardingStore>()(
     }),
     {
       name: 'weleap-onboarding-storage', // unique name for localStorage key
-      storage: createJSONStorage(() => localStorage), // use localStorage for persistence
+      storage: typeof window !== 'undefined' 
+        ? createJSONStorage(() => localStorage)
+        : createJSONStorage(() => ({
+            getItem: () => null,
+            setItem: () => {},
+            removeItem: () => {},
+          } as any)),
       // Only persist certain fields to avoid storing large objects
       partialize: (state) => ({
         isComplete: state.isComplete,

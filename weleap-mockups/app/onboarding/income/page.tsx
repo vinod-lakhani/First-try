@@ -55,14 +55,16 @@ export default function IncomePage() {
     router.push('/onboarding/plaid-consent');
   };
 
-  const handleSkip = () => {
-    setCurrentStep('plaid-consent');
-    router.push('/onboarding/plaid-consent');
-  };
 
   return (
     <Card className="w-full">
       <CardHeader className="space-y-2">
+        {/* Step indicator */}
+        <div className="text-center pb-2">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Step 2 of 4
+          </p>
+        </div>
         <CardTitle className="text-2xl sm:text-3xl font-bold">
           What's your income?
         </CardTitle>
@@ -137,30 +139,21 @@ export default function IncomePage() {
         {/* Action Buttons */}
         <div className="space-y-3 pt-4">
           <Button
+            onClick={handleConnectBank}
+            size="lg"
+            className="w-full"
+          >
+            Connect my bank info
+          </Button>
+          
+          <Button
             onClick={handleContinue}
+            variant="outline"
             size="lg"
             className="w-full"
             disabled={amount <= 0}
           >
-            Continue
-          </Button>
-          
-          <Button
-            onClick={handleConnectBank}
-            variant="outline"
-            size="lg"
-            className="w-full"
-          >
-            I'm not sure → Connect my bank instead
-          </Button>
-          
-          <Button
-            onClick={handleSkip}
-            variant="ghost"
-            size="lg"
-            className="w-full"
-          >
-            Skip for now
+            Continue with manual entry
           </Button>
         </div>
       </CardContent>
