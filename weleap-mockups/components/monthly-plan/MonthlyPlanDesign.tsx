@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Wallet, Home, Sparkles, PiggyBank } from 'lucide-react';
 import { OnboardingChat } from '@/components/onboarding/OnboardingChat';
+import { OnboardingProgress } from '@/components/onboarding/OnboardingProgress';
 
 export type MonthlyPlanDesignProps = {
   // Current (actual) values for reference
@@ -120,10 +121,14 @@ const MonthlyPlanDesign: React.FC<MonthlyPlanDesignProps> = ({
   return (
     <div className="min-h-screen bg-background flex items-start justify-center">
       <div className="w-full max-w-md sm:max-w-lg lg:max-w-xl px-4 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-6">
+        {/* Progress Bar */}
+        <div className="mb-2">
+          <OnboardingProgress />
+        </div>
         {/* Header */}
         <div className="space-y-2">
           <h1 className="text-2xl sm:text-3xl font-bold text-center text-slate-900 dark:text-white">
-            Design Your Monthly Plan
+            Allocate Income to Savings
           </h1>
           <p className="text-sm text-slate-600 dark:text-slate-400 text-center">
             Here&apos;s the plan Ribbit suggests based on your current spending. You can tweak the big levers — income, needs, and wants — and we&apos;ll update your savings automatically.
@@ -362,7 +367,7 @@ const MonthlyPlanDesign: React.FC<MonthlyPlanDesignProps> = ({
             size="lg" 
             className="w-full"
           >
-            Save Monthly Plan
+            Allocate my savings
           </Button>
           <Button
             variant="ghost"

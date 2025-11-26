@@ -17,6 +17,7 @@ import { Info, Shield, CreditCard, TrendingUp, Building2, PiggyBank } from 'luci
 import { Slider } from '@/components/ui/slider';
 import { OnboardingChat } from '@/components/onboarding/OnboardingChat';
 import { getPaychecksPerMonth } from '@/lib/onboarding/usePlanData';
+import { OnboardingProgress } from '@/components/onboarding/OnboardingProgress';
 
 interface SavingsCategory {
   id: string;
@@ -312,6 +313,10 @@ export default function SavingsPlanPage() {
     <>
     <Card className="w-full min-w-0 max-w-md sm:max-w-lg lg:max-w-xl mx-auto overflow-x-hidden">
       <CardHeader className="space-y-2">
+        {/* Progress Bar */}
+        <div className="mb-4">
+          <OnboardingProgress />
+        </div>
         <CardTitle className="text-2xl sm:text-3xl font-bold text-center">
           Your Savings Plan
         </CardTitle>

@@ -16,6 +16,7 @@ import { generateInitialPaycheckPlanFromEngines } from '@/lib/onboarding/plan';
 import type { PaycheckPlan } from '@/lib/onboarding/types';
 import { Info } from 'lucide-react';
 import { OnboardingChat } from '@/components/onboarding/OnboardingChat';
+import { OnboardingProgress } from '@/components/onboarding/OnboardingProgress';
 
 // Helper to get paychecks per month
 function getPaychecksPerMonth(frequency: string): number {
@@ -395,6 +396,12 @@ export default function MonthlyPlanPage() {
   if (isGenerating) {
     return (
       <Card className="w-full">
+        <CardHeader className="space-y-2">
+          {/* Progress Bar */}
+          <div className="pb-2">
+            <OnboardingProgress />
+          </div>
+        </CardHeader>
         <CardContent className="py-12 text-center">
           <p className="text-slate-600 dark:text-slate-400">
             Generating your personalized plan...
@@ -407,6 +414,12 @@ export default function MonthlyPlanPage() {
   if (!plan || !adjustedPlan) {
     return (
       <Card className="w-full">
+        <CardHeader className="space-y-2">
+          {/* Progress Bar */}
+          <div className="pb-2">
+            <OnboardingProgress />
+          </div>
+        </CardHeader>
         <CardContent className="py-12 text-center space-y-4">
           {!income || !income.netIncome$ || income.netIncome$ <= 0 ? (
             <>
@@ -436,6 +449,10 @@ export default function MonthlyPlanPage() {
     <>
     <Card className="w-full">
       <CardHeader className="space-y-2">
+        {/* Progress Bar */}
+        <div className="pb-2">
+          <OnboardingProgress />
+        </div>
         <div className="flex items-center justify-between">
           <CardTitle className="text-2xl sm:text-3xl font-bold">
             Your Monthly Plan

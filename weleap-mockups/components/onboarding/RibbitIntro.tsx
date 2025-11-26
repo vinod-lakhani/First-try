@@ -12,6 +12,7 @@ import { Link, Wallet, Target, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { withBasePath } from '@/lib/utils/basePath';
+import { OnboardingProgress } from './OnboardingProgress';
 
 export type RibbitIntroProps = {
   onPrimaryClick?: () => void;
@@ -32,12 +33,8 @@ const RibbitIntro: React.FC<RibbitIntroProps> = ({
   return (
     <div className="w-full flex items-center justify-center p-4">
       <div className="w-full max-w-sm px-6 py-8 flex flex-col gap-6">
-        {/* Progress / microcopy */}
-        <div className="text-center">
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Step 1 of 4
-          </p>
-        </div>
+        {/* Progress Bar */}
+        <OnboardingProgress />
 
         {/* Ribbit illustration */}
         <div className="flex flex-col items-center gap-2">

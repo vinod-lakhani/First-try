@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { useOnboardingStore } from '@/lib/onboarding/store';
 import { connectWithPlaidAndUpdateStore } from '@/lib/plaid/connect';
 import { Wallet, PieChart, Sparkles, PiggyBank, TrendingUp } from 'lucide-react';
+import { OnboardingProgress } from '@/components/onboarding/OnboardingProgress';
 
 export default function PlaidPage() {
   const router = useRouter();
@@ -50,6 +51,10 @@ export default function PlaidPage() {
   return (
     <Card className="w-full">
       <CardHeader className="space-y-2">
+        {/* Progress Bar */}
+        <div className="pb-2">
+          <OnboardingProgress />
+        </div>
         <CardTitle className="text-2xl sm:text-3xl font-bold">
           See your real financial picture in seconds.
         </CardTitle>

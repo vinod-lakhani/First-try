@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useOnboardingStore } from '@/lib/onboarding/store';
 import { CheckCircle2, Circle, Receipt, CreditCard, Target, Shield, AlertTriangle, X, Zap } from 'lucide-react';
+import { OnboardingProgress } from '@/components/onboarding/OnboardingProgress';
 
 interface BoostTile {
   id: string;
@@ -100,13 +101,17 @@ export default function BoostHubPage() {
   };
 
   const handleContinue = () => {
-    setCurrentStep('monthly-plan');
-    router.push('/onboarding/monthly-plan');
+    setCurrentStep('monthly-plan-current');
+    router.push('/onboarding/monthly-plan-current');
   };
 
   return (
     <Card className="w-full">
       <CardHeader className="space-y-2">
+        {/* Progress Bar */}
+        <div className="pb-2">
+          <OnboardingProgress />
+        </div>
         <CardTitle className="text-2xl sm:text-3xl font-bold">
           Boost Your Plan
         </CardTitle>
@@ -234,7 +239,7 @@ export default function BoostHubPage() {
             size="lg"
             className="w-full"
           >
-            Continue to Monthly Plan
+            See my expenses
           </Button>
           {!allComplete && (
             <p className="mt-2 text-center text-sm text-slate-600 dark:text-slate-400">

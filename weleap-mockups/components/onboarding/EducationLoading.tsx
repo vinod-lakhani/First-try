@@ -10,6 +10,7 @@
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Home, Sparkles, PiggyBank, HeartHandshake, Loader2 } from 'lucide-react';
+import { OnboardingProgress } from './OnboardingProgress';
 
 export type EducationLoadingProps = {
   // Optional: show a completion state when parent knows Plaid sync is done
@@ -28,9 +29,10 @@ const EducationLoading: React.FC<EducationLoadingProps> = ({
         <div className="max-w-md mx-auto px-6 py-8 space-y-6">
           {/* Header */}
           <div className="space-y-2">
-            <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
-              Step 3 of 4
-            </p>
+            {/* Progress Bar */}
+            <div className="mb-4">
+              <OnboardingProgress />
+            </div>
             <h1 className="text-2xl sm:text-3xl font-bold text-center text-slate-900 dark:text-white">
               While we set things up, here&apos;s how your plan works.
             </h1>
@@ -133,7 +135,7 @@ const EducationLoading: React.FC<EducationLoadingProps> = ({
             disabled={!isReady}
             onClick={isReady ? onContinue : undefined}
           >
-            {isReady ? 'See my plan' : 'Still syncing…'}
+            {isReady ? 'See my expenses' : 'Still syncing…'}
           </Button>
           <p className="text-xs text-center text-slate-500 dark:text-slate-400">
             This usually takes less than a minute.

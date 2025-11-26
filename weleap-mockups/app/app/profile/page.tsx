@@ -99,6 +99,15 @@ export default function ProfilePage() {
                   </p>
                 )}
               </div>
+              <div className="pt-2">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => router.push('/onboarding/income')}
+                >
+                  Restart onboarding
+                </Button>
+              </div>
             </CardContent>
           </Card>
 

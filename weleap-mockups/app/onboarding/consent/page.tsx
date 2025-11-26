@@ -1,7 +1,8 @@
 /**
- * Pre-Plaid Consent Page
+ * WeLeap Consent Page
  * 
- * Consent screen before connecting financial accounts via Plaid.
+ * Consent screen for WeLeap Terms of Service and Privacy Policy.
+ * This is shown when user selects manual entry on the income page.
  */
 
 'use client';
@@ -10,17 +11,19 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Shield, AlertCircle, CheckCircle2, ShieldCheck, Lock, Building } from 'lucide-react';
+import { Shield, AlertCircle, CheckCircle2, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { TOS_VERSION, PRIVACY_POLICY_VERSION } from '@/lib/legal/constants';
+import { useOnboardingStore } from '@/lib/onboarding/store';
 import { OnboardingProgress } from '@/components/onboarding/OnboardingProgress';
 
-export default function PlaidConsentPage() {
+export default function ConsentPage() {
   const router = useRouter();
+  const { setCurrentStep } = useOnboardingStore();
   const [consentChecked, setConsentChecked] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const handleAgreeAndConnect = async () => {
+  const handleAgreeAndContinue = async () => {
     if (!consentChecked) {
       console.log('Consent not checked');
       return;
@@ -38,19 +41,19 @@ export default function PlaidConsentPage() {
       const consentData = {
         id: Date.now().toString(),
         userId,
-        consentType: 'pre_plaid' as const,
+        consentType: 'weleap_consent' as const,
         tosVersion: TOS_VERSION,
         ppVersion: PRIVACY_POLICY_VERSION,
         createdAt: new Date().toISOString(),
       };
       
       if (typeof window !== 'undefined') {
-        localStorage.setItem(`weleap_consent_${userId}_pre_plaid`, JSON.stringify(consentData));
+        localStorage.setItem(`weleap_consent_${userId}_weleap`, JSON.stringify(consentData));
       }
 
       // Try to record consent via API (but don't block on failure in development)
       try {
-        const response = await fetch('/api/consent/pre-plaid', {
+        const response = await fetch('/api/consent/weleap', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -69,16 +72,24 @@ export default function PlaidConsentPage() {
         console.warn('API consent recording error (continuing anyway):', apiError);
       }
 
-      // Always redirect to Plaid connection page
-      router.push('/onboarding/plaid');
+      // Continue with manual entry flow - go to boost hub
+      setCurrentStep('boost');
+      router.push('/onboarding/boost');
     } catch (error) {
-      console.error('Error in handleAgreeAndConnect:', error);
+      console.error('Error in handleAgreeAndContinue:', error);
       setIsProcessing(false);
       // Still redirect even on error (unless it's a navigation error)
       if (error instanceof Error && error.message !== 'Navigation cancelled') {
-        router.push('/onboarding/plaid');
+        setCurrentStep('boost');
+        router.push('/onboarding/boost');
       }
     }
+  };
+
+  const handleSelectPlaid = () => {
+    // Navigate to Plaid consent screen
+    setCurrentStep('plaid-consent');
+    router.push('/onboarding/plaid-consent');
   };
 
   return (
@@ -89,45 +100,18 @@ export default function PlaidConsentPage() {
           <div className="mb-4">
             <OnboardingProgress />
           </div>
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/20">
-            <Shield className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 dark:bg-primary/20">
+            <Shield className="h-8 w-8 text-primary" />
           </div>
           <CardTitle className="text-2xl sm:text-3xl font-bold">
-            Before we connect your accounts
+            Before we continue
           </CardTitle>
           <CardDescription className="text-base">
-            We connect your accounts using Plaid — a trusted service used by apps like Venmo, Robinhood, Coinbase, and Chime. WeLeap never sees or stores your bank username or password.
+            Please review and agree to our Terms of Service and Privacy Policy to continue with WeLeap.
           </CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-6">
-          {/* Plaid Trust Block */}
-          <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-4 space-y-3">
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">
-              Why Plaid?
-            </h3>
-            <div className="space-y-2">
-              <div className="flex items-start gap-3">
-                <Building className="h-5 w-5 text-slate-600 dark:text-slate-400 shrink-0 mt-0.5" />
-                <p className="text-sm text-slate-700 dark:text-slate-300">
-                  Plaid securely connects to over 12,000 banks and credit unions.
-                </p>
-              </div>
-              <div className="flex items-start gap-3">
-                <ShieldCheck className="h-5 w-5 text-slate-600 dark:text-slate-400 shrink-0 mt-0.5" />
-                <p className="text-sm text-slate-700 dark:text-slate-300">
-                  Tens of millions of people use Plaid to link their accounts.
-                </p>
-              </div>
-              <div className="flex items-start gap-3">
-                <Lock className="h-5 w-5 text-slate-600 dark:text-slate-400 shrink-0 mt-0.5" />
-                <p className="text-sm text-slate-700 dark:text-slate-300">
-                  Your data is encrypted end-to-end, and you stay in control.
-                </p>
-              </div>
-            </div>
-          </div>
-
           {/* Information Box */}
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
             <div className="flex items-start gap-3">
@@ -164,15 +148,6 @@ export default function PlaidConsentPage() {
             </div>
           </label>
 
-          {/* Security Explanation Link */}
-          <div className="text-center text-xs text-slate-500 dark:text-slate-400">
-            Curious how your data is protected?{' '}
-            <Link href="/security" className="underline hover:text-slate-700 dark:hover:text-slate-300">
-              Learn more
-            </Link>
-            .
-          </div>
-
           {/* Links to Legal Documents */}
           <div className="flex justify-center gap-4 text-sm">
             <Link
@@ -195,9 +170,7 @@ export default function PlaidConsentPage() {
           {/* Action Buttons */}
           <div className="space-y-3 pt-4">
             <Button
-              onClick={() => {
-                handleAgreeAndConnect();
-              }}
+              onClick={handleAgreeAndContinue}
               size="lg"
               className="w-full"
               disabled={!consentChecked || isProcessing}
@@ -208,9 +181,21 @@ export default function PlaidConsentPage() {
               ) : (
                 <>
                   <CheckCircle2 className="mr-2 h-5 w-5" />
-                  Agree & Continue with Plaid
+                  Agree and continue
                 </>
               )}
+            </Button>
+
+            <Button
+              onClick={handleSelectPlaid}
+              variant="outline"
+              size="lg"
+              className="w-full"
+              disabled={isProcessing}
+              type="button"
+            >
+              <ArrowRight className="mr-2 h-5 w-5" />
+              Connect with Plaid instead
             </Button>
 
             <Button
@@ -228,4 +213,3 @@ export default function PlaidConsentPage() {
     </div>
   );
 }
-

@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useOnboardingStore } from '@/lib/onboarding/store';
+import { OnboardingProgress } from '@/components/onboarding/OnboardingProgress';
 
 export default function IncomePage() {
   const router = useRouter();
@@ -46,8 +47,8 @@ export default function IncomePage() {
       
       setIncome(incomeState);
     }
-    setCurrentStep('plaid-consent');
-    router.push('/onboarding/plaid-consent');
+    setCurrentStep('consent');
+    router.push('/onboarding/consent');
   };
 
   const handleConnectBank = () => {
@@ -59,11 +60,9 @@ export default function IncomePage() {
   return (
     <Card className="w-full">
       <CardHeader className="space-y-2">
-        {/* Step indicator */}
-        <div className="text-center pb-2">
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Step 2 of 4
-          </p>
+        {/* Progress Bar */}
+        <div className="pb-2">
+          <OnboardingProgress />
         </div>
         <CardTitle className="text-2xl sm:text-3xl font-bold">
           What's your income?

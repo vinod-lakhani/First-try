@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Wallet, Home, Sparkles, PiggyBank, ChevronDown, ChevronUp, ShoppingBag } from 'lucide-react';
 import { OnboardingChat } from '@/components/onboarding/OnboardingChat';
+import { OnboardingProgress } from '@/components/onboarding/OnboardingProgress';
 
 export type MonthlyBucket = {
   label: string;         // "Needs" or "Wants"
@@ -55,10 +56,14 @@ const MonthlyPlanCurrent: React.FC<MonthlyPlanCurrentProps> = ({
   return (
     <div className="min-h-screen bg-background flex items-start justify-center">
       <div className="w-full max-w-md sm:max-w-lg lg:max-w-xl px-4 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-6">
+        {/* Progress Bar */}
+        <div className="mb-2">
+          <OnboardingProgress />
+        </div>
         {/* Header */}
         <div className="space-y-2">
           <h1 className="text-2xl sm:text-3xl font-bold text-center text-slate-900 dark:text-white">
-            Your Current Monthly Picture
+            Income and Expense Profile
           </h1>
           <p className="text-sm text-slate-600 dark:text-slate-400 text-center">
             Here&apos;s how your money looks based on your recent activity. We&apos;ll use this as a starting point for your plan.
@@ -234,7 +239,7 @@ const MonthlyPlanCurrent: React.FC<MonthlyPlanCurrentProps> = ({
                 size="lg" 
                 className="w-full"
               >
-                Build My Monthly Plan
+                Allocate my Income
               </Button>
             </div>
 

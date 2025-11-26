@@ -25,6 +25,7 @@ import {
 import { NetWorthChart } from '@/components/charts/NetWorthChart';
 import { IncomeDistributionChart } from '@/components/charts/IncomeDistributionChart';
 import { OnboardingChat } from '@/components/onboarding/OnboardingChat';
+import { OnboardingProgress } from '@/components/onboarding/OnboardingProgress';
 
 // Helper to get paychecks per month
 function getPaychecksPerMonth(frequency: string): number {
@@ -156,6 +157,10 @@ export default function PlanFinalPage() {
 
   return (
     <div className="flex w-full min-w-0 max-w-2xl mx-auto flex-col space-y-4 sm:space-y-6 px-4 sm:px-6 py-4 sm:py-8">
+      {/* Progress Bar */}
+      <div className="mb-2">
+        <OnboardingProgress />
+      </div>
       {/* SECTION 1 – Header Summary */}
       <Card className="min-w-0">
         <CardHeader className="space-y-2">
