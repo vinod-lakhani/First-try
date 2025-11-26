@@ -248,7 +248,7 @@ export default function IncomePage() {
             <Button 
               variant="outline" 
               size="sm"
-              onClick={() => router.push('/app/tools/savings-optimizer')}
+              onClick={() => router.push('/app/tools/savings-helper')}
             >
               Edit Income Distribution
             </Button>

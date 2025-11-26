@@ -187,7 +187,7 @@ export function HomeScreen({ data }: HomeScreenProps) {
                 </div>
               </div>
               <Button
-                onClick={() => router.push('/app/tools/savings-optimizer')}
+                onClick={() => router.push('/app/tools/net-worth-viewer')}
                 variant="outline"
                 className="w-full"
               >
