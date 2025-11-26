@@ -18,6 +18,7 @@ export default function IncomePage() {
   const { income, setIncome, setCurrentStep } = useOnboardingStore();
   
   const [isTakeHomePay, setIsTakeHomePay] = useState(true); // true = take home (post-tax), false = gross (pre-tax)
+  const [frequency, setFrequency] = useState<'hourly' | 'monthly' | 'yearly'>('monthly');
   const [amount, setAmount] = useState<number>(income?.netIncome$ || income?.grossIncome$ || 0);
 
   // Initialize from store if available
@@ -32,7 +33,16 @@ export default function IncomePage() {
 
   const handleContinue = () => {
     if (amount > 0) {
-      const monthlyAmount = amount;
+      // Convert to monthly amount based on frequency
+      let monthlyAmount = amount;
+      if (frequency === 'hourly') {
+        // Assume 40 hours/week * 52 weeks / 12 months = 173.33 hours/month
+        monthlyAmount = amount * 173.33;
+      } else if (frequency === 'yearly') {
+        monthlyAmount = amount / 12;
+      }
+      // frequency === 'monthly' uses amount as-is
+      
       const annualAmount = monthlyAmount * 12;
       
       const incomeState = {
@@ -110,10 +120,27 @@ export default function IncomePage() {
           </div>
         </div>
 
+        {/* Frequency Dropdown */}
+        <div className="space-y-2">
+          <label htmlFor="frequency" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+            Frequency
+          </label>
+          <select
+            id="frequency"
+            value={frequency}
+            onChange={(e) => setFrequency(e.target.value as 'hourly' | 'monthly' | 'yearly')}
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-sm font-medium focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+          >
+            <option value="hourly">Hourly</option>
+            <option value="monthly">Monthly</option>
+            <option value="yearly">Yearly</option>
+          </select>
+        </div>
+
         {/* Amount Input */}
         <div className="space-y-2">
           <label htmlFor="amount" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-            {`${isTakeHomePay ? 'Take home' : 'Gross'} monthly amount`}
+            {`${isTakeHomePay ? 'Take home' : 'Gross'} ${frequency} amount`}
           </label>
           {isTakeHomePay && (
             <p className="text-xs text-slate-500 dark:text-slate-400">
