@@ -36,14 +36,14 @@ If you're getting a 404 error, the Root Directory is NOT set correctly. Here's h
      - **Value**: Your OpenAI API key (the one you have in `.env.local`)
      - **Important for**: Chat feature to work
    
-   - **Name**: `ENABLE_STATIC_EXPORT`
-     - **Value**: Leave this UNSET or set to empty (do not set to "true")
-     - **Important for**: Ensuring API routes work (static export disables them)
+   - **Name**: `DISABLE_STATIC_EXPORT` (Optional but recommended)
+     - **Value**: `true`
+     - **Important for**: Explicitly disabling static export on Vercel to ensure API routes work
    
    To add them:
    - In the project settings, go to "Environment Variables"
    - Add `OPENAI_API_KEY` with your API key value
-   - **DO NOT** add `ENABLE_STATIC_EXPORT=true` - it should be unset or empty
+   - Optionally add `DISABLE_STATIC_EXPORT=true` to explicitly disable static export
    - Make sure they're enabled for all environments (Production, Preview, Development)
 
 4. **Deploy:**

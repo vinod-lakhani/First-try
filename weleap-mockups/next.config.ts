@@ -1,8 +1,9 @@
 import type { NextConfig } from "next";
 
 // Detect deployment platform
-// Vercel ALWAYS sets VERCEL=1 during builds - this is the primary check
-const isVercel = process.env.VERCEL === '1';
+// Vercel sets VERCEL=1 during builds - this is the primary check
+// Also check for DISABLE_STATIC_EXPORT to explicitly disable it
+const isVercel = process.env.VERCEL === '1' || process.env.DISABLE_STATIC_EXPORT === 'true';
 // GitHub Actions is used for GitHub Pages deployment
 const isGitHubActions = process.env.GITHUB_ACTIONS === 'true';
 
@@ -44,7 +45,5 @@ const nextConfig: NextConfig = {
     unoptimized: shouldUseStaticExport,
   },
 };
-
-export default nextConfig;
 
 export default nextConfig;
