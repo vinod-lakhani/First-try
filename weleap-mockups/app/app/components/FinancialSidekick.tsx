@@ -447,8 +447,8 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="flex h-full max-h-[90vh] w-full max-w-2xl flex-col rounded-lg bg-white shadow-xl dark:bg-slate-900">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4">
+      <div className="flex h-full w-full sm:max-h-[90vh] sm:max-w-2xl flex-col rounded-none sm:rounded-lg bg-white shadow-xl dark:bg-slate-900 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between border-b px-4 py-3">
           <h2 className="text-xl font-semibold">Sidekick Overlay</h2>

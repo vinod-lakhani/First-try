@@ -271,8 +271,8 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-end bg-black/50 backdrop-blur-sm p-4">
-      <Card className="flex h-[600px] w-full max-w-md flex-col shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4">
+      <Card className="flex h-full w-full sm:h-[600px] sm:max-w-md flex-col shadow-xl rounded-none sm:rounded-lg overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between border-b pb-3">
           <CardTitle className="text-lg">Chat Assistant</CardTitle>
           <Button
