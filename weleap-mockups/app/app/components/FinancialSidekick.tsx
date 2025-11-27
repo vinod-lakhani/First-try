@@ -387,13 +387,31 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
       setMessages((prev) => [...prev, aiResponse]);
     } catch (error) {
       console.error('Error getting AI response:', error);
-      // Fallback response with error details
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      // Extract error message
+      let errorMessage = 'Unknown error';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (error && typeof error === 'object' && 'message' in error) {
+        errorMessage = String(error.message);
+      } else if (error) {
+        errorMessage = String(error);
+      }
+      
+      // Provide user-friendly error message
+      let userMessage = errorMessage;
+      if (errorMessage.includes('API key') || errorMessage.includes('not configured')) {
+        userMessage = "I'm having trouble connecting to the AI service. The OpenAI API key may not be configured correctly.";
+      } else if (errorMessage.includes('404') || errorMessage.includes('static hosting') || errorMessage.includes('server environment')) {
+        userMessage = "The chat feature is not available in this deployment. API routes require a server environment and cannot run on static hosting like GitHub Pages. Please run the app locally or deploy to a platform like Vercel or Netlify.";
+      } else if (errorMessage.includes('Network error') || errorMessage.includes('fetch')) {
+        userMessage = "Network error: Unable to connect to the chat service. Please check your connection and try again.";
+      } else {
+        userMessage = `I'm having trouble connecting right now: ${errorMessage}. Please try again in a moment.`;
+      }
+      
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
-        text: errorMessage.includes('API key') 
-          ? "I'm having trouble connecting to the AI service. Please check that the OpenAI API key is configured correctly."
-          : `I'm having trouble connecting right now: ${errorMessage}. Please try again in a moment.`,
+        text: userMessage,
         isUser: false,
         timestamp: new Date(),
       };

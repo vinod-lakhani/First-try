@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     if (!apiKey) {
       console.error('OPENAI_API_KEY is not set in environment variables');
       return NextResponse.json(
-        { error: 'OpenAI API key not configured. Please set OPENAI_API_KEY in your environment variables.' },
+        { error: 'Chat service is not configured. The OpenAI API key is missing. Please contact support or check your environment configuration.' },
         { status: 500 }
       );
     }
@@ -80,29 +80,70 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini', // or 'gpt-3.5-turbo' for lower cost
-        messages: openAIMessages,
-        temperature: 0.7,
-        max_tokens: 500,
-      }),
-    });
+    let response: Response;
+    try {
+      response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini', // or 'gpt-3.5-turbo' for lower cost
+          messages: openAIMessages,
+          temperature: 0.7,
+          max_tokens: 500,
+        }),
+      });
+    } catch (fetchError) {
+      console.error('Failed to fetch from OpenAI API:', fetchError);
+      throw new Error('Unable to connect to the AI service. Please check your network connection and try again.');
+    }
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+      let errorData: any = { error: 'Unknown error' };
+      try {
+        errorData = await response.json();
+      } catch (parseError) {
+        // Response is not JSON, try to get text
+        try {
+          const text = await response.text();
+          console.error('OpenAI API non-JSON error response:', {
+            status: response.status,
+            statusText: response.statusText,
+            body: text.substring(0, 200),
+          });
+          errorData = { error: `API error: ${response.statusText}` };
+        } catch (textError) {
+          console.error('OpenAI API error - unable to read response body:', {
+            status: response.status,
+            statusText: response.statusText,
+          });
+        }
+      }
+      
       console.error('OpenAI API error:', {
         status: response.status,
         statusText: response.statusText,
         error: errorData,
       });
+      
+      // Provide user-friendly error messages
+      let userErrorMessage = 'Failed to get response from the AI service';
+      if (response.status === 401) {
+        userErrorMessage = 'Authentication failed. The chat service may not be properly configured.';
+      } else if (response.status === 429) {
+        userErrorMessage = 'The chat service is temporarily rate-limited. Please try again in a moment.';
+      } else if (response.status >= 500) {
+        userErrorMessage = 'The AI service is temporarily unavailable. Please try again later.';
+      } else if (errorData.error?.message) {
+        userErrorMessage = errorData.error.message;
+      } else if (errorData.error) {
+        userErrorMessage = String(errorData.error);
+      }
+      
       return NextResponse.json(
-        { error: errorData.error?.message || errorData.error || 'Failed to get response from ChatGPT' },
+        { error: userErrorMessage },
         { status: response.status }
       );
     }
@@ -113,9 +154,29 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ response: aiResponse });
   } catch (error) {
     console.error('Chat API error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    
+    // Provide more specific error messages
+    let errorMessage = 'Internal server error';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+      // Log the full error for debugging
+      console.error('Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      });
+    } else {
+      console.error('Non-Error object caught:', error);
+      errorMessage = String(error);
+    }
+    
+    // Don't expose internal error details in production - provide user-friendly message
+    const userMessage = errorMessage.includes('API key') 
+      ? 'Chat service is not properly configured. Please contact support.'
+      : 'An error occurred while processing your request. Please try again.';
+    
     return NextResponse.json(
-      { error: errorMessage },
+      { error: userMessage },
       { status: 500 }
     );
   }
