@@ -203,16 +203,16 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
       // Get assets breakdown
       const assetsBreakdown = store.assets.map(asset => ({
         name: asset.name || 'Asset',
-        value: asset.balance$ || asset.value$ || 0,
+        value: asset.value$ || 0,
         type: asset.type || 'other',
       }));
 
       // Get goals breakdown
       const goalsBreakdown = store.goals.map(goal => ({
-        name: goal.name || goal.label || 'Goal',
-        target: goal.target$ || 0,
-        current: goal.current$ || 0,
-        deadline: goal.deadline,
+        name: goal.name || 'Goal',
+        target: goal.targetAmount$ || 0,
+        deadline: goal.targetDate,
+        type: goal.type,
       }));
 
       // Get actual spending from riskConstraints if available (3-month averages)
@@ -373,7 +373,7 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
             emergencyFundTargetMonths: store.safetyStrategy.efTargetMonths,
             liquidity: store.safetyStrategy.liquidity,
             retirementFocus: store.safetyStrategy.retirementFocus,
-            match401kPerMonth: store.safetyStrategy.match401kPerMonth$ * paychecksPerMonth,
+            match401kPerMonth: (store.safetyStrategy.match401kPerMonth$ || 0) * paychecksPerMonth,
           } : undefined,
         },
       });

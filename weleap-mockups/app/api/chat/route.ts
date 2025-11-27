@@ -254,12 +254,15 @@ Guidelines:
     if (userPlanData.goalsBreakdown && userPlanData.goalsBreakdown.length > 0) {
       prompt += `**Financial Goals:**\n`;
       userPlanData.goalsBreakdown.forEach((goal: any) => {
-        prompt += `- ${goal.name}: $${Math.round(goal.current).toLocaleString()}`;
+        prompt += `- ${goal.name}`;
         if (goal.target > 0) {
-          prompt += ` / $${Math.round(goal.target).toLocaleString()} target`;
-          if (goal.deadline) {
-            prompt += ` (deadline: ${goal.deadline})`;
-          }
+          prompt += `: Target $${Math.round(goal.target).toLocaleString()}`;
+        }
+        if (goal.deadline) {
+          prompt += ` (target date: ${goal.deadline})`;
+        }
+        if (goal.type) {
+          prompt += ` [${goal.type}]`;
         }
         prompt += `\n`;
       });
