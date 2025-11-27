@@ -116,11 +116,15 @@ export default function MonthlyPlanCurrentPage() {
 
   if (!monthlyIncome || monthlyIncome <= 0) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center px-4">
-        <div className="text-center space-y-4">
-          <p className="text-red-600 dark:text-red-400 font-medium">
-            Income information is required to view your monthly plan.
-          </p>
+      <div className="flex min-h-[calc(100vh-73px)] flex-col">
+        <div className="flex-1 overflow-y-auto px-4 py-6">
+          <div className="mx-auto w-full max-w-lg flex items-center justify-center">
+            <div className="text-center space-y-4">
+              <p className="text-red-600 dark:text-red-400 font-medium">
+                Income information is required to view your monthly plan.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     );

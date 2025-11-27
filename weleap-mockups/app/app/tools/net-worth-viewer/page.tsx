@@ -20,14 +20,18 @@ function NetWorthViewerContent() {
   // Early return check
   if (!planData) {
     return (
-      <div className="container mx-auto flex min-h-screen items-center justify-center p-4">
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-slate-600 dark:text-slate-400">
-              Loading net worth data...
-            </p>
-          </CardContent>
-        </Card>
+      <div className="flex min-h-[calc(100vh-73px)] flex-col">
+        <div className="flex-1 overflow-y-auto px-4 py-6">
+          <div className="mx-auto w-full max-w-lg flex items-center justify-center">
+            <Card>
+              <CardContent className="py-12 text-center">
+                <p className="text-slate-600 dark:text-slate-400">
+                  Loading net worth data...
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
     );
   }

@@ -428,8 +428,8 @@ export function NetWorthChart({
 
       {/* Info Dialog */}
       {showInfoDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <Card className="w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4">
+          <Card className="flex h-full w-full sm:max-h-[90vh] sm:max-w-3xl flex-col overflow-hidden rounded-none sm:rounded-lg">
             <CardHeader className="flex-shrink-0">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-2xl font-bold">
