@@ -31,14 +31,20 @@ If you're getting a 404 error, the Root Directory is NOT set correctly. Here's h
    - **Install Command**: Leave as default (`npm install`)
 
 3. **Environment Variables:**
-   Add the following environment variable:
+   Add the following environment variables:
    - **Name**: `OPENAI_API_KEY`
-   - **Value**: Your OpenAI API key (the one you have in `.env.local`)
+     - **Value**: Your OpenAI API key (the one you have in `.env.local`)
+     - **Important for**: Chat feature to work
    
-   To add it:
+   - **Name**: `ENABLE_STATIC_EXPORT`
+     - **Value**: Leave this UNSET or set to empty (do not set to "true")
+     - **Important for**: Ensuring API routes work (static export disables them)
+   
+   To add them:
    - In the project settings, go to "Environment Variables"
    - Add `OPENAI_API_KEY` with your API key value
-   - Make sure it's enabled for all environments (Production, Preview, Development)
+   - **DO NOT** add `ENABLE_STATIC_EXPORT=true` - it should be unset or empty
+   - Make sure they're enabled for all environments (Production, Preview, Development)
 
 4. **Deploy:**
    - Click "Deploy"
