@@ -14,12 +14,21 @@ export async function POST(request: NextRequest) {
   try {
     const { messages, context, userPlanData } = await request.json();
 
+    // Validate request
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return NextResponse.json(
+        { error: 'Invalid request: messages array is required' },
+        { status: 400 }
+      );
+    }
+
     // Get API key from environment variable
     const apiKey = process.env.OPENAI_API_KEY;
     
     if (!apiKey) {
+      console.error('OPENAI_API_KEY is not set in environment variables');
       return NextResponse.json(
-        { error: 'OpenAI API key not configured' },
+        { error: 'OpenAI API key not configured. Please set OPENAI_API_KEY in your environment variables.' },
         { status: 500 }
       );
     }
@@ -53,6 +62,24 @@ export async function POST(request: NextRequest) {
     // Option 2: Direct fetch to OpenAI API (if you don't want to install the SDK)
     const systemPrompt = buildSystemPrompt(context, userPlanData);
     
+    // Transform messages to OpenAI format, filtering out invalid messages
+    const openAIMessages = [
+      { role: 'system', content: systemPrompt },
+      ...messages
+        .filter((msg: any) => msg && msg.text && typeof msg.text === 'string')
+        .map((msg: any) => ({
+          role: msg.isUser ? 'user' : 'assistant',
+          content: msg.text,
+        })),
+    ];
+
+    if (openAIMessages.length <= 1) {
+      return NextResponse.json(
+        { error: 'Invalid request: no valid messages provided' },
+        { status: 400 }
+      );
+    }
+    
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -61,23 +88,21 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({
         model: 'gpt-4o-mini', // or 'gpt-3.5-turbo' for lower cost
-        messages: [
-          { role: 'system', content: systemPrompt },
-          ...messages.map((msg: any) => ({
-            role: msg.isUser ? 'user' : 'assistant',
-            content: msg.text,
-          })),
-        ],
+        messages: openAIMessages,
         temperature: 0.7,
         max_tokens: 500,
       }),
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      console.error('OpenAI API error:', error);
+      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+      console.error('OpenAI API error:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorData,
+      });
       return NextResponse.json(
-        { error: 'Failed to get response from ChatGPT' },
+        { error: errorData.error?.message || errorData.error || 'Failed to get response from ChatGPT' },
         { status: response.status }
       );
     }
@@ -88,8 +113,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ response: aiResponse });
   } catch (error) {
     console.error('Chat API error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: errorMessage },
       { status: 500 }
     );
   }
@@ -101,6 +127,16 @@ export async function POST(request: NextRequest) {
 function buildSystemPrompt(context?: string, userPlanData?: any): string {
   let prompt = `You are Ribbit, a friendly and helpful financial assistant for the WeLeap personal finance app. 
 You help users understand their financial plans, make better decisions, and answer questions about their money.
+
+CRITICAL RULE - ENDING RESPONSES:
+- NEVER end your response with phrases like:
+  * "If you have any other questions"
+  * "feel free to ask"
+  * "just let me know"
+  * "I'm here to help"
+  * Any variation asking if they need more help
+- Simply answer the question and STOP. Do not add any closing statement or invitation for more questions.
+- End your response naturally after answering - no additional phrases needed.
 
 Guidelines:
 - Be conversational, friendly, and encouraging
@@ -254,15 +290,12 @@ Guidelines:
     if (userPlanData.goalsBreakdown && userPlanData.goalsBreakdown.length > 0) {
       prompt += `**Financial Goals:**\n`;
       userPlanData.goalsBreakdown.forEach((goal: any) => {
-        prompt += `- ${goal.name}`;
+        prompt += `- ${goal.name}: $${Math.round(goal.current || 0).toLocaleString()}`;
         if (goal.target > 0) {
-          prompt += `: Target $${Math.round(goal.target).toLocaleString()}`;
+          prompt += ` / $${Math.round(goal.target).toLocaleString()} target`;
         }
         if (goal.deadline) {
-          prompt += ` (target date: ${goal.deadline})`;
-        }
-        if (goal.type) {
-          prompt += ` [${goal.type}]`;
+          prompt += ` (deadline: ${goal.deadline})`;
         }
         prompt += `\n`;
       });
@@ -339,7 +372,8 @@ Guidelines:
     }
   }
 
-  prompt += `Answer the user's question based on the context and their financial situation.`;
+  prompt += `Answer the user's question based on the context and their financial situation.
+Remember: Answer the question directly and STOP. Do NOT add any closing phrases, invitations for more questions, or statements like "just let me know" or "if you have other questions".`;
 
   return prompt;
 }

@@ -202,10 +202,13 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
       setMessages((prev) => [...prev, aiResponse]);
     } catch (error) {
       console.error('Error getting AI response:', error);
-      // Fallback to mock response if API fails
+      // Show error message or fallback to mock response
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
-        text: generateResponse(currentInput, context),
+        text: errorMessage.includes('API key')
+          ? "I'm having trouble connecting to the AI service. Please check that the OpenAI API key is configured correctly."
+          : generateResponse(currentInput, context), // Fallback to mock response
         isUser: false,
         timestamp: new Date(),
       };

@@ -33,11 +33,16 @@ export async function sendChatMessage(request: ChatRequest): Promise<string> {
     });
 
     if (!response.ok) {
-      throw new Error('Failed to get response from chat API');
+      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+      console.error('Chat API error response:', errorData);
+      throw new Error(errorData.error || `Failed to get response from chat API (${response.status})`);
     }
 
     const data = await response.json();
-    return data.response;
+    if (data.error) {
+      throw new Error(data.error);
+    }
+    return data.response || 'I apologize, I could not generate a response.';
   } catch (error) {
     console.error('Error sending chat message:', error);
     throw error;

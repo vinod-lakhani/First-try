@@ -203,16 +203,16 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
       // Get assets breakdown
       const assetsBreakdown = store.assets.map(asset => ({
         name: asset.name || 'Asset',
-        value: asset.value$ || 0,
+        value: (asset as any).balance$ || asset.value$ || 0,
         type: asset.type || 'other',
       }));
 
       // Get goals breakdown
       const goalsBreakdown = store.goals.map(goal => ({
         name: goal.name || 'Goal',
-        target: goal.targetAmount$ || 0,
-        deadline: goal.targetDate,
-        type: goal.type,
+        target: (goal as any).target$ || goal.targetAmount$ || 0,
+        current: (goal as any).current$ || 0,
+        deadline: (goal as any).deadline || goal.targetDate,
       }));
 
       // Get actual spending from riskConstraints if available (3-month averages)
@@ -373,7 +373,7 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
             emergencyFundTargetMonths: store.safetyStrategy.efTargetMonths,
             liquidity: store.safetyStrategy.liquidity,
             retirementFocus: store.safetyStrategy.retirementFocus,
-            match401kPerMonth: (store.safetyStrategy.match401kPerMonth$ || 0) * paychecksPerMonth,
+            match401kPerMonth: store.safetyStrategy.match401kPerMonth$ ? store.safetyStrategy.match401kPerMonth$ * paychecksPerMonth : 0,
           } : undefined,
         },
       });
@@ -387,10 +387,13 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
       setMessages((prev) => [...prev, aiResponse]);
     } catch (error) {
       console.error('Error getting AI response:', error);
-      // Fallback response
+      // Fallback response with error details
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
-        text: "I'm having trouble connecting right now. Please try again in a moment, or use one of the quick actions below.",
+        text: errorMessage.includes('API key') 
+          ? "I'm having trouble connecting to the AI service. Please check that the OpenAI API key is configured correctly."
+          : `I'm having trouble connecting right now: ${errorMessage}. Please try again in a moment.`,
         isUser: false,
         timestamp: new Date(),
       };
