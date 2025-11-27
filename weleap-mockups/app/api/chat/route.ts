@@ -12,7 +12,18 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const { messages, context, userPlanData } = await request.json();
+    let requestBody: any;
+    try {
+      requestBody = await request.json();
+    } catch (parseError) {
+      console.error('Failed to parse request body as JSON:', parseError);
+      return NextResponse.json(
+        { error: 'Invalid request format. Expected JSON.' },
+        { status: 400 }
+      );
+    }
+    
+    const { messages, context, userPlanData } = requestBody;
 
     // Validate request
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -60,7 +71,16 @@ export async function POST(request: NextRequest) {
     */
 
     // Option 2: Direct fetch to OpenAI API (if you don't want to install the SDK)
-    const systemPrompt = buildSystemPrompt(context, userPlanData);
+    let systemPrompt: string;
+    try {
+      systemPrompt = buildSystemPrompt(context, userPlanData);
+    } catch (promptError) {
+      console.error('Error building system prompt:', promptError);
+      return NextResponse.json(
+        { error: 'Failed to prepare chat context. Please try again.' },
+        { status: 500 }
+      );
+    }
     
     // Transform messages to OpenAI format, filtering out invalid messages
     const openAIMessages = [
@@ -148,8 +168,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const data = await response.json();
-    const aiResponse = data.choices[0]?.message?.content || 'I apologize, I could not generate a response.';
+    // Parse successful response
+    let data: any;
+    try {
+      data = await response.json();
+    } catch (parseError) {
+      console.error('Failed to parse OpenAI API response as JSON:', parseError);
+      const responseText = await response.text().catch(() => 'Unable to read response');
+      console.error('Response body:', responseText.substring(0, 500));
+      return NextResponse.json(
+        { error: 'Received invalid response from the AI service. Please try again.' },
+        { status: 500 }
+      );
+    }
+
+    // Check if OpenAI returned an error in the response
+    if (data.error) {
+      console.error('OpenAI API error in response:', data.error);
+      return NextResponse.json(
+        { error: data.error.message || 'An error occurred with the AI service' },
+        { status: 500 }
+      );
+    }
+
+    const aiResponse = data.choices?.[0]?.message?.content || 'I apologize, I could not generate a response.';
 
     return NextResponse.json({ response: aiResponse });
   } catch (error) {
@@ -312,10 +354,29 @@ Guidelines:
 
     // Actual Spending (3-month averages if available)
     if (userPlanData.actualSpending) {
+      const actuals = userPlanData.actualSpending;
       prompt += `**Actual Spending (3-month average):**\n`;
-      prompt += `- Needs: ${userPlanData.actualSpending.needsPct.toFixed(1)}% of income ($${Math.round(userPlanData.actualSpending.monthlyNeeds).toLocaleString()}/month)\n`;
-      prompt += `- Wants: ${userPlanData.actualSpending.wantsPct.toFixed(1)}% of income ($${Math.round(userPlanData.actualSpending.monthlyWants).toLocaleString()}/month)\n`;
-      prompt += `- Savings: ${userPlanData.actualSpending.savingsPct.toFixed(1)}% of income ($${Math.round(userPlanData.actualSpending.monthlySavings).toLocaleString()}/month)\n`;
+      if (typeof actuals.needsPct === 'number') {
+        prompt += `- Needs: ${actuals.needsPct.toFixed(1)}% of income`;
+        if (typeof actuals.monthlyNeeds === 'number') {
+          prompt += ` ($${Math.round(actuals.monthlyNeeds).toLocaleString()}/month)`;
+        }
+        prompt += `\n`;
+      }
+      if (typeof actuals.wantsPct === 'number') {
+        prompt += `- Wants: ${actuals.wantsPct.toFixed(1)}% of income`;
+        if (typeof actuals.monthlyWants === 'number') {
+          prompt += ` ($${Math.round(actuals.monthlyWants).toLocaleString()}/month)`;
+        }
+        prompt += `\n`;
+      }
+      if (typeof actuals.savingsPct === 'number') {
+        prompt += `- Savings: ${actuals.savingsPct.toFixed(1)}% of income`;
+        if (typeof actuals.monthlySavings === 'number') {
+          prompt += ` ($${Math.round(actuals.monthlySavings).toLocaleString()}/month)`;
+        }
+        prompt += `\n`;
+      }
       prompt += `\n`;
     }
 
@@ -351,9 +412,13 @@ Guidelines:
     if (userPlanData.goalsBreakdown && userPlanData.goalsBreakdown.length > 0) {
       prompt += `**Financial Goals:**\n`;
       userPlanData.goalsBreakdown.forEach((goal: any) => {
-        prompt += `- ${goal.name}: $${Math.round(goal.current || 0).toLocaleString()}`;
-        if (goal.target > 0) {
-          prompt += ` / $${Math.round(goal.target).toLocaleString()} target`;
+        const goalName = goal.name || 'Goal';
+        const goalCurrent = typeof goal.current === 'number' ? goal.current : 0;
+        const goalTarget = typeof goal.target === 'number' ? goal.target : undefined;
+        
+        prompt += `- ${goalName}: $${Math.round(goalCurrent).toLocaleString()}`;
+        if (goalTarget !== undefined && goalTarget > 0) {
+          prompt += ` / $${Math.round(goalTarget).toLocaleString()} target`;
         }
         if (goal.deadline) {
           prompt += ` (deadline: ${goal.deadline})`;
