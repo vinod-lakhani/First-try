@@ -451,7 +451,7 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
       <div className="flex h-full w-full sm:max-h-[90vh] sm:max-w-2xl flex-col rounded-none sm:rounded-lg bg-white shadow-xl dark:bg-slate-900 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 px-4 py-3 flex-shrink-0 bg-white dark:bg-slate-900 sticky top-0 z-10">
-          <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Sidekick Overlay</h2>
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Ribbit - Your Financial Sidekick</h2>
           <Button
             variant="ghost"
             size="icon"
