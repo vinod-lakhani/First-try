@@ -1,8 +1,12 @@
 # Vercel Deployment Setup
 
-## ⚠️ Fixing 404 Error
+## ⚠️ Fixing Build Issues
 
-If you're getting a 404 error, the Root Directory is NOT set correctly. Here's how to fix it:
+If your build completes in under 1 second (like 177ms), Vercel is NOT finding your Next.js project. Here's how to fix it:
+
+### Issue: Build completes too quickly (no npm install, no build output)
+
+**The Root Directory is NOT set correctly.** Here's how to fix it:
 
 1. Go to your Vercel project dashboard
 2. Click on **Settings** (in the top navigation)
@@ -11,7 +15,14 @@ If you're getting a 404 error, the Root Directory is NOT set correctly. Here's h
 5. Click **Edit**
 6. Enter: `weleap-mockups`
 7. Click **Save**
-8. Go to **Deployments** tab and redeploy (or push a new commit)
+8. Go to **Deployments** tab
+9. Click the **three dots (⋯)** on the latest deployment
+10. Click **Redeploy**
+11. Check the build logs - you should see:
+    - "Installing dependencies..."
+    - "Running npm run build"
+    - "Creating an optimized production build..."
+    - NOT just "Build Completed in /vercel/output [177ms]"
 
 ## Initial Setup Steps
 
