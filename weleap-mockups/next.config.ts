@@ -1,17 +1,15 @@
 import type { NextConfig } from "next";
 
 // Detect deployment platform
-// Vercel sets VERCEL=1 during builds
+// Vercel ALWAYS sets VERCEL=1 during builds - this is the primary check
 const isVercel = process.env.VERCEL === '1';
 // GitHub Actions is used for GitHub Pages deployment
 const isGitHubActions = process.env.GITHUB_ACTIONS === 'true';
 
-// NEVER enable static export on Vercel - it breaks API routes and client-side routing
-// Only enable static export if:
-// 1. We're on GitHub Actions (for GitHub Pages)
-// 2. We're NOT on Vercel
-// 3. ENABLE_STATIC_EXPORT is not explicitly set to 'false'
-const shouldUseStaticExport = isGitHubActions && !isVercel && process.env.ENABLE_STATIC_EXPORT !== 'false';
+// CRITICAL: NEVER enable static export on Vercel
+// Static export breaks API routes and client-side navigation
+// Only enable static export if we're explicitly on GitHub Actions AND not on Vercel
+const shouldUseStaticExport = isGitHubActions && !isVercel;
 
 // Debug logging (only in build, not in runtime)
 if (process.env.NODE_ENV === 'production') {
@@ -30,16 +28,23 @@ const basePath = shouldUseStaticExport && process.env.NODE_ENV === 'production'
   ? (process.env.NEXT_PUBLIC_BASE_PATH || '/First-try')
   : '';
 
+// Build Next.js config - explicitly handle static export
 const nextConfig: NextConfig = {
-  // IMPORTANT: Only enable static export for GitHub Pages
-  // Vercel MUST use server-side rendering for API routes to work
+  // CRITICAL: Only enable static export for GitHub Pages
+  // On Vercel, we MUST NOT use static export - it breaks everything
+  // The spread operator conditionally adds output: 'export' only if shouldUseStaticExport is true
+  // If shouldUseStaticExport is false (like on Vercel), this property is NOT added
   ...(shouldUseStaticExport ? { output: 'export' as const } : {}),
-  // Set base path only for GitHub Pages
+  
+  // Set base path only for GitHub Pages (Vercel doesn't need it)
   ...(basePath ? { basePath } : {}),
-  // Disable image optimization only for static export
+  
+  // Disable image optimization only for static export (GitHub Pages)
   images: {
     unoptimized: shouldUseStaticExport,
   },
 };
+
+export default nextConfig;
 
 export default nextConfig;
