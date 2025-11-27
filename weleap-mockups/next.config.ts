@@ -3,20 +3,25 @@ import type { NextConfig } from "next";
 // Detect deployment platform
 // Vercel sets VERCEL=1 during builds
 const isVercel = process.env.VERCEL === '1';
-const isGitHubPages = process.env.GITHUB_ACTIONS === 'true';
+// GitHub Actions is used for GitHub Pages deployment
+const isGitHubActions = process.env.GITHUB_ACTIONS === 'true';
 
 // NEVER enable static export on Vercel - it breaks API routes and client-side routing
-// Only enable for GitHub Pages builds
-const shouldUseStaticExport = isGitHubPages && !isVercel;
+// Only enable static export if:
+// 1. We're on GitHub Actions (for GitHub Pages)
+// 2. We're NOT on Vercel
+// 3. ENABLE_STATIC_EXPORT is not explicitly set to 'false'
+const shouldUseStaticExport = isGitHubActions && !isVercel && process.env.ENABLE_STATIC_EXPORT !== 'false';
 
 // Debug logging (only in build, not in runtime)
 if (process.env.NODE_ENV === 'production') {
   console.log('[Next.js Config] Platform Detection:', {
     isVercel,
-    isGitHubPages,
+    isGitHubActions,
     shouldUseStaticExport,
     VERCEL: process.env.VERCEL,
     GITHUB_ACTIONS: process.env.GITHUB_ACTIONS,
+    ENABLE_STATIC_EXPORT: process.env.ENABLE_STATIC_EXPORT,
   });
 }
 
