@@ -11,6 +11,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { X, Send } from 'lucide-react';
 import { withBasePath } from '@/lib/utils/basePath';
+import { sendChatMessage } from '@/lib/chat/chatService';
+import { useOnboardingStore } from '@/lib/onboarding/store';
+import { usePlanData } from '@/lib/onboarding/usePlanData';
+import { getPaychecksPerMonth } from '@/lib/onboarding/usePlanData';
 
 interface Message {
   id: string;
@@ -27,6 +31,8 @@ interface OnboardingChatProps {
 export function OnboardingChat({ context, inline = false }: OnboardingChatProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [imageSrc, setImageSrc] = useState('/images/ribbit.png');
+  const store = useOnboardingStore();
+  const planData = usePlanData();
   
   useEffect(() => {
     setImageSrc(withBasePath('images/ribbit.png'));
@@ -66,20 +72,147 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
     };
 
     setMessages((prev) => [...prev, userMessage]);
+    const currentInput = inputValue.trim();
     setInputValue('');
     setIsLoading(true);
 
-    // Simulate AI response (in a real implementation, this would call an API)
-    setTimeout(() => {
+    try {
+      // Calculate comprehensive user plan data for context
+      const incomeAmount = store.income?.netIncome$ || store.income?.grossIncome$ || 0;
+      const payFrequency = store.income?.payFrequency || 'biweekly';
+      const paychecksPerMonth = getPaychecksPerMonth(payFrequency);
+      const monthlyIncome = incomeAmount * paychecksPerMonth;
+
+      // Calculate expenses from fixed expenses
+      const monthlyExpenses = store.fixedExpenses.reduce((sum, expense) => {
+        let monthly = expense.amount$;
+        if (expense.frequency === 'weekly') monthly = expense.amount$ * 4.33;
+        else if (expense.frequency === 'biweekly') monthly = expense.amount$ * 2.17;
+        else if (expense.frequency === 'semimonthly') monthly = expense.amount$ * 2;
+        else if (expense.frequency === 'yearly') monthly = expense.amount$ / 12;
+        return sum + monthly;
+      }, 0);
+
+      // Calculate debt minimum payments per month
+      const monthlyDebtPayments = store.debts.reduce((sum, debt) => {
+        return sum + (debt.minPayment$ * paychecksPerMonth);
+      }, 0);
+
+      // Calculate total debt
+      const totalDebt = store.debts.reduce((sum, d) => sum + d.balance$, 0);
+
+      // Calculate needs and wants from expenses
+      const monthlyNeeds = store.fixedExpenses
+        .filter(e => e.category === 'needs' || !e.category)
+        .reduce((sum, expense) => {
+          let monthly = expense.amount$;
+          if (expense.frequency === 'weekly') monthly = expense.amount$ * 4.33;
+          else if (expense.frequency === 'biweekly') monthly = expense.amount$ * 2.17;
+          else if (expense.frequency === 'semimonthly') monthly = expense.amount$ * 2;
+          else if (expense.frequency === 'yearly') monthly = expense.amount$ / 12;
+          return sum + monthly;
+        }, 0) + monthlyDebtPayments; // Include debt payments in needs
+
+      const monthlyWants = store.fixedExpenses
+        .filter(e => e.category === 'wants')
+        .reduce((sum, expense) => {
+          let monthly = expense.amount$;
+          if (expense.frequency === 'weekly') monthly = expense.amount$ * 4.33;
+          else if (expense.frequency === 'biweekly') monthly = expense.amount$ * 2.17;
+          else if (expense.frequency === 'semimonthly') monthly = expense.amount$ * 2;
+          else if (expense.frequency === 'yearly') monthly = expense.amount$ / 12;
+          return sum + monthly;
+        }, 0);
+
+      // Calculate savings (what's left after expenses)
+      const monthlySavings = monthlyIncome - monthlyNeeds - monthlyWants;
+      const savingsRate = monthlyIncome > 0 ? monthlySavings / monthlyIncome : 0;
+
+      // Get expense breakdown
+      const expenseBreakdown = store.fixedExpenses.map(expense => {
+        let monthly = expense.amount$;
+        if (expense.frequency === 'weekly') monthly = expense.amount$ * 4.33;
+        else if (expense.frequency === 'biweekly') monthly = expense.amount$ * 2.17;
+        else if (expense.frequency === 'semimonthly') monthly = expense.amount$ * 2;
+        else if (expense.frequency === 'yearly') monthly = expense.amount$ / 12;
+        return {
+          name: expense.name,
+          amount: monthly,
+          category: expense.category || 'needs',
+        };
+      });
+
+      // Get debt breakdown
+      const debtBreakdown = store.debts.map(debt => ({
+        name: debt.name || 'Debt',
+        balance: debt.balance$,
+        minPayment: debt.minPayment$ * paychecksPerMonth,
+        apr: debt.aprPct || 0,
+      }));
+
+      // If planData is available, use it for more accurate numbers
+      let planDataContext = undefined;
+      if (planData) {
+        const needsCategories = planData.paycheckCategories.filter(c => 
+          c.key === 'essentials' || c.key === 'debt_minimums'
+        );
+        const wantsCategories = planData.paycheckCategories.filter(c => 
+          c.key === 'fun_flexible'
+        );
+        const savingsCategories = planData.paycheckCategories.filter(c => 
+          c.key === 'emergency' || c.key === 'long_term_investing' || c.key === 'debt_extra'
+        );
+
+        const planNeedsPerPaycheck = needsCategories.reduce((sum, c) => sum + c.amount, 0);
+        const planWantsPerPaycheck = wantsCategories.reduce((sum, c) => sum + c.amount, 0);
+        const planSavingsPerPaycheck = savingsCategories.reduce((sum, c) => sum + c.amount, 0);
+
+        planDataContext = {
+          planNeeds: planNeedsPerPaycheck * paychecksPerMonth,
+          planWants: planWantsPerPaycheck * paychecksPerMonth,
+          planSavings: planSavingsPerPaycheck * paychecksPerMonth,
+        };
+      }
+
+      // Call ChatGPT API with comprehensive data
+      const aiResponseText = await sendChatMessage({
+        messages: [...messages, userMessage],
+        context,
+        userPlanData: {
+          monthlyIncome,
+          monthlyExpenses,
+          monthlyNeeds,
+          monthlyWants,
+          monthlySavings,
+          savingsRate,
+          debtTotal: totalDebt,
+          monthlyDebtPayments,
+          expenseBreakdown,
+          debtBreakdown,
+          planData: planDataContext,
+        },
+      });
+
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
-        text: generateResponse(userMessage.text, context),
+        text: aiResponseText,
         isUser: false,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, aiResponse]);
+    } catch (error) {
+      console.error('Error getting AI response:', error);
+      // Fallback to mock response if API fails
+      const aiResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        text: generateResponse(currentInput, context),
+        isUser: false,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, aiResponse]);
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
