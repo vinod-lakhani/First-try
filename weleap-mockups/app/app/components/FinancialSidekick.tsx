@@ -374,6 +374,7 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
             liquidity: store.safetyStrategy.liquidity,
             retirementFocus: store.safetyStrategy.retirementFocus,
             match401kPerMonth: store.safetyStrategy.match401kPerMonth$ ? store.safetyStrategy.match401kPerMonth$ * paychecksPerMonth : 0,
+            onIDR: store.safetyStrategy.onIDR || false,
           } : undefined,
         },
       });

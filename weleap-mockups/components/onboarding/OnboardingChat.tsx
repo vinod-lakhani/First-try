@@ -174,6 +174,14 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
         };
       }
 
+      // Get safety strategy with IDR status
+      const safetyStrategy = store.safetyStrategy ? {
+        emergencyFundTargetMonths: store.safetyStrategy.efTargetMonths,
+        liquidity: store.safetyStrategy.liquidity,
+        retirementFocus: store.safetyStrategy.retirementFocus,
+        onIDR: store.safetyStrategy.onIDR || false,
+      } : undefined;
+
       // Call ChatGPT API with comprehensive data
       const aiResponseText = await sendChatMessage({
         messages: [...messages, userMessage],
@@ -190,6 +198,7 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
           expenseBreakdown,
           debtBreakdown,
           planData: planDataContext,
+          safetyStrategy,
         },
       });
 
