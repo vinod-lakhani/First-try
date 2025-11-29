@@ -28,7 +28,7 @@ export interface IncomePlanInputs {
 export interface IncomePlanResult {
   now: NWSState; // from actuals
   goal: NWSState; // from targets
-  next: NWSState; // recommended plan R_N/R_W/R_S
+  next: NWSState; // recommended plan
   notes: string[];
 }
 
@@ -108,6 +108,12 @@ export function computePreservingSavingsPlan(
 
 /**
  * Computes the recommended income allocation plan (NEXT) from actuals (NOW) and targets (GOAL).
+ * 
+ * Simple, clean logic:
+ * 1. Start from actuals
+ * 2. If savings is below target, shift from wants to savings (up to shift limit)
+ * 3. Optionally shift from needs to savings if remaining gap (longer-term adjustment)
+ * 4. Ensure sum = 1.0
  */
 export function computeIncomePlan(inputs: IncomePlanInputs): IncomePlanResult {
   const {
@@ -118,10 +124,17 @@ export function computeIncomePlan(inputs: IncomePlanInputs): IncomePlanResult {
     targetNeedsPct,
     targetWantsPct,
     targetSavingsPct,
-    shiftLimitPct = 0.04,
+    shiftLimitPct: rawShiftLimitPct = 0.04,
     needsBufferPct = 0.03,
     needsShiftCapPct = 0.02,
   } = inputs;
+  
+  // Normalize shiftLimitPct: convert from percentage (4.0) to decimal (0.04) if needed
+  // CRITICAL: shiftLimitPct must be in decimal format (0.04 = 4%) for calculations
+  let shiftLimitPct = rawShiftLimitPct;
+  if (shiftLimitPct > 1) {
+    shiftLimitPct = shiftLimitPct / 100; // Convert 4.0 to 0.04
+  }
 
   const notes: string[] = [];
 
@@ -136,48 +149,67 @@ export function computeIncomePlan(inputs: IncomePlanInputs): IncomePlanResult {
     throw new Error(`Target percentages must sum to 1.0, got ${targetSum}`);
   }
 
-  // Step 1: Start from actuals
+  // Calculate maximum allowed savings (hard limit) - this can NEVER be exceeded
+  const maxAllowedSavingsPct = round2(actualSavingsPct + shiftLimitPct);
+  
+  // Start from actuals
   let R_N = actualNeedsPct;
   let R_W = actualWantsPct;
   let R_S = actualSavingsPct;
 
-  // Step 2: Focus on Savings Gap
+  // Helper function to cap savings and ensure it never exceeds the limit
+  const capSavingsToLimit = () => {
+    if (R_S > maxAllowedSavingsPct + 0.0001) {
+      const excess = R_S - maxAllowedSavingsPct;
+      R_S = maxAllowedSavingsPct;
+      R_W = round2(R_W + excess);
+    }
+  };
+
+  // Step 1: Shift from Wants to Savings if savings is below target
+  // CRITICAL: Shift is constrained by shiftLimitPct (default 4%) to prevent drastic changes
+  // The shift limit ensures we don't recommend more than 4% shift per period
   const gap_S = targetSavingsPct - actualSavingsPct;
 
-  if (gap_S > 0) {
-    // Calculate how much Wants is above its target
-    const maxFromW = Math.max(0, actualWantsPct - targetWantsPct);
+  if (gap_S > 0.001) {
+    // Calculate shift amount: min(gap, available wants, shift limit)
+    // The shift limit (typically 4% = 0.04) is the maximum allowed shift
+    const maxAvailableFromW = actualWantsPct;
+    // CRITICAL: Never shift more than shiftLimitPct, even if gap is larger
+    const shift_ws_pct = Math.min(gap_S, maxAvailableFromW, shiftLimitPct);
     
-    // Candidate shift from Wants to Savings
-    const shift_ws_pct = Math.min(gap_S, maxFromW, shiftLimitPct);
+    // Double-check: ensure shift never exceeds limit (defensive check)
+    if (shift_ws_pct > shiftLimitPct + 0.0001) {
+      throw new Error(`Shift amount ${shift_ws_pct} exceeds shift limit ${shiftLimitPct}`);
+    }
     
     if (shift_ws_pct > 0.001) {
       R_S = round2(R_S + shift_ws_pct);
       R_W = round2(R_W - shift_ws_pct);
       
+      // Immediately cap if we exceeded the limit
+      capSavingsToLimit();
+      
       notes.push(
-        `Shifted ${round2(shift_ws_pct * 100).toFixed(1)}% of income from Wants to Savings within ${round2(shiftLimitPct * 100).toFixed(0)}% shift limit.`
+        `Shifted ${round2(shift_ws_pct * 100).toFixed(1)}% of income from Wants to Savings to reach target (limited by ${round2(shiftLimitPct * 100).toFixed(0)}% shift limit).`
       );
     }
-  } else if (gap_S <= 0) {
-    notes.push('Savings is already at or above target. No upward shift needed.');
   }
 
-  // Step 3: Optional Needs → Savings shift (longer-term nudge)
+  // Step 2: Optional shift from Needs to Savings (longer-term adjustment)
+  // CRITICAL: Total shift from Steps 1 and 2 combined must not exceed shiftLimitPct (4%)
   const remainingGap_S = Math.max(0, targetSavingsPct - R_S);
+  const shiftUsedSoFar = R_S - actualSavingsPct; // Amount shifted in Step 1
   
-  if (remainingGap_S > 0.001) {
-    // Calculate how much Needs is above target + buffer
+  if (remainingGap_S > 0.001 && shiftUsedSoFar < shiftLimitPct) {
     const maxFromN = Math.max(0, actualNeedsPct - (targetNeedsPct + needsBufferPct));
+    // Calculate remaining shift budget: shiftLimitPct minus what we already shifted in Step 1
+    const remainingShiftBudget = Math.max(0, shiftLimitPct - shiftUsedSoFar);
     
-    // Remaining shift budget after Wants→Savings
-    const remainingShiftBudget = shiftLimitPct - (R_S - actualSavingsPct);
-    
-    // Candidate shift from Needs to Savings
     const shift_ns_pct = Math.min(
       remainingGap_S,
       maxFromN,
-      remainingShiftBudget,
+      remainingShiftBudget, // Ensure total shift (Step 1 + Step 2) doesn't exceed shiftLimitPct
       needsShiftCapPct
     );
     
@@ -185,38 +217,60 @@ export function computeIncomePlan(inputs: IncomePlanInputs): IncomePlanResult {
       R_S = round2(R_S + shift_ns_pct);
       R_N = round2(R_N - shift_ns_pct);
       
+      // Immediately cap if we exceeded the limit
+      capSavingsToLimit();
+      
       notes.push(
         `Applied small ${round2(shift_ns_pct * 100).toFixed(1)}% shift from Needs to Savings as a longer-term lifestyle adjustment suggestion.`
       );
     }
   }
-
-  // Step 4: Normalize to ensure sum = 1.0
-  const sumR = R_N + R_W + R_S;
-  if (Math.abs(sumR - 1.0) > 0.001) {
-    R_N = round2(R_N / sumR);
-    R_W = round2(R_W / sumR);
-    R_S = round2(R_S / sumR);
-  }
-
-  // Convert to dollars
-  let needs$ = round2(income$ * R_N);
-  let wants$ = round2(income$ * R_W);
-  let savings$ = round2(income$ * R_S);
-
-  // Reconcile rounding: ensure totals sum exactly to income$
-  const currentTotal = round2(needs$ + wants$ + savings$);
-  const roundingDiff = round2(income$ - currentTotal);
   
-  if (Math.abs(roundingDiff) > 0.001) {
-    savings$ = round2(savings$ + roundingDiff);
+  // Step 3: Final cap check before normalization (ensure savings never exceeds limit)
+  capSavingsToLimit();
+  
+  // Step 4: ABSOLUTE FINAL CAP - lock savings and never change it again
+  // This ensures that no matter what happens during normalization, savings stays within limit
+  const currentShift = R_S - actualSavingsPct;
+  if (currentShift > shiftLimitPct + 0.0001) {
+    R_S = round2(actualSavingsPct + shiftLimitPct); // Force exact cap
   }
-
-  // Final validation
-  const finalTotal = round2(needs$ + wants$ + savings$);
-  if (Math.abs(finalTotal - income$) > 0.01) {
-    throw new Error(`Allocation error: total ${finalTotal} does not equal income ${income$}`);
+  const lockedSavings = R_S; // Lock it - this is the maximum allowed savings
+  
+  // Step 5: Normalize to ensure sum = 1.0 (WITH SAVINGS LOCKED)
+  // Calculate wants as remainder: 1.0 - needs - savings
+  R_W = Math.max(0, round2(1.0 - R_N - lockedSavings));
+  
+  // If wants went negative, needs + savings > 1.0 - adjust needs to fit
+  if (R_W < 0.0001) {
+    R_W = 0;
+    const maxNeeds = Math.max(0, round2(1.0 - lockedSavings));
+    if (R_N > maxNeeds + 0.0001) {
+      R_N = maxNeeds;
+    }
+    // Recalculate wants after adjusting needs
+    R_W = Math.max(0, round2(1.0 - R_N - lockedSavings));
   }
+  
+  // Restore locked savings (critical - must never change)
+  R_S = lockedSavings;
+  
+  // Final sum check - adjust wants only (never touch savings or needs)
+  const finalSum = R_N + R_W + R_S;
+  if (Math.abs(finalSum - 1.0) > 0.001) {
+    const finalDiff = round2(1.0 - finalSum);
+    // Only adjust wants - never savings (locked) or needs (should stay fixed)
+    R_W = Math.max(0, round2(R_W + finalDiff));
+    // If wants can't absorb all the difference, we have an edge case
+    // In this case, adjust needs slightly to maintain sum = 1.0
+    if (Math.abs(R_N + R_W + R_S - 1.0) > 0.001) {
+      R_N = Math.max(0, round2(1.0 - R_W - R_S));
+      R_W = Math.max(0, round2(1.0 - R_N - R_S));
+    }
+  }
+  
+  // CRITICAL: Ensure savings is still locked (should never change, but verify)
+  R_S = lockedSavings;
 
   // Build result
   const now: NWSState = {
@@ -234,15 +288,31 @@ export function computeIncomePlan(inputs: IncomePlanInputs): IncomePlanResult {
   };
 
   const next: NWSState = {
-    needsPct: R_N,
-    wantsPct: R_W,
-    savingsPct: R_S,
+    needsPct: round2(R_N),
+    wantsPct: round2(R_W),
+    savingsPct: round2(R_S), // This is lockedSavings, guaranteed to be <= actualSavingsPct + shiftLimitPct
     income$,
   };
+  
+  // Final verification (should always pass, but verify for safety)
+  const finalShift = next.savingsPct - actualSavingsPct;
+  if (finalShift > shiftLimitPct + 0.0001) {
+    // This should NEVER happen, but if it does, force exact cap
+    console.error('[computeIncomePlan] CRITICAL: Shift limit violated in final result - forcing cap', {
+      resultSavings: next.savingsPct * 100,
+      actualSavings: actualSavingsPct * 100,
+      shift: finalShift * 100,
+      limit: shiftLimitPct * 100,
+    });
+    // Return with forced cap
+    next.savingsPct = round2(actualSavingsPct + shiftLimitPct);
+    next.wantsPct = Math.max(0, round2(1.0 - next.needsPct - next.savingsPct));
+    next.needsPct = Math.max(0, round2(1.0 - next.wantsPct - next.savingsPct));
+  }
 
   // Add summary note
   const savingsDelta = round2((R_S - actualSavingsPct) * 100);
-  const savingsDelta$ = round2(savings$ - (income$ * actualSavingsPct));
+  const savingsDelta$ = round2((R_S - actualSavingsPct) * income$);
   
   if (Math.abs(savingsDelta) > 0.1) {
     notes.push(
@@ -257,4 +327,3 @@ export function computeIncomePlan(inputs: IncomePlanInputs): IncomePlanResult {
     notes,
   };
 }
-

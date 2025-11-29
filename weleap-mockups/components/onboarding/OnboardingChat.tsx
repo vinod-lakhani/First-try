@@ -15,6 +15,7 @@ import { sendChatMessage } from '@/lib/chat/chatService';
 import { useOnboardingStore } from '@/lib/onboarding/store';
 import { usePlanData } from '@/lib/onboarding/usePlanData';
 import { getPaychecksPerMonth } from '@/lib/onboarding/usePlanData';
+import ReactMarkdown from 'react-markdown';
 
 interface Message {
   id: string;
@@ -309,7 +310,31 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
                       : 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100'
                   }`}
                 >
-                  <p className="text-sm">{message.text}</p>
+                  {message.isUser ? (
+                    <p className="text-sm whitespace-pre-wrap">{message.text}</p>
+                  ) : (
+                    <div className="text-sm markdown-content">
+                      <ReactMarkdown
+                        components={{
+                          h2: ({node, ...props}) => <h2 className="text-base font-semibold mt-3 mb-2 first:mt-0 text-slate-900 dark:text-slate-100" {...props} />,
+                          h3: ({node, ...props}) => <h3 className="text-sm font-semibold mt-2 mb-1.5 first:mt-0 text-slate-900 dark:text-slate-100" {...props} />,
+                          p: ({node, ...props}) => <p className="mb-1.5 last:mb-0 text-slate-900 dark:text-slate-100 leading-relaxed" {...props} />,
+                          ul: ({node, ...props}) => <ul className="list-disc list-inside my-1.5 space-y-0.5 ml-2 text-slate-900 dark:text-slate-100" {...props} />,
+                          ol: ({node, ...props}) => <ol className="list-decimal list-inside my-1.5 space-y-0.5 ml-2 text-slate-900 dark:text-slate-100" {...props} />,
+                          li: ({node, ...props}) => <li className="ml-2 text-slate-900 dark:text-slate-100" {...props} />,
+                          strong: ({node, ...props}) => <strong className="font-semibold text-slate-900 dark:text-slate-100" {...props} />,
+                          table: ({node, ...props}) => <div className="overflow-x-auto my-2"><table className="min-w-full border-collapse text-xs" {...props} /></div>,
+                          thead: ({node, ...props}) => <thead className="border-b border-slate-300 dark:border-slate-600" {...props} />,
+                          tbody: ({node, ...props}) => <tbody {...props} />,
+                          tr: ({node, ...props}) => <tr className="border-b border-slate-300 dark:border-slate-600" {...props} />,
+                          th: ({node, ...props}) => <th className="px-2 py-1 text-left font-semibold text-slate-900 dark:text-slate-100" {...props} />,
+                          td: ({node, ...props}) => <td className="px-2 py-1 text-slate-900 dark:text-slate-100" {...props} />,
+                        }}
+                      >
+                        {message.text}
+                      </ReactMarkdown>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

@@ -7,7 +7,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { X, ArrowRight, Search, Zap, Sparkles, Send } from 'lucide-react';
@@ -15,6 +15,8 @@ import { sendChatMessage } from '@/lib/chat/chatService';
 import { useOnboardingStore } from '@/lib/onboarding/store';
 import { usePlanData } from '@/lib/onboarding/usePlanData';
 import { getPaychecksPerMonth } from '@/lib/onboarding/usePlanData';
+import { computeIncomePlan } from '@/lib/income/computePlan';
+import ReactMarkdown from 'react-markdown';
 
 interface Message {
   id: string;
@@ -82,8 +84,67 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+  const pathname = usePathname();
   const store = useOnboardingStore();
   const planData = usePlanData();
+  
+  // Determine context based on current pathname
+  const getContext = (): string => {
+    if (pathname?.includes('/tools/savings-helper')) {
+      return 'savings-helper';
+    }
+    if (pathname?.includes('/tools/savings-allocator')) {
+      return 'savings-allocator';
+    }
+    if (pathname?.includes('/tools/savings-optimizer')) {
+      return 'savings-optimizer';
+    }
+    // Default context
+    return 'financial-sidekick';
+  };
+  
+  // Track last context to detect when it changes
+  const lastContextRef = useRef<string>(getContext());
+  
+  // Reset messages when context changes (when navigating between pages)
+  useEffect(() => {
+    const currentContext = getContext();
+    // If context changed, reset messages
+    if (currentContext !== lastContextRef.current) {
+      lastContextRef.current = currentContext;
+      // Reset to initial message when context changes
+      setMessages([
+        {
+          id: '1',
+          text: "Hi! I'm Ribbit, your financial sidekick. I can help you with questions about your financial plan, savings, budgeting, and more. What would you like to know?",
+          isUser: false,
+          timestamp: new Date(),
+        },
+      ]);
+      // Also reset showChat to show recommendations first
+      setShowChat(false);
+    }
+  }, [pathname]);
+  
+  // Also reset messages when chat is opened (in case context changed while chat was closed)
+  useEffect(() => {
+    if (isOpen) {
+      const currentContext = getContext();
+      // If context changed since last interaction, reset messages
+      if (currentContext !== lastContextRef.current) {
+        lastContextRef.current = currentContext;
+        setMessages([
+          {
+            id: '1',
+            text: "Hi! I'm Ribbit, your financial sidekick. I can help you with questions about your financial plan, savings, budgeting, and more. What would you like to know?",
+            isUser: false,
+            timestamp: new Date(),
+          },
+        ]);
+        setShowChat(false);
+      }
+    }
+  }, [isOpen, pathname]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -267,6 +328,20 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
       // Get net worth data if available
       let netWorthInfo = undefined;
       if (planData?.netWorthChartData) {
+        // Debug: Check what's actually in netWorthChartData
+        console.log('[FinancialSidekick] Raw netWorthChartData:', {
+          hasCash: !!planData.netWorthChartData.cash,
+          cashType: typeof planData.netWorthChartData.cash,
+          cashIsArray: Array.isArray(planData.netWorthChartData.cash),
+          cashLength: planData.netWorthChartData.cash?.length ?? 'undefined',
+          hasBrokerage: !!planData.netWorthChartData.brokerage,
+          brokerageLength: planData.netWorthChartData.brokerage?.length ?? 'undefined',
+          hasRetirement: !!planData.netWorthChartData.retirement,
+          retirementLength: planData.netWorthChartData.retirement?.length ?? 'undefined',
+          assetsLength: planData.netWorthChartData.assets?.length ?? 'undefined',
+          allKeys: Object.keys(planData.netWorthChartData),
+        });
+        
         const netWorth = planData.netWorthChartData.netWorth || [];
         const assets = planData.netWorthChartData.assets || [];
         const liabilities = planData.netWorthChartData.liabilities || [];
@@ -277,18 +352,168 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
         const currentAssets = assets.length > 0 ? assets[0] : 0;
         const currentLiabilities = liabilities.length > 0 ? liabilities[0] : 0;
         
-        // Net worth projections (milestones)
+        // Net worth projections (milestones from planData)
         const projections = planData.netWorthProjection || [];
+        
+        // Get asset breakdowns from chart data
+        // CRITICAL FIX: ALWAYS create arrays with correct length matching assets
+        // The simulation arrays may be missing/empty, so we MUST create them here
+        const expectedLength = assets.length;
+        
+        // Helper to ensure array exists with correct length
+        // ALWAYS create arrays if assets exist, regardless of what we get from planData
+        const ensureArray = (arr: any, name: string): number[] => {
+          if (expectedLength > 0) {
+            // Always check - if array doesn't exist, is empty, or wrong length, create new one
+            const isValid = arr && Array.isArray(arr) && arr.length === expectedLength;
+            if (!isValid) {
+              console.warn(`[FinancialSidekick] ⚠️ ${name} array invalid (got ${arr?.length ?? 'missing'}, need ${expectedLength}) - CREATING placeholder array`);
+              return new Array(expectedLength).fill(0);
+            }
+            return [...arr]; // Copy to avoid mutation
+          }
+          return [];
+        };
+        
+        // ALWAYS ensure arrays exist - don't trust planData
+        const rawCash = planData.netWorthChartData.cash;
+        const rawBrokerage = planData.netWorthChartData.brokerage;
+        const rawRetirement = planData.netWorthChartData.retirement;
+        
+        console.log('[FinancialSidekick] BEFORE ensureArray - raw arrays:', {
+          cashLength: rawCash?.length ?? 'missing',
+          brokerageLength: rawBrokerage?.length ?? 'missing',
+          retirementLength: rawRetirement?.length ?? 'missing',
+          expectedLength,
+        });
+        
+        let cash = ensureArray(rawCash, 'cash');
+        let brokerage = ensureArray(rawBrokerage, 'brokerage');
+        let retirement = ensureArray(rawRetirement, 'retirement');
+        const hsa = planData.netWorthChartData.hsa;
+        
+        // CRITICAL: Log AFTER creating arrays to verify they exist
+        console.log('[FinancialSidekick] ✅ Asset array lengths AFTER ensureArray:', {
+          cash: cash.length,
+          brokerage: brokerage.length,
+          retirement: retirement.length,
+          assets: assets.length,
+          netWorth: netWorth.length,
+          expectedLength,
+          cashIsArray: Array.isArray(cash),
+          brokerageIsArray: Array.isArray(brokerage),
+          retirementIsArray: Array.isArray(retirement),
+        });
+        
+        // Check if arrays have data at index 119 (10 years)
+        if (netWorth.length > 119) {
+          console.log('[FinancialSidekick] Values at index 119 (10 years):', {
+            cash: cash[119],
+            brokerage: brokerage[119],
+            retirement: retirement[119],
+            assets: assets[119],
+            netWorth: netWorth[119],
+          });
+        }
+        
+        // Helper to extract asset breakdown at a specific month
+        // Note: simulation arrays are 0-indexed where:
+        // - index 0 = today (months: 0)
+        // - index 5 = 6 months from now (months: 6)
+        // - index 11 = 12 months from now (months: 12)
+        // - index 23 = 24 months from now (months: 24)
+        // So: index = months (when months=0) or index = months - 1 (when months > 0)
+        const getAssetBreakdown = (months: number) => {
+          // Convert months to array index
+          // Note: simulation arrays are 0-indexed, month 0 = today, month 120 = 120 months (10 years)
+          // So for 120 months (10 years), index = 119
+          const monthIndex = months === 0 ? 0 : months - 1;
+          if (monthIndex < 0 || monthIndex >= netWorth.length) {
+            console.warn(`[FinancialSidekick] Invalid month index: ${monthIndex} for months: ${months}, netWorth.length: ${netWorth.length}`);
+            return undefined;
+          }
+          
+          const breakdown = {
+            cash: cash[monthIndex] || 0,
+            brokerage: brokerage[monthIndex] || 0,
+            retirement: retirement[monthIndex] || 0,
+            ...(hsa && hsa.length > monthIndex ? { hsa: hsa[monthIndex] } : {}),
+            totalAssets: assets[monthIndex] || 0,
+            liabilities: liabilities[monthIndex] || 0,
+            netWorth: netWorth[monthIndex] || 0,
+          };
+          
+          // Debug logging for 10-year breakdown
+          if (months === 120) {
+            console.log(`[FinancialSidekick] 10-year breakdown (month ${months}, index ${monthIndex}):`, breakdown);
+            console.log(`[FinancialSidekick] Array lengths - cash: ${cash.length}, brokerage: ${brokerage.length}, retirement: ${retirement.length}, assets: ${assets.length}`);
+            console.log(`[FinancialSidekick] Raw values at index ${monthIndex}:`, {
+              cash: cash[monthIndex],
+              brokerage: brokerage[monthIndex],
+              retirement: retirement[monthIndex],
+              assets: assets[monthIndex],
+            });
+          }
+          
+          return breakdown;
+        };
+        
+        // Extract additional milestone values from full chart data if available
+        // The chart data contains monthly values for up to 40 years (480 months)
+        const extendedProjections = projections.map(p => {
+          const breakdown = getAssetBreakdown(p.months);
+          return {
+            label: p.label,
+            months: p.months,
+            value: p.value,
+            ...(breakdown ? { assetBreakdown: breakdown } : {}),
+          };
+        });
+        
+        // Add 5-year projection if not already included and chart data has it
+        const has5Year = projections.some(p => p.months === 60);
+        if (!has5Year && netWorth.length > 59) {
+          const monthIndex = 59; // Month 60 (5 years) - index 59 (0-based)
+          const breakdown = getAssetBreakdown(60); // 60 months
+          extendedProjections.push({
+            label: '5 Years',
+            months: 60,
+            value: netWorth[monthIndex],
+            ...(breakdown ? { assetBreakdown: breakdown } : {}),
+          });
+        }
+        
+        // Add 10-year projection if not already included
+        const has10Year = projections.some(p => p.months === 120);
+        if (!has10Year && netWorth.length > 119) {
+          const monthIndex = 119; // Month 120 (10 years) - index 119
+          const breakdown = getAssetBreakdown(120); // 120 months
+          // Debug: Log the breakdown to see what's actually there
+          console.log('[FinancialSidekick] 10-year breakdown data:', breakdown);
+          console.log('[FinancialSidekick] Arrays at index 119:', {
+            cash: cash[119],
+            brokerage: brokerage[119],
+            retirement: retirement[119],
+            assets: assets[119],
+            netWorth: netWorth[119],
+          });
+          extendedProjections.push({
+            label: '10 Years',
+            months: 120,
+            value: netWorth[monthIndex],
+            ...(breakdown ? { assetBreakdown: breakdown } : {}),
+          });
+        }
 
         netWorthInfo = {
           current: currentNetWorth,
           currentAssets,
           currentLiabilities,
-          projections: projections.map(p => ({
-            label: p.label,
-            months: p.months,
-            value: p.value,
-          })),
+          // Include current asset breakdown
+          currentAssetBreakdown: getAssetBreakdown(0),
+          projections: extendedProjections,
+          // Also include full chart data length so chat knows how many months are available
+          chartDataMonths: netWorth.length,
         };
       }
 
@@ -347,10 +572,136 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
         };
       }
 
+      // Get current context based on pathname
+      const currentContext = getContext();
+      
+      // For savings-helper context, calculate ALL THREE bar graph values
+      let savingsHelperData = undefined;
+      if (currentContext === 'savings-helper' && planData) {
+        // 1. Calculate Past 3 Months Average (from actual expenses) - FIRST BAR
+        let actuals3mNeedsTotal = 0;
+        let actuals3mWantsTotal = 0;
+        
+        // Calculate from actual expenses (same logic as savings-helper page)
+        for (const expense of store.fixedExpenses) {
+          let monthlyAmount = expense.amount$;
+          if (expense.frequency === 'weekly') monthlyAmount = expense.amount$ * 4.33;
+          else if (expense.frequency === 'biweekly') monthlyAmount = expense.amount$ * 2.17;
+          else if (expense.frequency === 'semimonthly') monthlyAmount = expense.amount$ * 2;
+          else if (expense.frequency === 'yearly') monthlyAmount = expense.amount$ / 12;
+          
+          if (expense.category === 'needs' || !expense.category) {
+            actuals3mNeedsTotal += monthlyAmount;
+          } else if (expense.category === 'wants') {
+            actuals3mWantsTotal += monthlyAmount;
+          }
+        }
+        
+        // Add debt minimum payments to needs
+        const monthlyDebtMinPayments = store.debts.reduce((sum, d) => sum + (d.minPayment$ * paychecksPerMonth), 0);
+        actuals3mNeedsTotal += monthlyDebtMinPayments;
+        
+        const actuals3mNeedsPct = monthlyIncome > 0 ? Math.max(actuals3mNeedsTotal / monthlyIncome, 0) : 0;
+        const actuals3mWantsPct = monthlyIncome > 0 ? Math.max(actuals3mWantsTotal / monthlyIncome, 0) : 0;
+        const actuals3mSavingsPct = Math.max(0, 1.0 - actuals3mNeedsPct - actuals3mWantsPct);
+        
+        // 2. Calculate Current Plan (baseline plan) - SECOND BAR
+        const needsCategories = planData.paycheckCategories.filter(c => 
+          c.key === 'essentials' || c.key === 'debt_minimums'
+        );
+        const wantsCategories = planData.paycheckCategories.filter(c => 
+          c.key === 'fun_flexible'
+        );
+        const savingsCategories = planData.paycheckCategories.filter(c => 
+          c.key === 'emergency' || c.key === 'long_term_investing' || c.key === 'debt_extra'
+        );
+        const currentNeedsPerPaycheck = needsCategories.reduce((sum, c) => sum + c.amount, 0);
+        const currentWantsPerPaycheck = wantsCategories.reduce((sum, c) => sum + c.amount, 0);
+        const currentSavingsPerPaycheck = savingsCategories.reduce((sum, c) => sum + c.amount, 0);
+        const totalPerPaycheck = currentNeedsPerPaycheck + currentWantsPerPaycheck + currentSavingsPerPaycheck;
+        
+        if (totalPerPaycheck > 0 && monthlyIncome > 0) {
+          const currentPlan = {
+            needsPct: currentNeedsPerPaycheck / totalPerPaycheck,
+            wantsPct: currentWantsPerPaycheck / totalPerPaycheck,
+            savingsPct: currentSavingsPerPaycheck / totalPerPaycheck,
+          };
+          
+          // 3. Calculate Recommended Plan - THIRD BAR
+          let shiftLimitPct = store.riskConstraints?.shiftLimitPct || 0.04;
+          const normalizedShiftLimit = shiftLimitPct > 1 ? shiftLimitPct / 100 : shiftLimitPct;
+          
+          const standardTargets = {
+            needsPct: 0.5,
+            wantsPct: 0.3,
+            savingsPct: 0.2,
+          };
+          
+          try {
+            const result = computeIncomePlan({
+              income$: monthlyIncome,
+              actualNeedsPct: currentPlan.needsPct,
+              actualWantsPct: currentPlan.wantsPct,
+              actualSavingsPct: currentPlan.savingsPct,
+              targetNeedsPct: standardTargets.needsPct,
+              targetWantsPct: standardTargets.wantsPct,
+              targetSavingsPct: standardTargets.savingsPct,
+              shiftLimitPct: normalizedShiftLimit,
+            });
+            
+            // Cap at shift limit if needed
+            const actualShift = result.next.savingsPct - currentPlan.savingsPct;
+            let recommended = result.next;
+            if (actualShift > normalizedShiftLimit + 0.001) {
+              const cappedSavingsPct = currentPlan.savingsPct + normalizedShiftLimit;
+              const cappedWantsPct = Math.max(0, currentPlan.wantsPct - normalizedShiftLimit);
+              recommended = {
+                needsPct: currentPlan.needsPct,
+                wantsPct: cappedWantsPct,
+                savingsPct: cappedSavingsPct,
+              };
+            }
+            
+            // Pass all three bar graph values clearly
+            savingsHelperData = {
+              // Bar 1: Past 3 Months Average (from actual expenses)
+              past3MonthsAverage: {
+                needsPct: actuals3mNeedsPct,
+                wantsPct: actuals3mWantsPct,
+                savingsPct: actuals3mSavingsPct,
+                needsAmount: actuals3mNeedsPct * monthlyIncome,
+                wantsAmount: actuals3mWantsPct * monthlyIncome,
+                savingsAmount: actuals3mSavingsPct * monthlyIncome,
+              },
+              // Bar 2: Current Plan (baseline plan)
+              currentPlan: {
+                needsPct: currentPlan.needsPct,
+                wantsPct: currentPlan.wantsPct,
+                savingsPct: currentPlan.savingsPct,
+                needsAmount: currentPlan.needsPct * monthlyIncome,
+                wantsAmount: currentPlan.wantsPct * monthlyIncome,
+                savingsAmount: currentPlan.savingsPct * monthlyIncome,
+              },
+              // Bar 3: Recommended Plan (optimized)
+              recommendedPlan: {
+                needsPct: recommended.needsPct,
+                wantsPct: recommended.wantsPct,
+                savingsPct: recommended.savingsPct,
+                needsAmount: recommended.needsPct * monthlyIncome,
+                wantsAmount: recommended.wantsPct * monthlyIncome,
+                savingsAmount: recommended.savingsPct * monthlyIncome,
+              },
+            };
+          } catch (error) {
+            console.error('[FinancialSidekick] Error calculating savings helper data:', error);
+          }
+        }
+      }
+      
       // Call ChatGPT API with comprehensive data
       const aiResponseText = await sendChatMessage({
         messages: [...messages, userMessage],
-        context: 'financial-sidekick',
+        context: currentContext,
         userPlanData: {
           monthlyIncome,
           monthlyExpenses,
@@ -365,7 +716,13 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
           assetsBreakdown,
           goalsBreakdown,
           actualSpending,
-          planData: planDataContext,
+          planData: savingsHelperData?.recommendedPlan ? {
+            planNeeds: savingsHelperData.recommendedPlan.needsAmount,
+            planWants: savingsHelperData.recommendedPlan.wantsAmount,
+            planSavings: savingsHelperData.recommendedPlan.savingsAmount,
+          } : (planDataContext),
+          // Pass all three bar graphs for savings-helper context
+          savingsHelperBarGraphs: savingsHelperData,
           emergencyFund: emergencyFundInfo,
           netWorth: netWorthInfo,
           savingsAllocation,
@@ -540,7 +897,31 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
                         : 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100'
                     }`}
                   >
-                    <p className="text-sm whitespace-pre-wrap">{message.text}</p>
+                    {message.isUser ? (
+                      <p className="text-sm whitespace-pre-wrap">{message.text}</p>
+                    ) : (
+                      <div className="text-sm markdown-content">
+                        <ReactMarkdown
+                          components={{
+                            h2: ({node, ...props}) => <h2 className="text-base font-semibold mt-3 mb-2 first:mt-0 text-slate-900 dark:text-slate-100" {...props} />,
+                            h3: ({node, ...props}) => <h3 className="text-sm font-semibold mt-2 mb-1.5 first:mt-0 text-slate-900 dark:text-slate-100" {...props} />,
+                            p: ({node, ...props}) => <p className="mb-1.5 last:mb-0 text-slate-900 dark:text-slate-100 leading-relaxed" {...props} />,
+                            ul: ({node, ...props}) => <ul className="list-disc list-inside my-1.5 space-y-0.5 ml-2 text-slate-900 dark:text-slate-100" {...props} />,
+                            ol: ({node, ...props}) => <ol className="list-decimal list-inside my-1.5 space-y-0.5 ml-2 text-slate-900 dark:text-slate-100" {...props} />,
+                            li: ({node, ...props}) => <li className="ml-2 text-slate-900 dark:text-slate-100" {...props} />,
+                            strong: ({node, ...props}) => <strong className="font-semibold text-slate-900 dark:text-slate-100" {...props} />,
+                            table: ({node, ...props}) => <div className="overflow-x-auto my-2"><table className="min-w-full border-collapse text-xs" {...props} /></div>,
+                            thead: ({node, ...props}) => <thead className="border-b border-slate-300 dark:border-slate-600" {...props} />,
+                            tbody: ({node, ...props}) => <tbody {...props} />,
+                            tr: ({node, ...props}) => <tr className="border-b border-slate-300 dark:border-slate-600" {...props} />,
+                            th: ({node, ...props}) => <th className="px-2 py-1 text-left font-semibold text-slate-900 dark:text-slate-100" {...props} />,
+                            td: ({node, ...props}) => <td className="px-2 py-1 text-slate-900 dark:text-slate-100" {...props} />,
+                          }}
+                        >
+                          {message.text}
+                        </ReactMarkdown>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

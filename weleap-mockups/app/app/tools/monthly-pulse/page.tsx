@@ -82,11 +82,14 @@ export default function MonthlyPulsePage() {
     }
     
     // Add debt minimums (show each debt separately)
+    // Debt minPayment$ is stored as per-paycheck, convert to monthly
     if (state.debts.length > 0) {
       state.debts.forEach(debt => {
+        // Convert per-paycheck debt payment to monthly
+        const monthlyDebtPayment = debt.minPayment$ * paychecksPerMonth;
         needsList.push({
           label: debt.name,
-          amount: debt.minPayment$,
+          amount: monthlyDebtPayment,
         });
       });
     } else {

@@ -407,18 +407,23 @@ export default function IncomeAllocatorPage() {
   };
 
   const handleConfirmApply = () => {
-    const newTargets = {
+    const savedDistribution = {
       needsPct: targetNeedsPct / 100,
       wantsPct: targetWantsPct / 100,
       savingsPct: targetSavingsPct / 100,
     };
 
-    // Update riskConstraints with new targets
-    // Also update actuals3m to match new targets so the plan immediately reflects the new allocation
+    // Update riskConstraints with new distribution
+    // Set both targets AND actuals3m to the same values so the engine treats it as final (no shifting)
+    // Set bypassWantsFloor=true to preserve exact values without normalization
     updateRiskConstraints({
-      targets: newTargets,
-      actuals3m: newTargets, // Set actuals to match targets so plan immediately shows new allocation
+      targets: savedDistribution,
+      actuals3m: savedDistribution, // Set to match targets so engine returns as-is
+      bypassWantsFloor: true, // Preserve exact values
     });
+    
+    // Clear initial paycheck plan to force recalculation
+    state.setInitialPaycheckPlan(undefined as any);
     
     // Close dialog and navigate
     setShowConfirmDialog(false);

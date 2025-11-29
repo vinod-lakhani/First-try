@@ -234,24 +234,31 @@ function calculateActualsFromExpenses(
     }
   }
 
-  // Add debt minimum payments to needs
-  if (debts && debts.length > 0) {
-    const totalDebtMinPayments$ = debts.reduce((sum, d) => sum + d.minPayment$, 0);
-    needsTotal += totalDebtMinPayments$;
-  }
-
   // Determine if incomePeriod$ is monthly or per-paycheck
   // If payFrequency is 'monthly', incomePeriod$ is monthly; otherwise it's per-paycheck
   const isIncomeMonthly = incomePayFrequency === 'monthly';
   
   // Convert income to monthly for comparison
   let monthlyIncome: number;
+  let paychecksPerMonth: number;
   if (isIncomeMonthly) {
     monthlyIncome = incomePeriod$;
+    paychecksPerMonth = 1; // Not used, but initialize for clarity
   } else {
     // incomePeriod$ is per-paycheck, convert to monthly
-    const paychecksPerMonth = getPaychecksPerMonth(incomePayFrequency || 'biweekly');
+    paychecksPerMonth = getPaychecksPerMonth(incomePayFrequency || 'biweekly');
     monthlyIncome = incomePeriod$ * paychecksPerMonth;
+  }
+
+  // Add debt minimum payments to needs
+  // Debt payments are stored as per-paycheck amounts, convert to monthly
+  if (debts && debts.length > 0) {
+    const totalDebtMinPayments$ = debts.reduce((sum, d) => sum + d.minPayment$, 0);
+    // Convert per-paycheck debt payments to monthly
+    const monthlyDebtMinPayments = isIncomeMonthly 
+      ? totalDebtMinPayments$  // If income is monthly, assume debt payments are also monthly
+      : totalDebtMinPayments$ * paychecksPerMonth;  // Convert per-paycheck to monthly
+    needsTotal += monthlyDebtMinPayments;
   }
   
   // Validate monthly income
@@ -691,6 +698,11 @@ export interface FinalPlanData {
     netWorth: number[];
     assets: number[];
     liabilities: number[];
+    // Asset breakdowns for detailed analysis
+    cash?: number[]; // Emergency fund / cash savings
+    brokerage?: number[]; // Taxable brokerage account
+    retirement?: number[]; // 401k, IRA, etc.
+    hsa?: number[]; // Health Savings Account (if applicable)
   };
 
   // SECTION 6 – Key Protection Settings
@@ -922,14 +934,15 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
     .filter(d => d.isHighApr || d.aprPct > 10)
     .map(d => ({ balance$: d.balance$, aprPct: d.aprPct }));
 
-  // Calculate total debt minimum payments before monthly conversions
+  // Calculate total debt minimum payments (per-paycheck)
   const totalDebtMinPayments$ = debts.reduce((sum, d) => sum + d.minPayment$, 0);
 
   // Convert to monthly for savings allocation (everything is monthly now)
   const paychecksPerMonth = getPaychecksPerMonth(income.payFrequency || 'biweekly');
   const monthlySavingsBudget = incomeAlloc.savings$ * paychecksPerMonth;
   const monthlyNeedsTotal = incomeAlloc.needs$ * paychecksPerMonth;
-  const monthlyDebtMinimums = totalDebtMinPayments$;
+  // Convert debt minimum payments from per-paycheck to monthly
+  const monthlyDebtMinimums = totalDebtMinPayments$ * paychecksPerMonth;
   const monthlyEssentials = Math.max(0, monthlyNeedsTotal - monthlyDebtMinimums);
 
   // Use custom savings allocation if provided, otherwise calculate from engine
@@ -1180,6 +1193,17 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
 
   const simulation = simulateScenario(scenarioInput);
 
+  // Debug: Log simulation arrays to check if they're populated
+  console.log('[buildFinalPlanData] Simulation arrays after simulateScenario:', {
+    cashLength: simulation.cash?.length || 0,
+    brokerageLength: simulation.brokerage?.length || 0,
+    retirementLength: simulation.retirement?.length || 0,
+    assetsLength: simulation.assets?.length || 0,
+    cashFirst3: simulation.cash?.slice(0, 3),
+    brokerageFirst3: simulation.brokerage?.slice(0, 3),
+    retirementFirst3: simulation.retirement?.slice(0, 3),
+  });
+
   // Net worth projection
   // Note: simulation.netWorth is 0-indexed, so index 0 = month 1, index 23 = month 24
   const currentNetWorth = simulation.netWorth[0] || 0;
@@ -1201,6 +1225,77 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
   const chartNetWorth = simulation.netWorth;
   const chartAssets = simulation.assets;
   const chartLiabilities = simulation.liabilities;
+  
+  // Include asset breakdowns for detailed analysis
+  // CRITICAL FIX: Always ensure arrays exist with correct length, even if simulation didn't populate them
+  // The simulation should populate them, but if they're missing/empty, create placeholder arrays
+  const expectedLength = chartAssets.length;
+  
+  // Helper to safely extract array or create placeholder
+  const getArrayOrPlaceholder = (arr: number[] | undefined, name: string): number[] => {
+    if (arr && Array.isArray(arr) && arr.length === expectedLength && expectedLength > 0) {
+      return [...arr]; // Copy the array
+    }
+    // Array is missing or wrong length - create placeholder of zeros
+    if (expectedLength > 0) {
+      console.warn(`[buildFinalPlanData] ${name} array is missing or wrong length (expected ${expectedLength}, got ${arr?.length ?? 0}). Creating placeholder.`);
+      return new Array(expectedLength).fill(0);
+    }
+    return [];
+  };
+  
+  const chartCash = getArrayOrPlaceholder(simulation.cash, 'cash');
+  const chartBrokerage = getArrayOrPlaceholder(simulation.brokerage, 'brokerage');
+  const chartRetirement = getArrayOrPlaceholder(simulation.retirement, 'retirement');
+  const chartHSA = (simulation.hsa && Array.isArray(simulation.hsa) && simulation.hsa.length === expectedLength) 
+    ? [...simulation.hsa] 
+    : undefined;
+  
+  // CRITICAL DEBUG: If arrays are empty but assets works, something is wrong
+  if (chartAssets.length > 0 && (chartCash.length === 0 || chartBrokerage.length === 0 || chartRetirement.length === 0)) {
+    console.error('❌❌❌ CRITICAL ERROR: Assets array has data but breakdown arrays are empty! ❌❌❌', {
+      assetsLength: chartAssets.length,
+      cashLength: chartCash.length,
+      brokerageLength: chartBrokerage.length,
+      retirementLength: chartRetirement.length,
+      simulationCashExists: !!simulation.cash,
+      simulationCashType: typeof simulation.cash,
+      simulationCashIsArray: Array.isArray(simulation.cash),
+      simulationCashLength: simulation.cash?.length ?? 0,
+      simulationBrokerageExists: !!simulation.brokerage,
+      simulationBrokerageLength: simulation.brokerage?.length ?? 0,
+      simulationRetirementExists: !!simulation.retirement,
+      simulationRetirementLength: simulation.retirement?.length ?? 0,
+      simulationKeys: Object.keys(simulation),
+      fullSimulation: simulation,
+    });
+  }
+  
+  // Debug: Check what we're actually getting from simulation
+  console.log('[buildFinalPlanData] Simulation object check:', {
+    hasCash: !!simulation.cash,
+    cashType: typeof simulation.cash,
+    cashIsArray: Array.isArray(simulation.cash),
+    cashLength: simulation.cash?.length ?? 'undefined',
+    cashFirstValue: simulation.cash?.[0],
+    hasBrokerage: !!simulation.brokerage,
+    brokerageLength: simulation.brokerage?.length ?? 'undefined',
+    brokerageFirstValue: simulation.brokerage?.[0],
+    hasRetirement: !!simulation.retirement,
+    retirementLength: simulation.retirement?.length ?? 'undefined',
+    retirementFirstValue: simulation.retirement?.[0],
+    assetsLength: simulation.assets?.length ?? 'undefined',
+    assetsFirstValue: simulation.assets?.[0],
+    simulationKeys: Object.keys(simulation),
+  });
+  
+  // Debug: Log after extraction
+  console.log('[buildFinalPlanData] Chart arrays after extraction:', {
+    chartCashLength: chartCash.length,
+    chartBrokerageLength: chartBrokerage.length,
+    chartRetirementLength: chartRetirement.length,
+    chartAssetsLength: chartAssets.length,
+  });
 
   // Debt payoff dates (from simulation - individual debt tracking)
   // The simulator tracks when each debt is paid off by name
@@ -1272,6 +1367,13 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
       netWorth: chartNetWorth,
       assets: chartAssets,
       liabilities: chartLiabilities,
+      // Asset breakdowns for detailed analysis
+      // Always include arrays with the same length as assets (even if filled with zeros)
+      // This ensures the structure exists for the chat to use
+      cash: chartCash,
+      brokerage: chartBrokerage,
+      retirement: chartRetirement,
+      ...(chartHSA && chartHSA.length > 0 ? { hsa: chartHSA } : {}),
     },
     protection: {
       minCheckingBuffer: riskConstraints?.minCheckingBuffer$,

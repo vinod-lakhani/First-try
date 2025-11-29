@@ -394,6 +394,38 @@ export function simulateScenario(input: ScenarioInput): ScenarioSeries {
   // Compute KPIs
   computeKPIs(series, input, efTarget$);
   
+  // Debug: Log array lengths before returning - CRITICAL DEBUG
+  const debugInfo = {
+    cash: series.cash.length,
+    brokerage: series.brokerage.length,
+    retirement: series.retirement.length,
+    assets: series.assets.length,
+    netWorth: series.netWorth.length,
+    cashFirst3: series.cash.slice(0, 3),
+    cashLast3: series.cash.slice(-3),
+    brokerageFirst3: series.brokerage.slice(0, 3),
+    brokerageLast3: series.brokerage.slice(-3),
+    retirementFirst3: series.retirement.slice(0, 3),
+    retirementLast3: series.retirement.slice(-3),
+    cashAtIndex119: series.cash[119],
+    brokerageAtIndex119: series.brokerage[119],
+    retirementAtIndex119: series.retirement[119],
+  };
+  
+  console.log('🔍 [simulateScenario] Returning series with array lengths:', debugInfo);
+  
+  // CRITICAL: If arrays are empty, throw an error
+  if (series.assets.length > 0 && (series.cash.length === 0 || series.brokerage.length === 0 || series.retirement.length === 0)) {
+    console.error('❌❌❌ [simulateScenario] FATAL: Assets has data but breakdown arrays are empty!', debugInfo);
+    console.error('❌❌❌ Full series object:', {
+      hasCash: !!series.cash,
+      hasBrokerage: !!series.brokerage,
+      hasRetirement: !!series.retirement,
+      cashType: typeof series.cash,
+      seriesKeys: Object.keys(series),
+    });
+  }
+  
   return series;
 }
 
