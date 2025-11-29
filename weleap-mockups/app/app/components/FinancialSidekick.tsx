@@ -476,7 +476,7 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
           const monthIndex = 59; // Month 60 (5 years) - index 59 (0-based)
           const breakdown = getAssetBreakdown(60); // 60 months
           extendedProjections.push({
-            label: '5 Years',
+            label: '5 Years' as const,
             months: 60,
             value: netWorth[monthIndex],
             ...(breakdown ? { assetBreakdown: breakdown } : {}),
@@ -498,7 +498,7 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
             netWorth: netWorth[119],
           });
           extendedProjections.push({
-            label: '10 Years',
+            label: '10 Years' as const,
             months: 120,
             value: netWorth[monthIndex],
             ...(breakdown ? { assetBreakdown: breakdown } : {}),
@@ -659,6 +659,7 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
                 needsPct: currentPlan.needsPct,
                 wantsPct: cappedWantsPct,
                 savingsPct: cappedSavingsPct,
+                income$: monthlyIncome,
               };
             }
             

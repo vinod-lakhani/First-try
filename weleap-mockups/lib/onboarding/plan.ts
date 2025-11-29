@@ -687,7 +687,7 @@ export interface FinalPlanData {
 
   // SECTION 5 – Net Worth Projection
   netWorthProjection: Array<{
-    label: 'Today' | '6 Months' | '12 Months' | '24 Months';
+    label: 'Today' | '6 Months' | '12 Months' | '24 Months' | '5 Years' | '10 Years';
     months: number;
     value: number;
   }>;
