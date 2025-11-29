@@ -80,6 +80,38 @@ vercel login
 vercel logs [deployment-url] --follow
 ```
 
+### 3. Extracting Questions and Responses to a File
+
+**Use the extraction script** to consolidate all questions and responses into a single file:
+
+```bash
+# Export to CSV (opens in Excel/Google Sheets)
+vercel logs [deployment-url] | node scripts/extract-questions.js --format csv --output questions.csv
+
+# Export to JSON
+vercel logs [deployment-url] | node scripts/extract-questions.js --format json --output questions.json
+
+# Export to human-readable text
+vercel logs [deployment-url] | node scripts/extract-questions.js --format txt --output questions.txt
+```
+
+**Or from a saved log file:**
+```bash
+# Save logs first
+vercel logs [deployment-url] > vercel-logs.txt
+
+# Then extract
+node scripts/extract-questions.js --input vercel-logs.txt --format csv --output questions.csv
+```
+
+**Filter by context:**
+```bash
+# Only extract questions from specific pages
+node scripts/extract-questions.js --input vercel-logs.txt --filter-context financial-sidekick --output sidekick-questions.csv
+```
+
+See `scripts/README-EXTRACT-QUESTIONS.md` for full documentation on the extraction script.
+
 ## Optional: External Logging Services
 
 For longer-term storage and better analytics, you can integrate with external logging services:
