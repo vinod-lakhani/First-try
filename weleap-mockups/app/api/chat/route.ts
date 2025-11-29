@@ -188,6 +188,7 @@ export async function POST(request: NextRequest) {
         await logQuestion({
           timestamp: new Date().toISOString(),
           question,
+          response: userErrorMessage, // Include error message as response
           context,
           sessionId,
           responseStatus: 'error',
@@ -281,6 +282,7 @@ export async function POST(request: NextRequest) {
       await logQuestion({
         timestamp: new Date().toISOString(),
         question,
+        response: userMessage, // Include error message as response
         context,
         sessionId,
         responseStatus: 'error',
