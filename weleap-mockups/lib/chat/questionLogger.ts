@@ -56,17 +56,13 @@ export async function logQuestion(log: QuestionLog): Promise<void> {
     // Also log the full structured JSON for detailed analysis (includes full response)
     console.log('[LLM_QUESTION_LOG]', JSON.stringify(logEntry, null, 2));
 
-    // Optional: Send to external logging service
-    // You can uncomment and configure one of these:
-    
-    // Option 1: Send to an API endpoint that stores in database
-    // await sendToLoggingAPI(logEntry);
-    
-    // Option 2: Use Vercel KV (Redis) for temporary storage
-    // await storeInVercelKV(logEntry);
-    
-    // Option 3: Send to Axiom, Logtail, or similar service
-    // await sendToExternalLoggingService(logEntry);
+    // Send to external logging API if enabled (runs async, doesn't block)
+    if (process.env.ENABLE_QUESTION_STORAGE === 'true') {
+      sendToLoggingAPI(logEntry).catch(error => {
+        // Log error but don't fail the main request
+        console.error('[QuestionLogger] Failed to send to logging API:', error);
+      });
+    }
 
   } catch (error) {
     // Don't fail the request if logging fails
@@ -113,5 +109,35 @@ export function getIpAddress(request: Request): string {
  */
 export function getUserAgent(request: Request): string {
   return request.headers.get('user-agent') || 'unknown';
+}
+
+/**
+ * Send log entry to the logging API endpoint
+ * This API route will then store it in the configured storage (Supabase, Axiom, etc.)
+ */
+async function sendToLoggingAPI(logEntry: QuestionLog): Promise<void> {
+  try {
+    // Get the base URL (works for both server and client)
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 
+                    (typeof window !== 'undefined' ? window.location.origin : '');
+    
+    const apiUrl = `${baseUrl}/api/log-question`;
+    
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(logEntry),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Logging API error: ${response.status} - ${errorText}`);
+    }
+  } catch (error) {
+    // Re-throw so caller can handle it
+    throw error;
+  }
 }
 
