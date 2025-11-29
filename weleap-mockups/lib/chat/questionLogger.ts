@@ -37,7 +37,14 @@ export async function logQuestion(log: QuestionLog): Promise<void> {
       ...log,
     };
 
-    // Log to console - Vercel will capture this in their logs dashboard
+    // Log a simple, visible line with the question first (easy to read in logs)
+    const timestamp = new Date(log.timestamp).toLocaleString();
+    const contextLabel = log.context ? `[${log.context}]` : '';
+    const statusIcon = log.responseStatus === 'success' ? '✅' : '❌';
+    
+    console.log(`[LLM_QUESTION] ${statusIcon} ${contextLabel} Q: "${log.question}" | Status: ${log.responseStatus} | ${timestamp}`);
+    
+    // Also log the full structured JSON for detailed analysis
     console.log('[LLM_QUESTION_LOG]', JSON.stringify(logEntry, null, 2));
 
     // Optional: Send to external logging service

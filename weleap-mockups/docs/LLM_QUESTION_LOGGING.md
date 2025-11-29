@@ -22,9 +22,18 @@ All questions are logged to the console with the prefix `[LLM_QUESTION_LOG]`. Ve
 2. Click on the **Deployments** tab
 3. Click on a deployment
 4. Click on **Logs** tab
-5. Filter/search for `LLM_QUESTION_LOG` to see all questions
+5. Filter/search for `[LLM_QUESTION]` to see all questions
 
-**Example log entry:**
+**Log Format:**
+
+Each question is logged in two formats:
+
+1. **Simple, readable format** (easy to scan):
+```
+[LLM_QUESTION] ✅ [financial-sidekick] Q: "How much cash will I have in 5 years?" | Status: success | 11/28/2025, 3:30:45 PM
+```
+
+2. **Detailed JSON format** (for analysis):
 ```json
 [LLM_QUESTION_LOG] {
   "type": "LLM_QUESTION",
@@ -41,6 +50,13 @@ All questions are logged to the console with the prefix `[LLM_QUESTION_LOG]`. Ve
   }
 }
 ```
+
+**Reading the simple format:**
+- ✅ or ❌ = Success or error
+- `[context]` = Which page/screen (e.g., `[savings-helper]`, `[financial-sidekick]`)
+- `Q: "..."` = The actual question text
+- `Status: success/error` = Response status
+- Timestamp = When the question was asked
 
 ### 2. Exporting Logs from Vercel
 
