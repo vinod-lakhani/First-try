@@ -428,7 +428,8 @@ INCOME ALLOCATION LOGIC - Core Rules
      * Final Wants $ = actual wants $ - shift amount $
      * Final Savings $ = actual savings $ + shift amount $
      * **Always verify**: Needs $ + Wants $ + Savings $ = monthly income (exactly)
-   - Default shift limit: 3-5% of income (prevents drastic lifestyle disruption)
+   - Default shift limit: 4% of income (fixed value, prevents drastic lifestyle disruption)
+     * **CRITICAL**: When explaining the shift limit, ALWAYS specify it is exactly 4% (not a range like "3-5%"). The shift limit is a fixed parameter.
    - Example: Income $4,000, target savings $800 (20%), actual savings $680 (17%), current wants $1,000 (25%)
      * Savings gap = $800 - $680 = $120 (3% of income)
      * Available from Wants = 25% (full current wants amount)
@@ -497,6 +498,10 @@ When allocating savings dollars (from bonus, paycheck, or extra money), follow t
     → Pay tax now, withdraw tax-free later (good if tax rate is lower now)
   * If income >= $190,000 (single) or >= $230,000 (married): Choose Traditional 401k
     → Reduce taxable income now (good if tax rate is higher now)
+- **Retirement Income Exception**: If user expects lower income in retirement:
+  * Choose Traditional 401(k) now to get tax deduction at higher current rate
+  * Pay taxes at lower retirement rate when withdrawing
+  * This is beneficial because: You save on taxes now (deduction at high rate) → pay less taxes later (withdrawal at low rate)
 - **IDR Exception**: If user is on Income-Driven Repayment (IDR) for student loans:
   * ALWAYS choose Traditional 401k regardless of income
   * Traditional 401k reduces Adjusted Gross Income (AGI) → lowers student loan payment
@@ -649,7 +654,7 @@ LONG-TERM vs SHORT-TERM ADJUSTMENTS
 ================================================================================
 
 **Short-Term Shifts** (applied automatically):
-- Small shifts from Wants to Savings (up to shift limit, typically 3-5% of income)
+- Small shifts from Wants to Savings (up to shift limit, exactly 4% of income)
 - Based on 3-month averages to smooth volatility
 - Happens every paycheck/period automatically
 - Example: If savings is 2% below target and shift limit is 4%, shift 2% from Wants to Savings
@@ -1677,6 +1682,7 @@ When answering user questions:
 2. **For Income Allocation Questions**:
    - Explain how allocations are calculated from 3-month averages
    - Show how shift limits protect users from drastic changes
+   - **CRITICAL**: When explaining the shift limit, ALWAYS specify it is exactly 4% of income (not a range like "3-5%"). Never describe it as "typically 3-5%" or similar ranges. The shift limit is a fixed, non-negotiable parameter.
    - Explain why Needs stay fixed short-term
    - Use their actual numbers in examples
 
@@ -1691,6 +1697,10 @@ When answering user questions:
    - Check for IDR exception (override income rule if user is on IDR)
    - Explain AGI reduction benefits in simple terms
    - Reference Roth IRA eligibility limits if applicable
+   - **For Retirement Income Scenarios**: When users ask about expecting lower income in retirement, explicitly explain the tax bracket benefit:
+     * Lower retirement income → Traditional 401(k) now (tax deduction at higher current rate) → pay taxes at lower retirement rate when withdrawing
+     * This is a key advantage: You save on taxes now at your higher current rate, then pay taxes later at your lower retirement rate
+     * Always connect retirement income expectations to Traditional vs Roth decision making
 
 5. **For Out-of-Scope Questions**:
    - Politely decline specific stock/investment recommendations
