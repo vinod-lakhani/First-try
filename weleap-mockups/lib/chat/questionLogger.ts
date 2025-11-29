@@ -8,6 +8,7 @@
 export interface QuestionLog {
   timestamp: string;
   question: string;
+  response?: string; // The LLM's response text
   context?: string;
   userId?: string;
   sessionId?: string;
@@ -42,9 +43,17 @@ export async function logQuestion(log: QuestionLog): Promise<void> {
     const contextLabel = log.context ? `[${log.context}]` : '';
     const statusIcon = log.responseStatus === 'success' ? '✅' : '❌';
     
-    console.log(`[LLM_QUESTION] ${statusIcon} ${contextLabel} Q: "${log.question}" | Status: ${log.responseStatus} | ${timestamp}`);
+    // Truncate long responses for single-line log (keep full response in JSON)
+    const responsePreview = log.response 
+      ? (log.response.length > 150 ? log.response.substring(0, 150) + '...' : log.response)
+      : (log.errorMessage || 'No response');
     
-    // Also log the full structured JSON for detailed analysis
+    console.log(`[LLM_QUESTION] ${statusIcon} ${contextLabel} Q: "${log.question}" | Status: ${log.responseStatus} | ${timestamp}`);
+    if (log.response) {
+      console.log(`[LLM_RESPONSE] A: "${responsePreview}"`);
+    }
+    
+    // Also log the full structured JSON for detailed analysis (includes full response)
     console.log('[LLM_QUESTION_LOG]', JSON.stringify(logEntry, null, 2));
 
     // Optional: Send to external logging service

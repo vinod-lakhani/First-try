@@ -238,6 +238,7 @@ export async function POST(request: NextRequest) {
       await logQuestion({
         timestamp: new Date().toISOString(),
         question,
+        response: aiResponse,
         context,
         sessionId,
         responseStatus: 'success',

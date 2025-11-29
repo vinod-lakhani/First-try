@@ -26,19 +26,21 @@ All questions are logged to the console with the prefix `[LLM_QUESTION_LOG]`. Ve
 
 **Log Format:**
 
-Each question is logged in two formats:
+Each question and response is logged in multiple formats:
 
 1. **Simple, readable format** (easy to scan):
 ```
 [LLM_QUESTION] ✅ [financial-sidekick] Q: "How much cash will I have in 5 years?" | Status: success | 11/28/2025, 3:30:45 PM
+[LLM_RESPONSE] A: "Based on your current plan, your projected cash in 5 years is approximately $45,200..."
 ```
 
-2. **Detailed JSON format** (for analysis):
+2. **Detailed JSON format** (for analysis - includes full response):
 ```json
 [LLM_QUESTION_LOG] {
   "type": "LLM_QUESTION",
   "timestamp": "2025-11-28T20:30:45.123Z",
   "question": "How much cash will I have in 5 years?",
+  "response": "Based on your current plan, your projected cash in 5 years is approximately $45,200. This includes your current cash balance of $11,700, plus monthly contributions and compound growth at 4% annually...",
   "context": "financial-sidekick",
   "responseStatus": "success",
   "responseLength": 234,
@@ -55,6 +57,7 @@ Each question is logged in two formats:
 - ✅ or ❌ = Success or error
 - `[context]` = Which page/screen (e.g., `[savings-helper]`, `[financial-sidekick]`)
 - `Q: "..."` = The actual question text
+- `A: "..."` = The LLM's response (truncated if longer than 150 chars - full response in JSON)
 - `Status: success/error` = Response status
 - Timestamp = When the question was asked
 
