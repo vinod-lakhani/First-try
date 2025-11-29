@@ -6,12 +6,18 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { logQuestion, extractUserQuestion, getIpAddress, getUserAgent } from '@/lib/chat/questionLogger';
 
 // You'll need to install OpenAI SDK: npm install openai
 // import OpenAI from 'openai';
 
 export async function POST(request: NextRequest) {
   // Wrap everything in a try-catch to ensure we always return JSON, never HTML error pages
+  let question = '';
+  let context = '';
+  let sessionId: string | undefined;
+  let userPlanData: any;
+  
   try {
     let requestBody: any;
     try {
@@ -24,7 +30,15 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const { messages, context, userPlanData } = requestBody;
+    const { messages, context: requestContext, userPlanData: requestUserPlanData } = requestBody;
+    context = requestContext || 'financial-sidekick';
+    userPlanData = requestUserPlanData;
+    
+    // Extract the user's question for logging
+    question = extractUserQuestion(messages);
+    
+    // Get session ID from request (if available)
+    sessionId = request.headers.get('x-session-id') || undefined;
 
     // Validate request
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -169,6 +183,25 @@ export async function POST(request: NextRequest) {
         userErrorMessage = String(errorData.error);
       }
       
+      // Log error response
+      if (question) {
+        await logQuestion({
+          timestamp: new Date().toISOString(),
+          question,
+          context,
+          sessionId,
+          responseStatus: 'error',
+          errorMessage: userErrorMessage,
+          model: 'gpt-4o-mini',
+          metadata: {
+            userAgent: getUserAgent(request),
+            ipAddress: getIpAddress(request),
+            httpStatus: response.status,
+            hasUserPlanData: !!userPlanData,
+          },
+        });
+      }
+      
       return NextResponse.json(
         { error: userErrorMessage },
         { status: response.status }
@@ -200,6 +233,24 @@ export async function POST(request: NextRequest) {
 
     const aiResponse = data.choices?.[0]?.message?.content || 'I apologize, I could not generate a response.';
 
+    // Log successful question/response
+    if (question) {
+      await logQuestion({
+        timestamp: new Date().toISOString(),
+        question,
+        context,
+        sessionId,
+        responseStatus: 'success',
+        responseLength: aiResponse.length,
+        model: 'gpt-4o-mini',
+        metadata: {
+          userAgent: getUserAgent(request),
+          ipAddress: getIpAddress(request),
+          hasUserPlanData: !!userPlanData,
+        },
+      });
+    }
+
     return NextResponse.json({ response: aiResponse });
   } catch (error) {
     console.error('Chat API error:', error);
@@ -223,6 +274,23 @@ export async function POST(request: NextRequest) {
     const userMessage = errorMessage.includes('API key') 
       ? 'Chat service is not properly configured. Please contact support.'
       : 'An error occurred while processing your request. Please try again.';
+    
+    // Log error question
+    if (question) {
+      await logQuestion({
+        timestamp: new Date().toISOString(),
+        question,
+        context,
+        sessionId,
+        responseStatus: 'error',
+        errorMessage: userMessage,
+        metadata: {
+          userAgent: getUserAgent(request),
+          ipAddress: getIpAddress(request),
+          internalError: errorMessage,
+        },
+      });
+    }
     
     return NextResponse.json(
       { error: userMessage },
