@@ -1,0 +1,103 @@
+"TimeUTC","timestampInMs","requestPath","requestMethod","requestQueryString","responseStatusCode","requestId","requestUserAgent","level","environment","branch","vercelCache","type","function","host","deploymentDomain","deploymentId","durationMs","region","maxMemoryUsed","memorySize","message","projectId","traceId","sessionId","invocationId","instanceId","concurrency"
+"2025-11-30 16:04:42",1764518682806,"weleap-mvp.vercel.app/api/chat","POST","",-1,"g6dt4-1764518672180-37e71b5583c4","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:145.0) Gecko/20100101 Firefox/145.0","info","production","main","","lambda","/api/chat","weleap-mvp.vercel.app","weleap-mvp.vercel.app","dpl_C6aceMxUw79vF4gKn2x1k26pXf6s",-1,"iad1",-1,-1,"[LLM_QUESTION_LOG] {
+  ""type"": ""LLM_QUESTION"",
+  ""timestamp"": ""2025-11-30T16:04:42.804Z"",
+  ""question"": ""I just got a bonus-how can you allocate acorss my goals?"",
+  ""response"": ""To allocate your bonus effectively, we will follow the Savings Allocation Priority Stack based on your current financial situation.\n\n### Bonus Allocation Steps\nAssuming your bonus is **$1,000**:\n\n1. **Emergency Fund**:\n   - Current gap: **$1,953** (target) - **$0** (current) = **$1,953** gap.\n   - Cap at 40% of bonus: **$1,000 × 0.40 = $400**.\n   - Allocate: **$400** to Emergency Fund.\n\n2. **Remaining after Emergency Fund**:\n   - **$1,000 - $400 = $600**.\n\n3. **High-APR Debt Payoff**:\n   - Total high-APR debt balance: **$2,000** at 10% APR.\n   - Cap at 40% of remaining: **$600 × 0.40 = $240**.\n   - Allocate: **$240** to debt.\n\n4. **Remaining after Debt Payoff**:\n   - **$600 - $240 = $360**.\n\n5. **Retirement vs. Brokerage Split**:\n   - Given your high retirement focus, let’s allocate:\n     - Retirement: 70%\n     - Brokerage: 30%\n   - Allocate:\n     - Retirement: **$360 × 0.70 = $252**.\n     - Brokerage: **$360 × 0.30 = $108**.\n\n### Summary of Allocation\n- **Emergency Fund**: **$400**\n- **High-APR Debt Payoff**: **$240**\n- **Retirement**: **$252**\n- **Brokerage**: **$108**\n\nThis allocation prioritizes building your Emergency Fund and paying down high-interest debt while also contributing to your retirement and brokerage accounts. You can adjust these amounts based on your actual bonus and specific goals."",
+  ""context"": ""financial-sidekick"",
+  ""responseStatus"": ""success"",
+  ""responseLength"": 1323,
+  ""model"": ""gpt-4o-mini"",
+  ""metadata"": {
+    ""userAgent"": ""Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:145.0) Gecko/20100101 Firefox/145.0"",
+    ""ipAddress"": ""100.8.237.85"",
+    ""hasUserPlanData"": true
+  }
+}","prj_JM9kWY6G7zNmt9Tj6ayk2B4iv9Uj","","","01KBAR4DSZR9FJMX24J79EC08J","",-1
+"2025-11-30 16:04:42",1764518682806,"weleap-mvp.vercel.app/api/chat","POST","",-1,"g6dt4-1764518672180-37e71b5583c4","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:145.0) Gecko/20100101 Firefox/145.0","info","production","main","","lambda","/api/chat","weleap-mvp.vercel.app","weleap-mvp.vercel.app","dpl_C6aceMxUw79vF4gKn2x1k26pXf6s",-1,"iad1",-1,-1,"[LLM_RESPONSE] A: ""To allocate your bonus effectively, we will follow the Savings Allocation Priority Stack based on your current financial situation.
+
+### Bonus Allocat...""","prj_JM9kWY6G7zNmt9Tj6ayk2B4iv9Uj","","","01KBAR4DSZR9FJMX24J79EC08J","",-1
+"2025-11-30 16:04:42",1764518682806,"weleap-mvp.vercel.app/api/chat","POST","",-1,"g6dt4-1764518672180-37e71b5583c4","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:145.0) Gecko/20100101 Firefox/145.0","info","production","main","","lambda","/api/chat","weleap-mvp.vercel.app","weleap-mvp.vercel.app","dpl_C6aceMxUw79vF4gKn2x1k26pXf6s",-1,"iad1",-1,-1,"[LLM_QUESTION] ✅ [financial-sidekick] Q: ""I just got a bonus-how can you allocate acorss my goals?"" | Status: success | 11/30/2025, 4:04:42 PM","prj_JM9kWY6G7zNmt9Tj6ayk2B4iv9Uj","","","01KBAR4DSZR9FJMX24J79EC08J","",-1
+"2025-11-30 16:04:32",1764518672191,"weleap-mvp.vercel.app/api/chat","POST","",200,"g6dt4-1764518672180-37e71b5583c4","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:145.0) Gecko/20100101 Firefox/145.0","info","production","main","","lambda","/api/chat","weleap-mvp.vercel.app","weleap-mvp.vercel.app","dpl_C6aceMxUw79vF4gKn2x1k26pXf6s",10598,"iad1",153,2048,"","prj_JM9kWY6G7zNmt9Tj6ayk2B4iv9Uj","","","01KBAR4DSZR9FJMX24J79EC08J","rE370ZDp0byh",1
+"2025-11-30 16:03:51",1764518631354,"weleap-mvp.vercel.app/api/chat","POST","",-1,"nq9xm-1764518618948-7cfd2361ea86","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:145.0) Gecko/20100101 Firefox/145.0","info","production","main","","lambda","/api/chat","weleap-mvp.vercel.app","weleap-mvp.vercel.app","dpl_C6aceMxUw79vF4gKn2x1k26pXf6s",-1,"iad1",-1,-1,"[LLM_QUESTION_LOG] {
+  ""type"": ""LLM_QUESTION"",
+  ""timestamp"": ""2025-11-30T16:03:51.353Z"",
+  ""question"": ""I just got a bonus-how can you allocate acorss my goals?"",
+  ""response"": ""To allocate your bonus effectively, we'll follow the Savings Allocation Priority Stack.\n\n### Bonus Allocation Steps\n1. **Emergency Fund**: Up to 40% of the bonus can go here if there's a gap.\n2. **High-APR Debt Payoff**: Next, allocate up to 40% of the remaining amount to high-APR debt.\n3. **401(k) Match**: Allocate whatever is needed to capture the full employer match.\n4. **Retirement vs. Brokerage**: Split the remaining savings based on your liquidity and retirement focus.\n\n#### Example Allocation\nAssuming your bonus is **$1,000**:\n\n1. **Emergency Fund**:\n   - Current EF gap: **$1,953** target - **$0** current = **$1,953** gap.\n   - Cap at 40% of bonus: **$1,000 × 0.40 = $400**.\n   - Allocate: **$400** to Emergency Fund.\n\n2. **Remaining after EF**: \n   - **$1,000 - $400 = $600**.\n\n3. **High-APR Debt Payoff**:\n   - Total high-APR debt balance: **$2,000** at 10% APR.\n   - Cap at 40% of remaining: **$600 × 0.40 = $240**.\n   - Allocate: **$240** to debt.\n\n4. **Remaining after Debt**:\n   - **$600 - $240 = $360**.\n\n5. **Retirement/Brokerage Split**:\n   - Based on your high retirement focus, let's say:\n     - Retirement: 70%\n     - Brokerage: 30%\n   - Allocate: \n     - Retirement: **$360 × 0.70 = $252**.\n     - Brokerage: **$360 × 0.30 = $108**.\n\n### Summary of Allocation\n- **Emergency Fund**: **$400**\n- **High-APR Debt Payoff**: **$240**\n- **Retirement**: **$252**\n- **Brokerage**: **$108**\n\nThis allocation prioritizes building your Emergency Fund and paying down high-interest debt while also contributing to your retirement and brokerage accounts. You can explore different scenarios using the **Savings Allocator tool** to see how these allocations affect your overall financial goals."",
+  ""context"": ""financial-sidekick"",
+  ""responseStatus"": ""success"",
+  ""responseLength"": 1707,
+  ""model"": ""gpt-4o-mini"",
+  ""metadata"": {
+    ""userAgent"": ""Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:145.0) Gecko/20100101 Firefox/145.0"",
+    ""ipAddress"": ""100.8.237.85"",
+    ""hasUserPlanData"": true
+  }
+}","prj_JM9kWY6G7zNmt9Tj6ayk2B4iv9Uj","","","01KBAR2STF93FJJ5Y3G3S4W3TQ","",-1
+"2025-11-30 16:03:51",1764518631354,"weleap-mvp.vercel.app/api/chat","POST","",-1,"nq9xm-1764518618948-7cfd2361ea86","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:145.0) Gecko/20100101 Firefox/145.0","info","production","main","","lambda","/api/chat","weleap-mvp.vercel.app","weleap-mvp.vercel.app","dpl_C6aceMxUw79vF4gKn2x1k26pXf6s",-1,"iad1",-1,-1,"[LLM_RESPONSE] A: ""To allocate your bonus effectively, we'll follow the Savings Allocation Priority Stack.
+
+### Bonus Allocation Steps
+1. **Emergency Fund**: Up to 40% o...""","prj_JM9kWY6G7zNmt9Tj6ayk2B4iv9Uj","","","01KBAR2STF93FJJ5Y3G3S4W3TQ","",-1
+"2025-11-30 16:03:51",1764518631354,"weleap-mvp.vercel.app/api/chat","POST","",-1,"nq9xm-1764518618948-7cfd2361ea86","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:145.0) Gecko/20100101 Firefox/145.0","info","production","main","","lambda","/api/chat","weleap-mvp.vercel.app","weleap-mvp.vercel.app","dpl_C6aceMxUw79vF4gKn2x1k26pXf6s",-1,"iad1",-1,-1,"[LLM_QUESTION] ✅ [financial-sidekick] Q: ""I just got a bonus-how can you allocate acorss my goals?"" | Status: success | 11/30/2025, 4:03:51 PM","prj_JM9kWY6G7zNmt9Tj6ayk2B4iv9Uj","","","01KBAR2STF93FJJ5Y3G3S4W3TQ","",-1
+"2025-11-30 16:03:38",1764518618958,"weleap-mvp.vercel.app/api/chat","POST","",200,"nq9xm-1764518618948-7cfd2361ea86","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:145.0) Gecko/20100101 Firefox/145.0","info","production","main","","lambda","/api/chat","weleap-mvp.vercel.app","weleap-mvp.vercel.app","dpl_C6aceMxUw79vF4gKn2x1k26pXf6s",12377,"iad1",153,2048,"","prj_JM9kWY6G7zNmt9Tj6ayk2B4iv9Uj","","","01KBAR2STF93FJJ5Y3G3S4W3TQ","rE370ZDp0byh",1
+"2025-11-30 16:02:15",1764518535185,"weleap-mvp.vercel.app/api/chat","POST","",-1,"wvmb4-1764518528029-9b00e98018c5","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:145.0) Gecko/20100101 Firefox/145.0","info","production","main","","lambda","/api/chat","weleap-mvp.vercel.app","weleap-mvp.vercel.app","dpl_C6aceMxUw79vF4gKn2x1k26pXf6s",-1,"iad1",-1,-1,"[LLM_QUESTION_LOG] {
+  ""type"": ""LLM_QUESTION"",
+  ""timestamp"": ""2025-11-30T16:02:15.185Z"",
+  ""question"": ""Help me figure out how much I can save"",
+  ""response"": ""Your current plan has you saving **$977** per month, which is **97.7%** of your income.\n\n### Current Allocations\n- **Needs:** **$23** (2.3% of income)\n- **Wants:** **$0** (0.0% of income)\n- **Savings:** **$977** (97.7% of income)\n\n### Recommended Plan (Target Allocation)\n- **Target Needs:** **$23** (2.3% of income)\n- **Target Wants:** **$250** (25.0% of income)\n- **Target Savings:** **$727** (72.7% of income)\n\nWith your current income, you can maintain your savings at **$977** per month. However, your recommended savings target is **$727**. You currently have a surplus of **$250** that could be adjusted towards your Wants.\n\nYou can explore different scenarios using the **Savings Helper tool** to see how adjusting your Needs and Wants will affect your savings and overall financial plan."",
+  ""context"": ""financial-sidekick"",
+  ""responseStatus"": ""success"",
+  ""responseLength"": 796,
+  ""model"": ""gpt-4o-mini"",
+  ""metadata"": {
+    ""userAgent"": ""Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:145.0) Gecko/20100101 Firefox/145.0"",
+    ""ipAddress"": ""100.8.237.85"",
+    ""hasUserPlanData"": true
+  }
+}","prj_JM9kWY6G7zNmt9Tj6ayk2B4iv9Uj","","","01KBAR0117MJJNZMQZYSXYGGFS","",-1
+"2025-11-30 16:02:15",1764518535185,"weleap-mvp.vercel.app/api/chat","POST","",-1,"wvmb4-1764518528029-9b00e98018c5","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:145.0) Gecko/20100101 Firefox/145.0","info","production","main","","lambda","/api/chat","weleap-mvp.vercel.app","weleap-mvp.vercel.app","dpl_C6aceMxUw79vF4gKn2x1k26pXf6s",-1,"iad1",-1,-1,"[LLM_RESPONSE] A: ""Your current plan has you saving **$977** per month, which is **97.7%** of your income.
+
+### Current Allocations
+- **Needs:** **$23** (2.3% of income)...""","prj_JM9kWY6G7zNmt9Tj6ayk2B4iv9Uj","","","01KBAR0117MJJNZMQZYSXYGGFS","",-1
+"2025-11-30 16:02:15",1764518535185,"weleap-mvp.vercel.app/api/chat","POST","",-1,"wvmb4-1764518528029-9b00e98018c5","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:145.0) Gecko/20100101 Firefox/145.0","info","production","main","","lambda","/api/chat","weleap-mvp.vercel.app","weleap-mvp.vercel.app","dpl_C6aceMxUw79vF4gKn2x1k26pXf6s",-1,"iad1",-1,-1,"[LLM_QUESTION] ✅ [financial-sidekick] Q: ""Help me figure out how much I can save"" | Status: success | 11/30/2025, 4:02:15 PM","prj_JM9kWY6G7zNmt9Tj6ayk2B4iv9Uj","","","01KBAR0117MJJNZMQZYSXYGGFS","",-1
+"2025-11-30 16:02:08",1764518528038,"weleap-mvp.vercel.app/api/chat","POST","",200,"wvmb4-1764518528029-9b00e98018c5","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:145.0) Gecko/20100101 Firefox/145.0","info","production","main","","lambda","/api/chat","weleap-mvp.vercel.app","weleap-mvp.vercel.app","dpl_C6aceMxUw79vF4gKn2x1k26pXf6s",7130,"iad1",153,2048,"","prj_JM9kWY6G7zNmt9Tj6ayk2B4iv9Uj","","","01KBAR0117MJJNZMQZYSXYGGFS","rE370ZDp0byh",1
+"2025-11-30 15:59:53",1764518393338,"weleap-mvp.vercel.app/api/chat","POST","",-1,"zb7ms-1764518391183-2d3888ed709f","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:145.0) Gecko/20100101 Firefox/145.0","info","production","main","","lambda","/api/chat","weleap-mvp.vercel.app","weleap-mvp.vercel.app","dpl_C6aceMxUw79vF4gKn2x1k26pXf6s",-1,"iad1",-1,-1,"[LLM_QUESTION_LOG] {
+  ""type"": ""LLM_QUESTION"",
+  ""timestamp"": ""2025-11-30T15:59:53.333Z"",
+  ""question"": ""Hello"",
+  ""response"": ""Hello! How can I assist you with your financial questions today?"",
+  ""context"": ""savings-allocator"",
+  ""responseStatus"": ""success"",
+  ""responseLength"": 64,
+  ""model"": ""gpt-4o-mini"",
+  ""metadata"": {
+    ""userAgent"": ""Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:145.0) Gecko/20100101 Firefox/145.0"",
+    ""ipAddress"": ""100.8.237.85"",
+    ""hasUserPlanData"": true
+  }
+}","prj_JM9kWY6G7zNmt9Tj6ayk2B4iv9Uj","","","01KBAQVVD1THJ47EKPNPR268GM","",-1
+"2025-11-30 15:59:53",1764518393338,"weleap-mvp.vercel.app/api/chat","POST","",-1,"zb7ms-1764518391183-2d3888ed709f","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:145.0) Gecko/20100101 Firefox/145.0","info","production","main","","lambda","/api/chat","weleap-mvp.vercel.app","weleap-mvp.vercel.app","dpl_C6aceMxUw79vF4gKn2x1k26pXf6s",-1,"iad1",-1,-1,"[LLM_RESPONSE] A: ""Hello! How can I assist you with your financial questions today?""","prj_JM9kWY6G7zNmt9Tj6ayk2B4iv9Uj","","","01KBAQVVD1THJ47EKPNPR268GM","",-1
+"2025-11-30 15:59:53",1764518393338,"weleap-mvp.vercel.app/api/chat","POST","",-1,"zb7ms-1764518391183-2d3888ed709f","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:145.0) Gecko/20100101 Firefox/145.0","info","production","main","","lambda","/api/chat","weleap-mvp.vercel.app","weleap-mvp.vercel.app","dpl_C6aceMxUw79vF4gKn2x1k26pXf6s",-1,"iad1",-1,-1,"[LLM_QUESTION] ✅ [savings-allocator] Q: ""Hello"" | Status: success | 11/30/2025, 3:59:53 PM","prj_JM9kWY6G7zNmt9Tj6ayk2B4iv9Uj","","","01KBAQVVD1THJ47EKPNPR268GM","",-1
+"2025-11-30 15:59:51",1764518391201,"weleap-mvp.vercel.app/api/chat","POST","",200,"zb7ms-1764518391183-2d3888ed709f","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:145.0) Gecko/20100101 Firefox/145.0","info","production","main","","lambda","/api/chat","weleap-mvp.vercel.app","weleap-mvp.vercel.app","dpl_C6aceMxUw79vF4gKn2x1k26pXf6s",2191,"iad1",152,2048,"","prj_JM9kWY6G7zNmt9Tj6ayk2B4iv9Uj","","","01KBAQVVD1THJ47EKPNPR268GM","rE370ZDp0byh",1
+"2025-11-30 15:49:18",1764517758095,"weleap-mvp.vercel.app/api/chat","POST","",-1,"5jtgt-1764517752026-7fe9621c5a6f","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:145.0) Gecko/20100101 Firefox/145.0","info","production","main","","lambda","/api/chat","weleap-mvp.vercel.app","weleap-mvp.vercel.app","dpl_C6aceMxUw79vF4gKn2x1k26pXf6s",-1,"iad1",-1,-1,"[LLM_QUESTION_LOG] {
+  ""type"": ""LLM_QUESTION"",
+  ""timestamp"": ""2025-11-30T15:49:18.075Z"",
+  ""question"": ""I want to save 2000 in the next 2 month"",
+  ""response"": ""To save **$2,000** in the next **2 months**, you'll need to save **$1,000** per month.\n\nHere's how that would fit into your current plan:\n\n### Current Savings Situation:\n- **Current monthly savings**: **$975**\n- **Target monthly savings needed**: **$1,000**\n- **Shortfall**: **$25/month**\n\n### Recommended Action:\nSince you need to save **$1,000** each month, you will need to adjust your current savings to meet this goal. \n\nYou could consider reducing your discretionary spending (Wants) to make up for the **$25** shortfall. \n\nYour current allocation is:\n- **Needs**: **$25**\n- **Wants**: **$0**\n- **Savings**: **$975**\n\nYou can either adjust your Wants to allocate more towards savings or look for ways to increase your income temporarily to cover this additional savings goal."",
+  ""context"": ""financial-sidekick"",
+  ""responseStatus"": ""success"",
+  ""responseLength"": 781,
+  ""model"": ""gpt-4o-mini"",
+  ""metadata"": {
+    ""userAgent"": ""Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:145.0) Gecko/20100101 Firefox/145.0"",
+    ""ipAddress"": ""100.8.237.85"",
+    ""hasUserPlanData"": true
+  }
+}","prj_JM9kWY6G7zNmt9Tj6ayk2B4iv9Uj","","","01KBAQ8B8NRSEQWHJVZD7KJWQA","",-1
+"2025-11-30 15:49:18",1764517758094,"weleap-mvp.vercel.app/api/chat","POST","",-1,"5jtgt-1764517752026-7fe9621c5a6f","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:145.0) Gecko/20100101 Firefox/145.0","info","production","main","","lambda","/api/chat","weleap-mvp.vercel.app","weleap-mvp.vercel.app","dpl_C6aceMxUw79vF4gKn2x1k26pXf6s",-1,"iad1",-1,-1,"[LLM_RESPONSE] A: ""To save **$2,000** in the next **2 months**, you'll need to save **$1,000** per month.
+
+Here's how that would fit into your current plan:
+
+### Current...""","prj_JM9kWY6G7zNmt9Tj6ayk2B4iv9Uj","","","01KBAQ8B8NRSEQWHJVZD7KJWQA","",-1
+"2025-11-30 15:49:18",1764517758094,"weleap-mvp.vercel.app/api/chat","POST","",-1,"5jtgt-1764517752026-7fe9621c5a6f","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:145.0) Gecko/20100101 Firefox/145.0","info","production","main","","lambda","/api/chat","weleap-mvp.vercel.app","weleap-mvp.vercel.app","dpl_C6aceMxUw79vF4gKn2x1k26pXf6s",-1,"iad1",-1,-1,"[LLM_QUESTION] ✅ [financial-sidekick] Q: ""I want to save 2000 in the next 2 month"" | Status: success | 11/30/2025, 3:49:18 PM","prj_JM9kWY6G7zNmt9Tj6ayk2B4iv9Uj","","","01KBAQ8B8NRSEQWHJVZD7KJWQA","",-1
+"2025-11-30 15:49:12",1764517752085,"weleap-mvp.vercel.app/api/chat","POST","",200,"5jtgt-1764517752026-7fe9621c5a6f","Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:145.0) Gecko/20100101 Firefox/145.0","info","production","main","","lambda","/api/chat","weleap-mvp.vercel.app","weleap-mvp.vercel.app","dpl_C6aceMxUw79vF4gKn2x1k26pXf6s",6209,"iad1",176,2048,"","prj_JM9kWY6G7zNmt9Tj6ayk2B4iv9Uj","","","01KBAQ8B8NRSEQWHJVZD7KJWQA","YtRD3tb8XDOb",1
