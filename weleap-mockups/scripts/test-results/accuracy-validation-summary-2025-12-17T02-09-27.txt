@@ -1,0 +1,33 @@
+Accuracy Validation Test Results
+=====================================
+
+Timestamp: 2025-12-17T02:09:27.694Z
+Base URL: http://localhost:3000
+
+Summary:
+  Tests Passed: 0/5
+  Validations Passed: 0/16 (0.0%)
+
+Test Results:
+================================================================================
+
+❌ Calculation Error - Down Payment Savings
+   Question: I don't think I can afford to save 3.4k a month for my down payment because this is my entire saving...
+   Error: HTTP 500: Internal Server Error
+
+❌ Down Payment - Savings Priority Stack Integration
+   Question: I'm living in the Bay Area, when would I be able to to buy a house or apartment? Nothing fancy, just...
+   Error: HTTP 500: Internal Server Error
+
+❌ Comparison Question - Use Actual User Data
+   Question: Am I on track compared to other people my age?...
+   Error: HTTP 500: Internal Server Error
+
+❌ Add Down Payment Plan - Priority Stack
+   Question: Can you add this down payment savings plan to my financial plan?...
+   Error: HTTP 500: Internal Server Error
+
+❌ Down Payment Timeline - Correct Calculation
+   Question: If I'm saving 2k per month for my down payment, then when can I buy a house? Also where should this ...
+   Error: HTTP 500: Internal Server Error
+
