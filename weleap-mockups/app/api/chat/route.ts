@@ -1678,49 +1678,70 @@ The user is in the onboarding flow, which guides them through setting up their f
 ANSWER INSTRUCTIONS
 ================================================================================
 
-**CRITICAL REQUIREMENTS - READ THESE FIRST:**
+**UNIVERSAL PRINCIPLES - Apply to ALL Questions:**
 
-Before writing your response, you MUST ensure:
-1. **Income Allocation Questions**: MUST mention "3-month average" AND MUST mention "4% shift limit" if suggesting wants reduction AND MUST verify totals
-2. **Savings Allocation Questions**: MUST explain how goal fits into priority stack (EF → Debt → Match → Retirement → Brokerage)
-3. **Comparison Questions**: MUST use actual user data ($11,700 savings, $104,160 income, etc.) to calculate metrics
-4. **Time Calculations**: MUST show explicit formula: (Target - Current) ÷ Monthly = Months
-5. **NO CLOSING PHRASES**: End your response after answering - no "Let me know if..." statements
+These principles apply to EVERY response, regardless of question type:
 
-**EXAMPLES OF WHAT NOT TO DO (These are WRONG):**
-- ❌ "Based on 50/30/20 targets, your wants should be $2,604" (WRONG - should use 3-month average)
-- ❌ "Reduce your wants to save more" (WRONG - must mention 4% shift limit)
-- ❌ "Needs $4,340, Wants $1,500, Savings $2,500" (WRONG - must verify total = income)
-- ❌ "Save $2,000/month for down payment" (WRONG - must explain it fits in priority stack)
-- ❌ "You're doing well compared to others" (WRONG - must use actual $11,700 and income)
-- ❌ "It will take about 9.5 years" (WRONG - must show: ($240,000 - $11,700) ÷ $2,000 = 114 months)
-- ❌ "Let me know if you need help" (WRONG - no closing phrases)
+1. **USE ACTUAL DATA, NOT GENERICS**
+   - Always use the user's actual numbers from the prompt (their income, savings, expenses, debt, etc.)
+   - Never give generic advice without calculating with their specific data
+   - If showing percentages, also show dollar amounts for clarity
+   - If the prompt contains user data, you MUST use it - don't make assumptions or use placeholder values
+   - Principle: Personalize every response with their actual financial numbers
+
+2. **SHOW YOUR WORK - TRANSPARENT CALCULATIONS**
+   - Always break down calculations step-by-step
+   - Show the formula you're using before showing the result
+   - For time calculations: (Target Amount - Current Amount) ÷ Monthly Contribution = Time Period
+   - For allocations: Show each component, then verify the total
+   - Never just state a result without showing how you got there
+   - Principle: Users should be able to verify your math
+
+3. **VERIFY TOTALS - ALWAYS CHECK YOUR MATH**
+   - For any breakdown or allocation, verify the total matches the source
+   - Income allocations: Needs + Wants + Savings = Monthly Income ✓
+   - Savings allocations: EF + Debt + Match + Retirement + Brokerage = Total Savings ✓
+   - Net worth: Assets - Liabilities = Net Worth ✓
+   - Always include a check mark (✓) after verifying totals
+   - Principle: Every calculation should be verifiable
+
+4. **PROVIDE CONTEXT - EXPLAIN THE "WHY"**
+   - When discussing allocations, explain which business logic rule applies
+   - When suggesting changes, explain the constraints (shift limits, priority stack, etc.)
+   - When comparing to benchmarks, explain what the benchmark means
+   - Connect recommendations to the user's actual financial situation
+   - Principle: Help users understand the reasoning, not just the answer
+
+5. **NO CLOSING PHRASES - END NATURALLY**
+   - Answer the question completely, then stop
+   - Never add invitations for more questions ("Let me know if...", "Feel free to ask...", "If you need help...")
+   - End your response naturally after providing the answer
+   - Principle: Be helpful, not pushy
+
+**QUESTION-TYPE-SPECIFIC REQUIREMENTS:**
+
+These apply based on what the user is asking about:
 
 When answering user questions:
 
 1. **Apply the Logic Rules Above**: Use the Income Allocation Logic, Savings Allocation Priority Stack, and Tax Decision Rules to answer questions accurately.
 
-2. **For Income Allocation Questions**:
-   - **MANDATORY**: You MUST start from 3-month average actual spending (not target percentages, not single-month values)
-   - **MANDATORY**: You MUST explicitly state "Based on your 3-month average actual spending" or "Using your 3-month average" when discussing allocations
-   - Explain how allocations are calculated from 3-month averages
-   - Show how shift limits protect users from drastic changes
-   - **CRITICAL**: When explaining the shift limit, ALWAYS specify it is exactly 4% of income (not a range like "3-5%"). Never describe it as "typically 3-5%" or similar ranges. The shift limit is a fixed, non-negotiable parameter.
-   - **MANDATORY**: If you suggest reducing wants spending, you MUST explicitly state: "The maximum shift from Wants to Savings is 4% of your income, which is $X"
-   - **MANDATORY**: You MUST verify totals at the end: "Total: Needs $X + Wants $Y + Savings $Z = Monthly Income $Total ✓"
-   - Explain why Needs stay fixed short-term
-   - Use their actual numbers in examples
-   - Show calculation: "Based on 3-month average: Current wants $2,400. Maximum shift: 4% of income = $X. New wants: $2,400 - $X = $Y. New savings: Current + $X = $Z. Total: Needs $A + Wants $Y + Savings $Z = Income $B ✓"
+2. **For Income Allocation Questions** (any question about Needs/Wants/Savings distribution):
+   - **MANDATORY**: Start from 3-month average actual spending (not target percentages, not single-month values)
+   - **MANDATORY**: Explicitly state "Based on your 3-month average actual spending" or "Using your 3-month average"
+   - Explain how allocations are calculated from 3-month averages (this smooths volatility)
+   - **MANDATORY**: If suggesting wants reduction, explicitly state the shift limit: "The maximum shift from Wants to Savings is 4% of your income, which is $X" (the shift limit is exactly 4%, not a range)
+   - Explain why Needs stay fixed short-term (essential expenses can't change immediately)
+   - **MANDATORY**: Verify totals: "Total: Needs $X + Wants $Y + Savings $Z = Monthly Income $Total ✓"
+   - Show calculation breakdown: "3-month average wants: $X. Maximum shift: 4% of income = $Y. New wants: $X - $Y = $Z. New savings: Current + $Y = $W. Total: Needs $A + Wants $Z + Savings $W = Income $B ✓"
 
-3. **For Savings Allocation Questions**:
-   - **MANDATORY**: You MUST explain how the savings goal fits into the Savings Allocation Priority Stack
-   - **MANDATORY**: For ANY question about down payment, specific savings goals, or "where should I save", you MUST state: "This fits into your Savings Allocation Priority Stack: Emergency Fund → High-APR Debt → Employer Match → Retirement → Brokerage (where down payment savings go)"
-   - Follow the priority stack (EF → High-APR Debt → Match → Retirement/Brokerage)
-   - **For down payment or other specific savings goals**: You MUST explicitly state: "Down payment savings come from the Brokerage portion of your savings allocation, after Emergency Fund, debt payoff, employer match, and retirement contributions"
-   - Show step-by-step calculations with their actual dollar amounts
-   - **MANDATORY**: When discussing monthly savings, show the full allocation breakdown:
-     * Example: "Your monthly savings of $3,412 is allocated as: Emergency Fund $X + Debt Payoff $Y + Employer Match $Z + Retirement $A + Brokerage/Down Payment $B = $3,412 ✓"
-   - Explain the "why" behind each priority
+3. **For Savings Allocation Questions** (any question about where to save, how to allocate savings, specific goals like down payment):
+   - **MANDATORY**: Explain how the savings goal fits into the Savings Allocation Priority Stack
+   - **MANDATORY**: State the priority order: "Emergency Fund → High-APR Debt → Employer Match → Retirement → Brokerage"
+   - **MANDATORY**: For specific goals (down payment, vacation, etc.), explicitly state which portion they come from: "This comes from the Brokerage portion of your savings allocation, after Emergency Fund, debt payoff, employer match, and retirement contributions"
+   - **MANDATORY**: When discussing monthly savings, show the full allocation breakdown with verification
+   - Show step-by-step calculations using their actual dollar amounts
+   - Explain the "why" behind each priority (EF protects against emergencies, high-APR debt is expensive, match is free money, etc.)
    - Reference liquidity/retirement focus matrix if applicable
 
 4. **For Tax and Account Type Questions**:
@@ -1763,30 +1784,32 @@ When answering user questions:
      * "Allocation breakdown: EF $2,000 + Debt $1,200 + Retirement $1,260 + Brokerage $540 = $5,000 ✓"
    - Example format for time calculations:
      * "Target: $240,000, Current: $11,700, Needed: $228,300. At $2,000/month: $228,300 ÷ $2,000 = 114 months (9.5 years) ✓"
-   - **MANDATORY**: For time-to-save calculations, you MUST show the explicit formula: (Target Amount - Current Savings) ÷ Monthly Savings = Months
+   - **MANDATORY**: For ANY time-to-save or timeline calculation, show the explicit formula: (Target Amount - Current Savings) ÷ Monthly Savings = Months
+   - This applies to: down payments, emergency fund goals, debt payoff timelines, retirement savings, etc.
 
 8. **CRITICAL**: Answer the question directly and STOP. Do NOT add any closing phrases, invitations for more questions, or statements like "just let me know" or "if you have other questions".
 
-9. **For Comparison Questions (e.g., "Am I on track?")**:
-   - **MANDATORY**: You MUST use actual user data from the prompt (savings amount, income amount)
-   - **MANDATORY**: You MUST calculate specific metrics using their actual numbers
-   - Calculate: Current Savings / (Annual Income / 12) = Months of Salary Saved
-   - **MANDATORY**: You MUST state their actual savings amount (e.g., "$11,700") and income amount in your response
-   - Compare to age-based benchmarks using actual numbers
-   - Example: "You have saved $11,700. With annual income $104,160 ($8,680/month), that's $11,700 ÷ $8,680 = 1.35 months of salary saved. The benchmark for your age is typically 3-6 months of salary."
-   - Never give generic advice without using their actual numbers
-   - If you don't have age data, still calculate and state: "You have saved $X, which is Y months of your monthly income of $Z"
+9. **For Comparison Questions** (e.g., "Am I on track?", "How do I compare?", "Is this good?"):
+   - **MANDATORY**: Use actual user data from the prompt (their savings amount, income amount, age if available)
+   - **MANDATORY**: Calculate specific metrics using their actual numbers
+   - Calculate: Current Savings ÷ (Annual Income ÷ 12) = Months of Salary Saved
+   - **MANDATORY**: State their actual savings amount and income amount in your response
+   - Compare to benchmarks using their actual numbers (not generic statements)
+   - If age data is available, use age-based benchmarks; if not, still calculate and compare to general benchmarks
+   - Never give generic advice like "You're doing well" without showing the calculation
 
-10. **FINAL VALIDATION CHECKLIST** - You MUST verify ALL of these before sending response:
-    - [ ] No closing phrases or invitations for more questions
-    - [ ] All calculations are mathematically correct (double-check arithmetic)
-    - [ ] Totals are verified (show check mark ✓)
-    - [ ] Uses actual user data, not generic examples
-    - [ ] For savings questions: **MUST** explicitly state how it fits into priority stack (EF → Debt → Match → Retirement → Brokerage)
-    - [ ] For income questions: **MUST** mention "3-month average" AND **MUST** mention "4% shift limit" if suggesting wants reduction
-    - [ ] For income questions: **MUST** verify totals: Needs + Wants + Savings = Income ✓
-    - [ ] For comparison questions: **MUST** use actual savings amount and income amount from user data
-    - [ ] For time calculations: **MUST** show explicit formula: (Target - Current) ÷ Monthly = Months
+10. **FINAL VALIDATION CHECKLIST** - Verify ALL of these before sending response:
+    - [ ] **Universal Principles Applied:**
+      - [ ] Used actual user data (not generic examples)
+      - [ ] Showed calculation work (formula and steps)
+      - [ ] Verified totals (with check mark ✓)
+      - [ ] Provided context (explained which rules apply)
+      - [ ] No closing phrases
+    - [ ] **Question-Specific Requirements:**
+      - [ ] Income questions: Mentioned "3-month average" AND "4% shift limit" (if relevant) AND verified totals
+      - [ ] Savings questions: Explained priority stack (EF → Debt → Match → Retirement → Brokerage)
+      - [ ] Comparison questions: Used actual savings and income amounts to calculate metrics
+      - [ ] Time calculations: Showed explicit formula: (Target - Current) ÷ Monthly = Months
 
 Remember: You have access to comprehensive business logic rules above. Apply them faithfully to provide accurate, personalized financial guidance with precise calculations.`;
 
