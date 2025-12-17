@@ -959,6 +959,184 @@ async function runComprehensiveTests() {
   }
   
   // ============================================================================
+  // CATEGORY 8: Accuracy Validation Tests (Production Issues)
+  // ============================================================================
+  console.log('\n' + '#'.repeat(80));
+  console.log('# CATEGORY 8: Accuracy Validation Tests');
+  console.log('#'.repeat(80) + '\n');
+  
+  // Use production scenario data for accuracy tests
+  const productionScenarioData = {
+    ...mockUserPlanData,
+    actuals3m: {
+      needsPct: 0.33,
+      wantsPct: 0.276,
+      savingsPct: 0.393,
+      monthlyNeeds: 2868,
+      monthlyWants: 2400,
+      monthlySavings: 3412,
+    },
+    emergencyFund: {
+      current: 11700,
+      target: 12000,
+      monthsTarget: 3,
+      gap: 300,
+    },
+  };
+  
+  const accuracyValidationQuestions = [
+    {
+      question: "I don't think I can afford to save 3.4k a month for my down payment because this is my entire saving and investing category. Give me something a little more reasonable with what I can reduce from my \"wants\" spending",
+      context: 'financial-sidekick',
+      validations: {
+        'No calculation error': (a) => {
+          const errorPattern = /\$\d+[\s,]*-\s*\$\d+[\s,]*=\s*\$\d{5,}/;
+          return {
+            pass: !errorPattern.test(a),
+            message: 'Should not have calculation error like "$1,500 - $11,700 = $228,300"',
+          };
+        },
+        'Correct time calculation': (a) => {
+          const hasCorrectFormula = /\(\$240,000\s*-\s*\$11,700\)|240,000.*11,700.*÷|240,000.*11,700.*\/|228,300.*÷|228,300.*\//.test(a);
+          if (a.includes('240,000') && a.includes('11,700') && !hasCorrectFormula) {
+            return {
+              pass: false,
+              message: 'Missing correct time calculation formula: (Target - Current) / Monthly',
+            };
+          }
+          return { pass: true };
+        },
+        'Mentions 4% shift limit': (a) => {
+          const hasShiftLimit = /4%|four percent|shift limit/i.test(a);
+          if (!hasShiftLimit && (a.includes('wants') || a.includes('reduce'))) {
+            return {
+              pass: false,
+              message: 'Should mention 4% shift limit when suggesting wants reduction',
+            };
+          }
+          return { pass: true };
+        },
+        'Uses 3-month average': (a) => {
+          const has3Month = /3-month|three-month|3 month|three month|actuals3m|3.?month average/i.test(a);
+          if (!has3Month && (a.includes('wants') || a.includes('needs') || a.includes('allocation'))) {
+            return {
+              pass: false,
+              message: 'Should reference 3-month average when discussing income allocation',
+            };
+          }
+          return { pass: true };
+        },
+        'Verifies totals': (a) => {
+          const hasVerification = /Total.*=.*\$|Needs.*Wants.*Savings.*=.*\$|✓|check/i.test(a);
+          if (!hasVerification && (a.includes('$2,868') || a.includes('$2,400') || a.includes('$3,412') || a.includes('$8,680'))) {
+            return {
+              pass: false,
+              message: 'Should verify totals: Needs + Wants + Savings = Income',
+            };
+          }
+          return { pass: true };
+        },
+      },
+    },
+    {
+      question: "I'm living in the Bay Area, when would I be able to to buy a house or apartment? Nothing fancy, just an average starter home. I also don't know how much I should be saving every month so that I have enough to pay for the down payment",
+      context: 'financial-sidekick',
+      validations: {
+        'Mentions priority stack': (a) => {
+          const hasPriorityStack = /priority|EF.*Debt.*Match|Emergency Fund.*Debt|allocation.*priority|brokerage|priority stack/i.test(a);
+          if (!hasPriorityStack && (a.includes('down payment') || a.includes('saving'))) {
+            return {
+              pass: false,
+              message: 'Should explain how down payment fits into savings allocation priority stack',
+            };
+          }
+          return { pass: true };
+        },
+        'Shows allocation breakdown': (a) => {
+          const hasBreakdown = /\$3,412.*allocat|EF.*Debt.*Retirement|allocation.*breakdown|Emergency Fund.*Debt/i.test(a);
+          if (a.includes('$3,412') && !hasBreakdown) {
+            return {
+              pass: false,
+              message: 'Should show full savings allocation breakdown when discussing monthly savings',
+            };
+          }
+          return { pass: true };
+        },
+      },
+    },
+    {
+      question: 'Am I on track compared to other people my age?',
+      context: 'financial-sidekick',
+      validations: {
+        'Uses actual user data': (a) => {
+          const hasActualData = /\$11,700|\$104,160|\$8,680|months of salary|months.*income/i.test(a);
+          if (!hasActualData) {
+            return {
+              pass: false,
+              message: 'Should use actual user data (savings $11,700, income) to calculate metrics',
+            };
+          }
+          return { pass: true };
+        },
+        'Calculates metrics': (a) => {
+          const hasMetrics = /months.*salary|months.*income|salary.*saved|benchmark/i.test(a);
+          if (!hasMetrics && a.includes('on track')) {
+            return {
+              pass: false,
+              message: 'Should calculate specific metrics like months of salary saved',
+            };
+          }
+          return { pass: true };
+        },
+      },
+    },
+    {
+      question: 'Can you add this down payment savings plan to my financial plan?',
+      context: 'financial-sidekick',
+      validations: {
+        'Mentions priority stack': (a) => {
+          const hasPriorityStack = /priority|EF.*Debt.*Match|Emergency Fund.*Debt|allocation.*priority|brokerage|priority stack/i.test(a);
+          if (!hasPriorityStack && a.includes('down payment')) {
+            return {
+              pass: false,
+              message: 'Should explain how down payment fits into savings allocation priority stack',
+            };
+          }
+          return { pass: true };
+        },
+      },
+    },
+    {
+      question: "If I'm saving 2k per month for my down payment, then when can I buy a house? Also where should this money exist while I'm saving it, in a bank account, in the stock market, high yield savings account, ETF, etc?",
+      context: 'financial-sidekick',
+      validations: {
+        'Correct calculation': (a) => {
+          const hasCorrectTime = /114.*months|9\.5.*years|9.*years.*6.*months/i.test(a);
+          const hasCalculation = /228,300.*÷|228,300.*\/|240,000.*11,700|\(.*240,000.*11,700.*\)/i.test(a);
+          if (!hasCorrectTime && !hasCalculation && a.includes('$2,000')) {
+            return {
+              pass: false,
+              message: 'Should show correct calculation: ($240,000 - $11,700) / $2,000 = 114 months (9.5 years)',
+            };
+          }
+          return { pass: true };
+        },
+      },
+    },
+  ];
+  
+  for (const test of accuracyValidationQuestions) {
+    allResults.push(await testChat(
+      test.question,
+      productionScenarioData,
+      test.context,
+      test.validations,
+      'Accuracy Validation'
+    ));
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  
+  // ============================================================================
   // SUMMARY
   // ============================================================================
   console.log('\n' + '#'.repeat(80));
