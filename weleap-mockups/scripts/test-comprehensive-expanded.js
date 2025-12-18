@@ -1137,6 +1137,245 @@ async function runComprehensiveTests() {
   }
   
   // ============================================================================
+  // CATEGORY 9: Onboarding & UI Context Questions
+  // ============================================================================
+  console.log('\n' + '#'.repeat(80));
+  console.log('# CATEGORY 9: Onboarding & UI Context Questions');
+  console.log('#'.repeat(80) + '\n');
+  
+  const onboardingQuestions = [
+    {
+      question: 'How do I use the sliders on this screen?',
+      context: 'monthly-plan-design',
+      validations: {
+        'Mentions sliders': (a) => ({
+          pass: /slider/i.test(a),
+          message: 'Should explain how to use sliders',
+        }),
+        'Explains slider functionality': (a) => ({
+          pass: /income|needs|wants|adjust|move/i.test(a),
+          message: 'Should explain what the sliders control',
+        }),
+      },
+    },
+    {
+      question: 'What am I looking at on this screen?',
+      context: 'monthly-plan-current',
+      validations: {
+        'Explains current screen': (a) => ({
+          pass: /current|spending|expense|income|profile|3-month|average/i.test(a),
+          message: 'Should explain what the current screen shows',
+        }),
+      },
+    },
+    {
+      question: 'How much should I allocate to my emergency fund?',
+      context: 'savings-plan',
+      validations: {
+        'Mentions emergency fund': (a) => ({
+          pass: /emergency.*fund|EF/i.test(a),
+          message: 'Should mention emergency fund',
+        }),
+        'Provides allocation guidance': (a) => ({
+          pass: /allocate|amount|percentage|slider|40%|3.*month|6.*month/i.test(a),
+          message: 'Should provide guidance on emergency fund allocation',
+        }),
+      },
+    },
+    {
+      question: 'What does the net worth chart show?',
+      context: 'plan-final',
+      validations: {
+        'Explains net worth chart': (a) => ({
+          pass: /net.*worth|chart|projection|assets|liabilities|milestone/i.test(a),
+          message: 'Should explain what the net worth chart displays',
+        }),
+      },
+    },
+    {
+      question: 'What can I do with this tool?',
+      context: 'savings-helper',
+      validations: {
+        'Explains tool functionality': (a) => ({
+          pass: /tool|bar.*graph|slider|scenario|adjust|compare|needs|wants/i.test(a),
+          message: 'Should explain what the savings helper tool does',
+        }),
+      },
+    },
+    {
+      question: 'How do I allocate money to pay off my debt?',
+      context: 'savings-allocator',
+      validations: {
+        'Mentions debt allocation': (a) => ({
+          pass: /debt|payoff|allocate|slider|high.*apr|40%/i.test(a),
+          message: 'Should explain how to allocate money for debt payoff',
+        }),
+      },
+    },
+    {
+      question: 'How do I read this chart?',
+      context: 'net-worth-viewer',
+      validations: {
+        'Explains chart reading': (a) => ({
+          pass: /chart|read|interpret|net.*worth|assets|liabilities|milestone/i.test(a),
+          message: 'Should explain how to read the net worth chart',
+        }),
+      },
+    },
+    {
+      question: 'What happens after I complete this step?',
+      context: 'monthly-plan-design',
+      validations: {
+        'Explains next steps': (a) => ({
+          pass: /next|after|complete|step|onboarding|savings.*plan|continue/i.test(a),
+          message: 'Should explain what happens next in the onboarding flow',
+        }),
+      },
+    },
+    {
+      question: 'What does this screen mean?',
+      context: 'monthly-plan-current',
+      validations: {
+        'Explains screen purpose': (a) => ({
+          pass: /screen|shows|displays|current|spending|expense|income/i.test(a),
+          message: 'Should explain what the screen means and its purpose',
+        }),
+      },
+    },
+    {
+      question: 'What should I do next?',
+      context: 'savings-plan',
+      validations: {
+        'Provides next step guidance': (a) => ({
+          pass: /next|continue|complete|adjust|allocate|slider|button/i.test(a),
+          message: 'Should provide guidance on what to do next',
+        }),
+      },
+    },
+    {
+      question: 'Explain the logic behind this recommendation',
+      context: 'monthly-plan-design',
+      validations: {
+        'Explains recommendation logic': (a) => ({
+          pass: /logic|reason|why|recommend|based|3-month|average|target|50.*30.*20/i.test(a),
+          message: 'Should explain the logic behind the recommendation',
+        }),
+      },
+    },
+    {
+      question: 'Why is my savings amount different from what I set?',
+      context: 'monthly-plan-design',
+      validations: {
+        'Explains savings calculation': (a) => ({
+          pass: /savings|calculate|income.*expense|auto|remaining|difference/i.test(a),
+          message: 'Should explain how savings is calculated',
+        }),
+      },
+    },
+    {
+      question: 'What is the 3-month average and why does it matter?',
+      context: 'monthly-plan-current',
+      validations: {
+        'Explains 3-month average': (a) => ({
+          pass: /3-month|three.*month|average|smooth|volatility|spending/i.test(a),
+          message: 'Should explain what 3-month average means and why it matters',
+        }),
+      },
+    },
+    {
+      question: 'Can I skip this step?',
+      context: 'savings-plan',
+      validations: {
+        'Addresses skipping step': (a) => ({
+          pass: /skip|required|necessary|important|complete|recommend/i.test(a),
+          message: 'Should address whether the step can be skipped',
+        }),
+      },
+    },
+    {
+      question: 'What if I don\'t know my exact income?',
+      context: 'income',
+      validations: {
+        'Provides income guidance': (a) => ({
+          pass: /income|estimate|approximate|guess|close|exact|adjust/i.test(a),
+          message: 'Should provide guidance on handling uncertain income',
+        }),
+      },
+    },
+    {
+      question: 'How do I know if my plan is good?',
+      context: 'plan-final',
+      validations: {
+        'Explains plan quality indicators': (a) => ({
+          pass: /good|plan|quality|target|50.*30.*20|emergency|debt|savings|rate/i.test(a),
+          message: 'Should explain how to evaluate if the plan is good',
+        }),
+      },
+    },
+    {
+      question: 'Why can\'t I move the savings slider?',
+      context: 'monthly-plan-design',
+      validations: {
+        'Explains savings auto-calculation': (a) => ({
+          pass: /savings|auto|calculate|income.*expense|remaining|difference|cannot|move/i.test(a),
+          message: 'Should explain that savings is auto-calculated',
+        }),
+      },
+    },
+    {
+      question: 'What happens if I change my income slider?',
+      context: 'monthly-plan-design',
+      validations: {
+        'Explains income slider impact': (a) => ({
+          pass: /income|slider|change|affect|needs|wants|savings|recalculate/i.test(a),
+          message: 'Should explain how changing income affects other allocations',
+        }),
+      },
+    },
+    {
+      question: 'Why is there a 40% limit on the emergency fund slider?',
+      context: 'savings-plan',
+      validations: {
+        'Explains 40% limit': (a) => ({
+          pass: /40%|limit|cap|emergency|fund|reason|why|balance|debt|retirement/i.test(a),
+          message: 'Should explain why there is a 40% limit on emergency fund',
+        }),
+      },
+    },
+    {
+      question: 'What do the milestones on the chart mean?',
+      context: 'plan-final',
+      validations: {
+        'Explains milestones': (a) => ({
+          pass: /milestone|6.*month|12.*month|24.*month|projection|net.*worth|progress/i.test(a),
+          message: 'Should explain what the milestones represent',
+        }),
+      },
+    },
+    {
+      question: 'I don\'t understand what I\'m supposed to do here',
+      context: 'savings-plan',
+      validations: {
+        'Provides clear guidance': (a) => ({
+          pass: /allocate|slider|emergency|debt|retirement|adjust|set|configure/i.test(a),
+          message: 'Should provide clear guidance on what to do',
+        }),
+      },
+    },
+  ];
+  
+  for (const test of onboardingQuestions) {
+    allResults.push(await testChat(
+      test.question,
+      mockUserPlanData,
+      test.context,
+      test.validations,
+      'Onboarding & UI Context'
+    ));
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  
+  // ============================================================================
   // SUMMARY
   // ============================================================================
   console.log('\n' + '#'.repeat(80));
