@@ -30,6 +30,11 @@ export interface IncomePlanResult {
   goal: NWSState; // from targets
   next: NWSState; // recommended plan
   notes: string[];
+  totalSavings?: { // optional: total savings (cash + pre-tax + match) for each state
+    now: number;
+    next: number;
+    goal: number;
+  };
 }
 
 /**
