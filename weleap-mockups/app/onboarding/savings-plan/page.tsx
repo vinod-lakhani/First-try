@@ -840,7 +840,7 @@ export default function SavingsPlanPage() {
             {/* Emergency Fund Section with Slider */}
             {(() => {
               const efCategory = emergencyCategory;
-              const currentEfPct = hasAdjustedEfSlider ? efAllocationPct : (savingsAlloc.ef$ / postTaxSavingsAvailable) * 100;
+              const currentEfPct = hasAdjustedEfSlider ? efAllocationPct : ((savingsAlloc?.ef$ ?? 0) / postTaxSavingsAvailable) * 100;
               const efAllocationAmount = (currentEfPct / 100) * postTaxSavingsAvailable;
               const efCap = Math.min(postTaxSavingsAvailable * 0.4, efGap$ > 0 ? efGap$ : postTaxSavingsAvailable);
               const maxPct = (efCap / postTaxSavingsAvailable) * 100;
