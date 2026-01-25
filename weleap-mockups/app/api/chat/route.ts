@@ -1740,12 +1740,42 @@ The user is in the onboarding flow, which guides them through setting up their f
 
     // Savings Breakdown (Total Savings Composition - Cash + Pre-tax + Match)
     // This is different from Savings Allocation (how post-tax cash is distributed)
-    if (userPlanData.monthlySavings && typeof userPlanData.monthlySavings === 'number') {
-      prompt += `**Total Monthly Savings:**\n`;
-      const monthlySavings = typeof userPlanData.monthlySavings === 'number' ? userPlanData.monthlySavings : 0;
-      prompt += `- Total savings: $${Math.round(monthlySavings).toLocaleString()}/month\n`;
+    // Calculate using centralized formula if we have the necessary data
+    if (userPlanData.monthlyIncome && userPlanData.monthlyNeeds !== undefined && userPlanData.monthlyWants !== undefined && userPlanData.payrollContributions) {
+      // We can calculate the savings breakdown using the centralized formula
+      const monthlyIncome = typeof userPlanData.monthlyIncome === 'number' ? userPlanData.monthlyIncome : 0;
+      const monthlyNeeds = typeof userPlanData.monthlyNeeds === 'number' ? userPlanData.monthlyNeeds : 0;
+      const monthlyWants = typeof userPlanData.monthlyWants === 'number' ? userPlanData.monthlyWants : 0;
+      const pc = userPlanData.payrollContributions;
       
-      // Calculate savings breakdown if we have payroll contributions data
+      // Calculate using centralized formula logic
+      const baseSavingsMonthly = monthlyIncome - monthlyNeeds - monthlyWants;
+      const monthly401k = typeof pc.monthly401kContribution === 'number' ? pc.monthly401kContribution : 0;
+      const monthlyHSA = typeof pc.monthlyHSAContribution === 'number' ? pc.monthlyHSAContribution : 0;
+      const preTaxTotal = monthly401k + monthlyHSA;
+      const monthlyMatch = typeof pc.monthlyEmployerMatch === 'number' ? pc.monthlyEmployerMatch : 0;
+      const taxSavingsMonthly = preTaxTotal * 0.25; // Estimated marginal tax rate
+      const netPreTaxImpact = preTaxTotal - taxSavingsMonthly;
+      const cashSavingsMTD = Math.max(0, baseSavingsMonthly - netPreTaxImpact);
+      const totalSavingsMTD = cashSavingsMTD + preTaxTotal + monthlyMatch;
+      
+      prompt += `**Total Monthly Savings Breakdown:**\n`;
+      prompt += `- Total savings: $${Math.round(totalSavingsMTD).toLocaleString()}/month\n`;
+      prompt += `- **Savings Breakdown (what makes up total savings):**\n`;
+      prompt += `  - Cash Savings (post-tax): $${Math.round(cashSavingsMTD).toLocaleString()}/month\n`;
+      if (preTaxTotal > 0) {
+        prompt += `  - Payroll Savings (pre-tax 401k/HSA): $${Math.round(preTaxTotal).toLocaleString()}/month\n`;
+      }
+      if (monthlyMatch > 0) {
+        prompt += `  - 401K Match (free money from employer): $${Math.round(monthlyMatch).toLocaleString()}/month\n`;
+      }
+      prompt += `- **CRITICAL**: When users ask "what makes up my savings" or "break down my savings" or "what is my savings composed of", you MUST show this exact breakdown with dollar amounts: Cash Savings $${Math.round(cashSavingsMTD).toLocaleString()} + Payroll Savings $${Math.round(preTaxTotal).toLocaleString()} + 401K Match $${Math.round(monthlyMatch).toLocaleString()} = Total Savings $${Math.round(totalSavingsMTD).toLocaleString()}\n`;
+      prompt += `\n`;
+    } else if (userPlanData.monthlySavings && typeof userPlanData.monthlySavings === 'number') {
+      // Fallback: use monthlySavings if we don't have all the data for calculation
+      const monthlySavings = typeof userPlanData.monthlySavings === 'number' ? userPlanData.monthlySavings : 0;
+      prompt += `**Total Monthly Savings:**\n`;
+      prompt += `- Total savings: $${Math.round(monthlySavings).toLocaleString()}/month\n`;
       if (userPlanData.payrollContributions) {
         const pc = userPlanData.payrollContributions;
         const monthly401k = typeof pc.monthly401kContribution === 'number' ? pc.monthly401kContribution : 0;
