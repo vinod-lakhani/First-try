@@ -1225,12 +1225,28 @@ If users ask about:
 **UI Layout**:
 - Title: "Your Financial Plan" or similar
 - Multiple sections:
-  1. Income Distribution Chart (pie chart showing Needs/Wants/Savings)
-  2. Paycheck Breakdown (categories and amounts per paycheck)
-  3. Savings Allocation (how savings is distributed across goals)
-  4. Net Worth Projection Chart (40-year projection showing assets, liabilities, net worth)
-  5. Key Milestones (net worth at 6 months, 12 months, 24 months)
-  6. Debt Payoff Timeline (when each debt will be paid off)
+  1. **Income Distribution Chart** (pie chart showing Needs/Wants/Savings with savings breakdown):
+     - Shows total savings amount
+     - **Savings Breakdown** displayed below chart:
+       - Cash Savings (post-tax money available for allocation)
+       - Payroll Savings (pre-tax 401k/HSA contributions)
+       - 401K Match (employer match - free money)
+     - These three components make up the total savings shown
+  
+  2. **Paycheck Breakdown** (categories and amounts per paycheck)
+  
+  3. **Savings Allocation** (how post-tax savings is distributed across goals):
+     - Emergency Fund allocation (monthly amount)
+     - High-APR Debt Payoff allocation (if applicable)
+     - Retirement Contributions allocation (post-tax like Roth IRA)
+     - Brokerage/Other Goals allocation
+     - This shows WHERE the post-tax cash savings is being allocated
+  
+  4. **Net Worth Projection Chart** (40-year projection showing assets, liabilities, net worth)
+  
+  5. **Key Milestones** (net worth at 6 months, 12 months, 24 months)
+  
+  6. **Debt Payoff Timeline** (when each debt will be paid off)
 
 **User Controls**:
 - **"Complete" or "Save Plan" Button**: 
@@ -1246,12 +1262,27 @@ If users ask about:
 - Confirmation that their plan is saved
 
 **Guidance You Can Provide**:
+- **MANDATORY - Savings Breakdown Questions**: When users ask "what makes up my savings" or "break down my savings" or "what is my savings composed of", you MUST:
+  * Reference the savings breakdown shown on the Income Distribution Chart
+  * Show the three components: Cash Savings + Payroll Savings (pre-tax) + 401K Match = Total Savings
+  * Use the exact dollar amounts from userPlanData.savingsAllocation if available
+  * Explain: "Your total savings of $X/month is made up of: Cash Savings $A (post-tax), Payroll Savings $B (pre-tax 401k/HSA), and 401K Match $C (free money from employer)"
+  
+- **MANDATORY - Savings Allocation Questions**: When users ask about how their savings is allocated or "where does my savings go", you MUST:
+  * Reference the Savings Allocation section (how post-tax cash savings is distributed)
+  * Show the breakdown: Emergency Fund $X + Debt Payoff $Y + Retirement $Z + Brokerage $W = Total Post-Tax Savings
+  * Use the exact dollar amounts from userPlanData.savingsAllocation if available
+  * Explain the priority stack: Emergency Fund first, then high-APR debt, then retirement, then brokerage
+  
 - Help interpret the net worth projection chart
 - Explain what the milestones mean (6 months, 12 months, 24 months)
 - Answer questions about debt payoff timelines
 - Help them understand how their savings allocation affects long-term wealth
 - Explain the relationship between savings rate and net worth growth
-- Guide them on next steps after completing onboarding`,
+- Guide them on next steps after completing onboarding
+- **CRITICAL**: Always distinguish between:
+  * **Savings Breakdown** (Cash + Payroll + Match = Total) - shown in Income Distribution Chart
+  * **Savings Allocation** (how post-tax cash is distributed: EF + Debt + Retirement + Brokerage) - shown in Savings Strategy section`,
       
       'savings-helper': `CURRENT SCREEN: Savings Helper Tool
       
@@ -1487,7 +1518,9 @@ If users ask about:
 - Asset information
 - Financial goals and progress
 - Net worth data and projections
-- Savings allocation across goals
+- Savings allocation across goals (how post-tax cash is distributed)
+- Savings breakdown (Cash + Pre-tax + Match = Total)
+- Payroll contributions (401k, HSA, employer match)
 - Safety strategy preferences (liquidity, retirement focus, IDR status)
 
 **Guidance You Can Provide**:
@@ -1498,6 +1531,10 @@ If users ask about:
 - Explain financial concepts and strategies
 - Help them understand trade-offs and decisions
 - Provide context about their financial situation
+- **MANDATORY**: When users ask about savings breakdown or composition, use the exact data from userPlanData (savings breakdown and savings allocation sections)
+- **MANDATORY**: Always distinguish between:
+  * **Savings Breakdown** (what makes up total savings: Cash + Pre-tax + Match)
+  * **Savings Allocation** (where post-tax cash goes: EF + Debt + Retirement + Brokerage)
 
 **Note**: Monthly expense data is provided below. Individual transaction details are available in the app but summarized here as monthly expense categories.`,
     };
@@ -1689,15 +1726,42 @@ The user is in the onboarding flow, which guides them through setting up their f
       prompt += `\n`;
     }
 
+    // Savings Breakdown (Total Savings Composition - Cash + Pre-tax + Match)
+    // This is different from Savings Allocation (how post-tax cash is distributed)
+    if (userPlanData.monthlySavings && typeof userPlanData.monthlySavings === 'number') {
+      prompt += `**Total Monthly Savings:**\n`;
+      const monthlySavings = typeof userPlanData.monthlySavings === 'number' ? userPlanData.monthlySavings : 0;
+      prompt += `- Total savings: $${Math.round(monthlySavings).toLocaleString()}/month\n`;
+      
+      // Calculate savings breakdown if we have payroll contributions data
+      if (userPlanData.payrollContributions) {
+        const pc = userPlanData.payrollContributions;
+        const monthly401k = typeof pc.monthly401kContribution === 'number' ? pc.monthly401kContribution : 0;
+        const monthlyMatch = typeof pc.monthlyEmployerMatch === 'number' ? pc.monthlyEmployerMatch : 0;
+        const monthlyHSA = typeof pc.monthlyHSAContribution === 'number' ? pc.monthlyHSAContribution : 0;
+        const preTaxTotal = monthly401k + monthlyHSA;
+        const cashSavings = monthlySavings - preTaxTotal - monthlyMatch;
+        
+        prompt += `- **Savings Breakdown (what makes up total savings):**\n`;
+        if (cashSavings > 0) {
+          prompt += `  - Cash Savings (post-tax): $${Math.round(cashSavings).toLocaleString()}/month\n`;
+        }
+        if (preTaxTotal > 0) {
+          prompt += `  - Payroll Savings (pre-tax 401k/HSA): $${Math.round(preTaxTotal).toLocaleString()}/month\n`;
+        }
+        if (monthlyMatch > 0) {
+          prompt += `  - 401K Match (free money from employer): $${Math.round(monthlyMatch).toLocaleString()}/month\n`;
+        }
+        prompt += `- **CRITICAL**: When users ask "what makes up my savings" or "break down my savings", you MUST show this breakdown: Cash Savings + Payroll Savings + 401K Match = Total Savings\n`;
+      }
+      prompt += `\n`;
+    }
+
     // Savings Rate
     if (userPlanData.savingsRate !== undefined && userPlanData.savingsRate != null && typeof userPlanData.savingsRate === 'number') {
-      prompt += `**Savings:**\n`;
       const savingsRatePct = userPlanData.savingsRate * 100;
       if (isFinite(savingsRatePct)) {
-        prompt += `- Savings rate: ${savingsRatePct.toFixed(1)}%\n`;
-      }
-      if (userPlanData.monthlySavings && typeof userPlanData.monthlySavings === 'number') {
-        prompt += `- Monthly savings: $${Math.round(userPlanData.monthlySavings).toLocaleString()}\n`;
+        prompt += `- Savings rate: ${savingsRatePct.toFixed(1)}% of income\n`;
       }
       prompt += `\n`;
     }
@@ -1979,11 +2043,15 @@ The user is in the onboarding flow, which guides them through setting up their f
       prompt += `\n`;
     }
 
-    // Savings Allocation Breakdown
+    // Savings Allocation Breakdown (How post-tax cash savings is distributed)
+    // NOTE: This is different from "Savings Breakdown" above
+    // - Savings Breakdown = Cash + Pre-tax + Match (what makes up total savings)
+    // - Savings Allocation = How post-tax cash is distributed (EF + Debt + Retirement + Brokerage)
     if (userPlanData.savingsAllocation) {
-      prompt += `**Savings Allocation (Monthly):**\n`;
+      prompt += `**Savings Allocation (How Post-Tax Cash Savings is Distributed):**\n`;
       const totalSavings = typeof userPlanData.savingsAllocation.total === 'number' ? userPlanData.savingsAllocation.total : 0;
-      prompt += `- Total monthly savings: $${Math.round(totalSavings).toLocaleString()}\n`;
+      prompt += `- Total post-tax cash savings allocated: $${Math.round(totalSavings).toLocaleString()}/month\n`;
+      prompt += `- **CRITICAL**: This shows WHERE the post-tax cash savings goes (Emergency Fund, Debt, Retirement, Brokerage)\n`;
       prompt += `- Breakdown:\n`;
       
       if (userPlanData.savingsAllocation.emergencyFund?.amount > 0) {
@@ -2011,6 +2079,7 @@ The user is in the onboarding flow, which guides them through setting up their f
         const brokPercent = typeof userPlanData.savingsAllocation.brokerage.percent === 'number' ? userPlanData.savingsAllocation.brokerage.percent : 0;
         prompt += `  - Taxable Brokerage: $${Math.round(brokAmount).toLocaleString()}/month (${brokPercent.toFixed(1)}% of savings)\n`;
       }
+      prompt += `- **CRITICAL**: When users ask "where does my savings go" or "how is my savings allocated", you MUST show this breakdown with exact dollar amounts\n`;
       prompt += `\n`;
     }
   }

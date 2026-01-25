@@ -235,6 +235,36 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
         };
       }
 
+      // Calculate savings allocation breakdown if available
+      let savingsAllocationData = undefined;
+      if (store.safetyStrategy?.customSavingsAllocation) {
+        const customAlloc = store.safetyStrategy.customSavingsAllocation;
+        const totalPostTax = customAlloc.ef$ + customAlloc.highAprDebt$ + customAlloc.retirementTaxAdv$ + customAlloc.brokerage$;
+        savingsAllocationData = {
+          total: totalPostTax,
+          emergencyFund: {
+            amount: customAlloc.ef$,
+            percent: totalPostTax > 0 ? (customAlloc.ef$ / totalPostTax) * 100 : 0,
+          },
+          debtPayoff: {
+            amount: customAlloc.highAprDebt$,
+            percent: totalPostTax > 0 ? (customAlloc.highAprDebt$ / totalPostTax) * 100 : 0,
+          },
+          retirementTaxAdv: {
+            amount: customAlloc.retirementTaxAdv$,
+            percent: totalPostTax > 0 ? (customAlloc.retirementTaxAdv$ / totalPostTax) * 100 : 0,
+          },
+          brokerage: {
+            amount: customAlloc.brokerage$,
+            percent: totalPostTax > 0 ? (customAlloc.brokerage$ / totalPostTax) * 100 : 0,
+          },
+          match401k: payrollContributionsData?.monthlyEmployerMatch ? {
+            amount: payrollContributionsData.monthlyEmployerMatch,
+            percent: 0, // Match is separate from post-tax allocation
+          } : undefined,
+        };
+      }
+
       // Call ChatGPT API with comprehensive data
       const aiResponseText = await sendChatMessage({
         messages: [...messages, userMessage],
@@ -253,6 +283,7 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
           planData: planDataContext,
           safetyStrategy,
           payrollContributions: payrollContributionsData,
+          savingsAllocation: savingsAllocationData,
         },
       });
 
