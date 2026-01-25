@@ -699,6 +699,58 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
         }
       }
       
+      // Calculate pre-tax savings and employer match if payroll contributions are available
+      let payrollContributionsData = undefined;
+      if (store.payrollContributions) {
+        const pc = store.payrollContributions;
+        const grossIncome = store.income?.grossIncome$ || store.income?.netIncome$ || monthlyIncome;
+        const grossMonthly = grossIncome * paychecksPerMonth;
+        
+        // Calculate 401k contribution
+        let monthly401k = 0;
+        if (pc.currentlyContributing401k === 'yes' && pc.contributionValue401k) {
+          if (pc.contributionType401k === 'percent_gross') {
+            monthly401k = grossMonthly * (pc.contributionValue401k / 100);
+          } else if (pc.contributionType401k === 'amount') {
+            monthly401k = pc.contributionFrequency401k === 'per_month' 
+              ? pc.contributionValue401k 
+              : pc.contributionValue401k * paychecksPerMonth;
+          }
+        }
+        
+        // Calculate employer match
+        let monthlyMatch = 0;
+        if (pc.hasEmployerMatch === 'yes' && pc.employerMatchPct && pc.employerMatchCapPct) {
+          const matchableAmount = Math.min(monthly401k, grossMonthly * (pc.employerMatchCapPct / 100));
+          monthlyMatch = matchableAmount * (pc.employerMatchPct / 100);
+        }
+        
+        // Calculate HSA contribution
+        let monthlyHSA = 0;
+        if (pc.currentlyContributingHSA === 'yes' && pc.contributionValueHSA) {
+          if (pc.contributionTypeHSA === 'percent_gross') {
+            monthlyHSA = grossMonthly * (pc.contributionValueHSA / 100);
+          } else if (pc.contributionTypeHSA === 'amount') {
+            monthlyHSA = pc.contributionFrequencyHSA === 'per_month'
+              ? pc.contributionValueHSA
+              : pc.contributionValueHSA * paychecksPerMonth;
+          }
+        }
+        
+        payrollContributionsData = {
+          has401k: pc.has401k,
+          hasEmployerMatch: pc.hasEmployerMatch,
+          employerMatchPct: pc.employerMatchPct,
+          employerMatchCapPct: pc.employerMatchCapPct,
+          currentlyContributing401k: pc.currentlyContributing401k,
+          contributionValue401k: pc.contributionValue401k,
+          monthly401kContribution: monthly401k,
+          monthlyEmployerMatch: monthlyMatch,
+          hasHSA: pc.hasHSA,
+          monthlyHSAContribution: monthlyHSA,
+        };
+      }
+
       // Call ChatGPT API with comprehensive data
       const aiResponseText = await sendChatMessage({
         messages: [...messages, userMessage],
@@ -734,6 +786,7 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
             match401kPerMonth: store.safetyStrategy.match401kPerMonth$ ? store.safetyStrategy.match401kPerMonth$ * paychecksPerMonth : 0,
             onIDR: store.safetyStrategy.onIDR || false,
           } : undefined,
+          payrollContributions: payrollContributionsData,
         },
       });
 

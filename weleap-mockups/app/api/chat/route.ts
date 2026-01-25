@@ -1114,15 +1114,34 @@ If users ask about:
       
 **Screen Purpose**: This screen helps users allocate their savings budget across different financial goals like emergency fund, debt payoff, retirement, and other savings goals. It's part of the onboarding flow after income allocation.
 
+**CRITICAL UI SEPARATION - Pre-Tax vs Post-Tax**:
+- **PRE-TAX SECTION** (shown at top of screen):
+  - "Pre-tax payroll savings": Shows 401(k) and HSA contributions (deducted from paycheck before taxes)
+  - "Employer match": Shows free money from employer 401(k) match (if user has match)
+  - "Total wealth moves": Shows ALL money moving into savings (pre-tax + post-tax + match)
+  - These are DISPLAY-ONLY metrics - users cannot adjust pre-tax contributions on this screen
+  - Pre-tax contributions are set on the Payroll Contributions screen (previous step)
+  
+- **POST-TAX SECTION** (main allocation area):
+  - "Post-tax savings available to allocate": This is the cash available AFTER pre-tax deductions
+  - Users allocate this post-tax money using +/- buttons and input boxes
+  - Categories: Emergency Fund, Debt Payoff, Retirement (post-tax like Roth IRA), Brokerage
+  - This is the INTERACTIVE section where users make allocation decisions
+
 **UI Layout**:
-- Title: "Savings Plan" or similar
-- Shows "Post-tax savings available to allocate" (calculated using centralized formula: base savings - net pre-tax impact)
-- Shows breakdown: Pre-tax payroll savings, Employer match, Total wealth moves
-- Multiple savings categories displayed as cards or sections:
-  1. Emergency Fund (with target months selector and interactive controls)
-  2. High-APR Debt Payoff (if user has high-interest debt)
-  3. Retirement Contributions (tax-advantaged allocation)
-  4. Brokerage/Other Goals (remaining savings)
+- Title: "Savings Allocation" or similar
+- **Top Section (Pre-Tax Display)**:
+  - Shows "Post-tax savings available to allocate" (calculated using centralized formula: base savings - net pre-tax impact)
+  - Shows three metrics in a grid:
+    1. "Pre-tax payroll savings" - 401(k) + HSA contributions (estimated monthly)
+    2. "Employer match" - Free money from 401(k) match (if available, shown in green)
+    3. "Total wealth moves" - Sum of all savings (pre-tax + post-tax + match)
+- **Main Section (Post-Tax Allocation)**:
+  - Multiple savings categories displayed as cards or sections:
+    1. Emergency Fund (with target months selector and interactive controls)
+    2. High-APR Debt Payoff (if user has high-interest debt)
+    3. Retirement Contributions (tax-advantaged allocation - POST-TAX like Roth IRA)
+    4. Brokerage/Other Goals (remaining savings)
 
 **User Controls**:
 - **Emergency Fund Target Months Dropdown**: 
@@ -1169,16 +1188,32 @@ If users ask about:
 - Cash balance updates immediately as they adjust categories
 
 **Guidance You Can Provide**:
+- **MANDATORY - 401K Match Awareness**: 
+  * ALWAYS check if user has employer 401(k) match in the payrollContributions data provided
+  * If user has match (hasEmployerMatch === 'yes'), you MUST mention it when discussing retirement savings
+  * Explain: "Your employer provides a 401(k) match of $X/month - this is free money and should be prioritized"
+  * If user asks "should I do the 401K match" or similar, explain that employer match is free money and they should contribute enough to get the full match
+  * The match is automatically included in "Total wealth moves" - users don't need to allocate it separately
+  
+- **MANDATORY - Pre-Tax vs Post-Tax UI Explanation**:
+  * When users ask about pre-tax or post-tax, you MUST explain the UI separation:
+    - Pre-tax (top section): Shows 401(k) and HSA contributions - these are set on Payroll Contributions screen, not adjustable here
+    - Post-tax (main section): Shows cash available after pre-tax deductions - this is what users allocate using +/- buttons
+  * Explain that pre-tax contributions reduce take-home pay but save on taxes
+  * Explain that post-tax savings is the cash left after pre-tax deductions are taken out
+  * If user asks about changing 401(k) contribution, direct them to the Payroll Contributions screen (previous step)
+  
 - Explain the priority stack (why EF comes first, then high-APR debt)
 - Help them set appropriate emergency fund target (3 vs 6 months)
 - Guide them on how much to allocate to each category
 - Explain the 40% cap on EF and debt (ensures other goals progress)
-- Help them understand employer match importance
-- Explain Roth vs Traditional retirement account choices
+- Help them understand employer match importance (if they have one)
+- Explain Roth vs Traditional retirement account choices (for post-tax retirement contributions)
 - **MANDATORY**: When users ask "How do I adjust my savings allocation?" or "How do I use the controls?", you MUST:
   * Explain that they use +/- buttons and input boxes (not sliders) to adjust allocations
   * Mention that cash balance updates in real-time as they adjust
   * Explain that they can click + or - buttons or type directly in the input box
+  * Clarify that they're adjusting POST-TAX savings (pre-tax is set elsewhere)
 - Guide them on how to use +/- buttons and input boxes to adjust allocations
 - Explain how post-tax savings is calculated (base savings minus net pre-tax impact)
 - **MANDATORY**: When users ask "I don't understand what I'm supposed to do here" or similar confusion questions, you MUST provide clear, actionable guidance on what to do using the buttons/input boxes, not just offer to help`,
@@ -1608,6 +1643,47 @@ The user is in the onboarding flow, which guides them through setting up their f
             }
             prompt += `\n`;
           });
+        }
+      }
+      prompt += `\n`;
+    }
+
+    // Payroll Contributions and Employer Match (CRITICAL for savings-plan context)
+    if (userPlanData.payrollContributions) {
+      const pc = userPlanData.payrollContributions;
+      prompt += `**Payroll Contributions (Pre-Tax):**\n`;
+      
+      if (pc.has401k) {
+        prompt += `- Has 401(k) retirement plan: Yes\n`;
+        if (pc.currentlyContributing401k === 'yes' && pc.monthly401kContribution) {
+          const monthly401k = typeof pc.monthly401kContribution === 'number' ? pc.monthly401kContribution : 0;
+          prompt += `- Current 401(k) contribution: $${Math.round(monthly401k).toLocaleString()}/month\n`;
+        }
+        
+        if (pc.hasEmployerMatch === 'yes') {
+          prompt += `- Employer provides 401(k) match: Yes\n`;
+          if (pc.employerMatchPct && pc.employerMatchCapPct) {
+            const matchPct = typeof pc.employerMatchPct === 'number' ? pc.employerMatchPct : 0;
+            const matchCap = typeof pc.employerMatchCapPct === 'number' ? pc.employerMatchCapPct : 0;
+            prompt += `- Match details: ${matchPct}% match up to ${matchCap}% of pay\n`;
+          }
+          if (pc.monthlyEmployerMatch) {
+            const monthlyMatch = typeof pc.monthlyEmployerMatch === 'number' ? pc.monthlyEmployerMatch : 0;
+            prompt += `- Monthly employer match: $${Math.round(monthlyMatch).toLocaleString()}/month (FREE MONEY - this is automatically included in your total wealth moves)\n`;
+          }
+          prompt += `- **CRITICAL**: The employer match is "free money" and should ALWAYS be prioritized. If user asks about 401K match, explain that this is free money and they should contribute enough to get the full match.\n`;
+        } else if (pc.hasEmployerMatch === 'no') {
+          prompt += `- Employer provides 401(k) match: No\n`;
+        }
+      } else {
+        prompt += `- Has 401(k) retirement plan: No\n`;
+      }
+      
+      if (pc.hasHSA) {
+        prompt += `- Has HSA: Yes\n`;
+        if (pc.monthlyHSAContribution) {
+          const monthlyHSA = typeof pc.monthlyHSAContribution === 'number' ? pc.monthlyHSAContribution : 0;
+          prompt += `- Current HSA contribution: $${Math.round(monthlyHSA).toLocaleString()}/month\n`;
         }
       }
       prompt += `\n`;
