@@ -854,7 +854,9 @@ function SavingsHelperContent() {
               <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
                 Total Savings (All-in)
               </span>
-              <HelpCircle className="h-3 w-3 text-slate-400" title="Cash savings + Payroll savings + Employer match" />
+              <span title="Cash savings + Payroll savings + Employer match">
+                <HelpCircle className="h-3 w-3 text-slate-400" />
+              </span>
             </div>
             <div className="space-y-1">
               <div className="flex items-center justify-between text-sm">
