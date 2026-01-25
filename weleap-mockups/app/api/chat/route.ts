@@ -1589,6 +1589,18 @@ The user is in the onboarding flow, which guides them through setting up their f
   if (userPlanData) {
     prompt += `User's financial information:\n\n`;
     
+    // **CRITICAL DATA SUMMARY** - Help LLM understand what data is available
+    prompt += `**AVAILABLE DATA SUMMARY:**\n`;
+    prompt += `The following sections contain the user's complete financial data. Use these exact values when answering questions:\n`;
+    if (userPlanData.monthlyIncome) prompt += `- Income data available\n`;
+    if (userPlanData.monthlyNeeds || userPlanData.monthlyWants) prompt += `- Spending data (Needs/Wants/Savings) available\n`;
+    if (userPlanData.payrollContributions) prompt += `- Payroll contributions and employer match data available\n`;
+    if (userPlanData.savingsAllocation) prompt += `- Savings allocation breakdown available (how post-tax cash is distributed)\n`;
+    if (userPlanData.debtTotal) prompt += `- Debt information available\n`;
+    if (userPlanData.netWorth) prompt += `- Net worth projections available\n`;
+    if (userPlanData.emergencyFund) prompt += `- Emergency fund data available\n`;
+    prompt += `\n**IMPORTANT**: Always use the exact values from the sections below. Never say "I don't have access to your data" - all data is provided in this prompt.\n\n`;
+    
     // Income
     if (userPlanData.monthlyIncome) {
       const monthlyIncome = typeof userPlanData.monthlyIncome === 'number' ? userPlanData.monthlyIncome : 0;
