@@ -380,6 +380,12 @@ export default function SavingsPlanPage() {
   ]);
 
   const handleContinue = () => {
+    // Guard clause: if savingsAlloc is null, we can't continue
+    if (!savingsAlloc) {
+      console.error('Cannot continue: savingsAlloc is null');
+      return;
+    }
+
     // Calculate the actual displayed amounts from sliders to ensure we save exactly what the user sees
     // This matches the calculation used in the UI
     const efAmountToSave = hasAdjustedEfSlider 
@@ -468,18 +474,19 @@ export default function SavingsPlanPage() {
   }
 
   // Calculate current amounts from sliders or allocation (for display)
+  // Note: savingsAlloc is guaranteed to be non-null here due to guard clause above
   const currentEfAmount = hasAdjustedEfSlider 
     ? Math.min((efAllocationPct / 100) * postTaxSavingsAvailable, efGap$ > 0 ? efGap$ : postTaxSavingsAvailable * 0.4)
-    : savingsAlloc.ef$;
+    : savingsAlloc?.ef$ ?? 0;
   const currentDebtAmount = hasAdjustedDebtSlider
     ? Math.min((debtAllocationPct / 100) * postTaxSavingsAvailable, postTaxSavingsAvailable * 0.4)
-    : savingsAlloc.highAprDebt$;
+    : savingsAlloc?.highAprDebt$ ?? 0;
   const currentRetirementAmount = hasAdjustedRetirementSlider
     ? (retirementAllocationPct / 100) * postTaxSavingsAvailable
-    : savingsAlloc.retirementTaxAdv$;
+    : savingsAlloc?.retirementTaxAdv$ ?? 0;
   const currentBrokerageAmount = hasAdjustedBrokerageSlider
     ? (brokerageAllocationPct / 100) * postTaxSavingsAvailable
-    : savingsAlloc.brokerage$;
+    : savingsAlloc?.brokerage$ ?? 0;
 
   // Post-tax categories only (removed 401k match and traditional 401k from post-tax list)
   const emergencyCategory: SavingsCategory = {
@@ -509,7 +516,7 @@ export default function SavingsPlanPage() {
       amount: currentRetirementAmount,
       percent: (currentRetirementAmount / postTaxSavingsAvailable) * 100,
       icon: <TrendingUp className="h-5 w-5" />,
-      description: `Post-tax retirement accounts (${savingsAlloc.routing.acctType}) for long-term growth`,
+      description: `Post-tax retirement accounts (${savingsAlloc?.routing?.acctType ?? 'retirement'}) for long-term growth`,
       color: '#8b5cf6',
     },
     {
