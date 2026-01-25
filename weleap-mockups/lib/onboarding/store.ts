@@ -14,6 +14,7 @@ import type {
   Asset,
   PrimaryGoal,
   Goal,
+  PayrollContributions,
   SafetyStrategy,
   RiskConstraints,
   PaycheckPlan,
@@ -98,6 +99,10 @@ export interface OnboardingStore extends OnboardingState {
   addGoal: (goal: Goal) => void;
   updateGoal: (id: string, updates: Partial<Goal>) => void;
   removeGoal: (id: string) => void;
+  
+  // Payroll contributions setters
+  setPayrollContributions: (contributions: PayrollContributions) => void;
+  updatePayrollContributions: (updates: Partial<PayrollContributions>) => void;
   
   // Safety strategy setters
   setSafetyStrategy: (strategy: SafetyStrategy) => void;
@@ -218,6 +223,15 @@ export const useOnboardingStore = create<OnboardingStore>()(
       goals: state.goals.filter((g) => g.id !== id),
     })),
   
+  // Payroll contributions setters
+  setPayrollContributions: (contributions) => set({ payrollContributions: contributions }),
+  updatePayrollContributions: (updates) =>
+    set((state) => ({
+      payrollContributions: state.payrollContributions
+        ? { ...state.payrollContributions, ...updates }
+        : updates as PayrollContributions,
+    })),
+  
   // Safety strategy setters
   setSafetyStrategy: (strategy) => set({ safetyStrategy: strategy }),
   updateSafetyStrategy: (updates) =>
@@ -265,14 +279,20 @@ export const useOnboardingStore = create<OnboardingStore>()(
     }),
   
   // Reset
-  resetOnboarding: () =>
+  resetOnboarding: () => {
+    // Explicitly clear localStorage to ensure all persisted data is removed
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('weleap-onboarding-storage');
+    }
     set({
       ...defaultState,
       startedAt: new Date().toISOString(),
-    }),
-    }),
-    {
-      name: 'weleap-onboarding-storage', // unique name for localStorage key
+      payrollContributions: undefined, // Explicitly clear payroll contributions
+    });
+  },
+  }),
+  {
+    name: 'weleap-onboarding-storage', // unique name for localStorage key
       storage: typeof window !== 'undefined' 
         ? createJSONStorage(() => localStorage)
         : createJSONStorage(() => ({
@@ -292,6 +312,7 @@ export const useOnboardingStore = create<OnboardingStore>()(
         assets: state.assets,
         goals: state.goals,
         primaryGoal: state.primaryGoal,
+        payrollContributions: state.payrollContributions,
         riskConstraints: state.riskConstraints,
         safetyStrategy: state.safetyStrategy,
         pulsePreferences: state.pulsePreferences,

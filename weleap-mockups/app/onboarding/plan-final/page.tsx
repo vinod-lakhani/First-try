@@ -26,6 +26,7 @@ import { NetWorthChart } from '@/components/charts/NetWorthChart';
 import { IncomeDistributionChart } from '@/components/charts/IncomeDistributionChart';
 import { OnboardingChat } from '@/components/onboarding/OnboardingChat';
 import { OnboardingProgress } from '@/components/onboarding/OnboardingProgress';
+import { calculateSavingsBreakdown } from '@/lib/utils/savingsCalculations';
 
 // Helper to get paychecks per month
 function getPaychecksPerMonth(frequency: string): number {
@@ -76,6 +77,73 @@ export default function PlanFinalPage() {
     ...cat,
     amount: cat.amount * paychecksPerMonth, // Convert to monthly
   })) : [];
+
+  // Use centralized savings calculation for consistency
+  const savingsCalculations = useMemo(() => {
+    if (!planData) {
+      return {
+        observedCashSavingsMTD: 0,
+        expectedPayrollSavingsMTD: 0,
+        expectedMatchMTD: 0,
+        totalSavingsMTD: 0,
+        savingsBreakdown: [],
+      };
+    }
+
+    // Use centralized savings calculation for consistency
+    const income = state.income;
+    const payrollContributions = state.payrollContributions;
+    
+    // Calculate needs and wants from plan categories (these don't change with custom allocation)
+    const needsCategory = planData.paycheckCategories.find(c => c.key === 'essentials');
+    const debtMinCategory = planData.paycheckCategories.find(c => c.key === 'debt_minimums');
+    const wantsCategory = planData.paycheckCategories.find(c => c.key === 'fun_flexible');
+    
+    const monthlyNeeds = ((needsCategory?.amount || 0) + (debtMinCategory?.amount || 0)) * paychecksPerMonth;
+    const monthlyWants = (wantsCategory?.amount || 0) * paychecksPerMonth;
+    
+    // Use centralized calculation function
+    const savingsCalc = calculateSavingsBreakdown(income, payrollContributions, monthlyNeeds, monthlyWants);
+    
+    const observedCashSavingsMTD = savingsCalc.cashSavingsMTD;
+    const expectedPayrollSavingsMTD = savingsCalc.payrollSavingsMTD;
+    const expectedMatchMTD = savingsCalc.employerMatchMTD;
+    const totalSavingsMTD = savingsCalc.totalSavingsMTD;
+    
+    // Debug logging to track calculation
+    console.log('[PlanFinal] Savings Breakdown:', savingsCalc);
+
+    // Create savings breakdown for chart (same structure as income page)
+    const grossIncome = income?.grossIncome$
+      ? income.grossIncome$ * paychecksPerMonth
+      : monthlyTakeHomePay;
+    
+    const savingsBreakdown = [
+      {
+        label: 'Cash Savings',
+        amount: observedCashSavingsMTD,
+        percent: grossIncome > 0 ? (observedCashSavingsMTD / grossIncome) * 100 : 0,
+      },
+      {
+        label: 'Payroll Savings',
+        amount: expectedPayrollSavingsMTD,
+        percent: grossIncome > 0 ? (expectedPayrollSavingsMTD / grossIncome) * 100 : 0,
+      },
+      {
+        label: '401K Match',
+        amount: expectedMatchMTD,
+        percent: grossIncome > 0 ? (expectedMatchMTD / grossIncome) * 100 : 0,
+      },
+    ].filter(item => item.amount > 0.01); // Only show if amount is meaningful
+
+    return {
+      observedCashSavingsMTD,
+      expectedPayrollSavingsMTD,
+      expectedMatchMTD,
+      totalSavingsMTD,
+      savingsBreakdown,
+    };
+  }, [planData, paychecksPerMonth, monthlyTakeHomePay, state.payrollContributions, state.income]);
 
   // Responsive chart size
   const [chartSize, setChartSize] = useState(280);
@@ -195,6 +263,8 @@ export default function PlanFinalPage() {
               description: cat.why,
             }))}
             size={chartSize}
+            totalSavings={savingsCalculations.totalSavingsMTD}
+            savingsBreakdown={savingsCalculations.savingsBreakdown}
           />
           <div className="mt-6 space-y-1 text-sm text-slate-600 dark:text-slate-400">
             <p>This plan updates automatically if your income or spending changes.</p>

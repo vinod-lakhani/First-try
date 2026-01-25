@@ -6,15 +6,16 @@
 
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useOnboardingStore } from '@/lib/onboarding/store';
 import { usePlanData } from '@/lib/onboarding/usePlanData';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { X } from 'lucide-react';
+import { X, ChevronDown, ChevronUp } from 'lucide-react';
 import { formatCurrency, formatPercent } from '@/lib/feed/utils';
 import { getPaychecksPerMonth } from '@/lib/onboarding/usePlanData';
+import { calculateSavingsBreakdown } from '@/lib/utils/savingsCalculations';
 
 export default function MonthlyPulsePage() {
   const router = useRouter();
@@ -24,6 +25,11 @@ export default function MonthlyPulsePage() {
   const income = state.income;
   const paychecksPerMonth = getPaychecksPerMonth(income?.payFrequency || 'biweekly');
   const monthlyIncome = planData ? planData.paycheckAmount * paychecksPerMonth : 0;
+  const grossIncome = income?.grossIncome$
+    ? income.grossIncome$ * paychecksPerMonth
+    : monthlyIncome;
+  const [savingsExpanded, setSavingsExpanded] = useState(false);
+  const [savingsBreakdownExpanded, setSavingsBreakdownExpanded] = useState(false);
 
   // Get targets from riskConstraints or use defaults
   const targets = state.riskConstraints?.targets || {
@@ -170,6 +176,42 @@ export default function MonthlyPulsePage() {
   const wantsPct = totalIncome > 0 ? (totalWants / totalIncome) * 100 : 0;
   const savingsPct = totalIncome > 0 ? (totalSavings / totalIncome) * 100 : 0;
 
+  // Use centralized savings calculation for consistency
+  const payrollContributions = state.payrollContributions;
+  
+  // Calculate monthly needs and wants from plan categories
+  const monthlyNeeds = useMemo(() => {
+    if (!planData) return 0;
+    const needsCategories = planData.paycheckCategories.filter(c => 
+      c.key === 'essentials' || c.key === 'debt_minimums'
+    );
+    return needsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
+  }, [planData, paychecksPerMonth]);
+  
+  const monthlyWants = useMemo(() => {
+    if (!planData) return 0;
+    const wantsCategories = planData.paycheckCategories.filter(c => c.key === 'fun_flexible');
+    return wantsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
+  }, [planData, paychecksPerMonth]);
+  
+  // Use centralized calculation function
+  const savingsBreakdown = useMemo(() => {
+    return calculateSavingsBreakdown(income, payrollContributions, monthlyNeeds, monthlyWants);
+  }, [income, payrollContributions, monthlyNeeds, monthlyWants]);
+  
+  const observedCashSavingsMTD = savingsBreakdown.cashSavingsMTD;
+  const expectedPayrollSavingsMTD = savingsBreakdown.payrollSavingsMTD;
+  const expectedMatchMTD = savingsBreakdown.employerMatchMTD;
+  const totalSavingsMTD = savingsBreakdown.totalSavingsMTD;
+
+  // Calculate targets
+  // For now, we'll use the same target percentage for total savings
+  // In the future, we might want separate targets for cash vs payroll
+  const targetCashSavingsMTD = (normalizedTargets.savingsPct / 100) * monthlyIncome;
+  const targetPayrollSavingsMTD = expectedPayrollSavingsMTD; // Target equals expected (from payroll settings)
+  const targetMatchMTD = expectedMatchMTD; // Target equals expected match
+  const targetTotalSavingsMTD = targetCashSavingsMTD + targetPayrollSavingsMTD + targetMatchMTD;
+
   if (!planData) {
     return (
       <div className="flex min-h-[calc(100vh-73px)] items-center justify-center p-4">
@@ -262,23 +304,87 @@ export default function MonthlyPulsePage() {
                   </p>
                 </div>
 
-                {/* Savings */}
+                {/* Savings - Expandable */}
                 <div>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-slate-600 dark:text-slate-400">Savings</span>
-                    <span className="font-medium">
-                      {formatPercent(savingsPct)} ({formatCurrency(totalSavings)})
-                    </span>
-                  </div>
-                  <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-green-500 transition-all"
-                      style={{ width: `${savingsPct}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Target: {formatPercent(normalizedTargets.savingsPct)}
-                  </p>
+                  <button
+                    onClick={() => setSavingsExpanded(!savingsExpanded)}
+                    className="w-full"
+                  >
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-slate-600 dark:text-slate-400">Savings</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">
+                          {formatPercent((totalSavingsMTD / monthlyIncome) * 100)} ({formatCurrency(totalSavingsMTD)})
+                        </span>
+                        {savingsExpanded ? (
+                          <ChevronUp className="h-4 w-4 text-slate-400" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 text-slate-400" />
+                        )}
+                      </div>
+                    </div>
+                    <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-green-500 transition-all"
+                        style={{ width: `${Math.min((totalSavingsMTD / monthlyIncome) * 100, 100)}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Target: {formatPercent(normalizedTargets.savingsPct)}
+                    </p>
+                  </button>
+
+                  {/* Savings Breakdown */}
+                  {savingsExpanded && (
+                    <div className="mt-3 space-y-2 pl-2 border-l-2 border-green-200 dark:border-green-800">
+                      {/* Cash Savings (Post-tax) */}
+                      <div className="text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-slate-600 dark:text-slate-400">Cash savings (Post-tax):</span>
+                          <span className="font-medium text-slate-900 dark:text-white">
+                            {formatCurrency(observedCashSavingsMTD)}
+                          </span>
+                        </div>
+                        <div className="text-slate-500 dark:text-slate-400 italic">observed</div>
+                      </div>
+
+                      {/* Payroll Savings (Pre-tax) */}
+                      {expectedPayrollSavingsMTD > 0 && (
+                        <div className="text-xs">
+                          <div className="flex justify-between">
+                            <span className="text-slate-600 dark:text-slate-400">Payroll savings (Pre-tax):</span>
+                            <span className="font-medium text-slate-900 dark:text-white">
+                              {formatCurrency(expectedPayrollSavingsMTD)}
+                            </span>
+                          </div>
+                          <div className="text-slate-500 dark:text-slate-400 italic">estimated</div>
+                        </div>
+                      )}
+
+                      {/* Employer Match */}
+                      {expectedMatchMTD > 0 && (
+                        <div className="text-xs">
+                          <div className="flex justify-between">
+                            <span className="text-slate-600 dark:text-slate-400">Employer match:</span>
+                            <span className="font-medium text-green-600 dark:text-green-400">
+                              +{formatCurrency(expectedMatchMTD)}
+                            </span>
+                          </div>
+                          <div className="text-slate-500 dark:text-slate-400 italic">estimated</div>
+                        </div>
+                      )}
+
+                      {/* Total Savings */}
+                      <div className="text-xs pt-2 border-t border-slate-200 dark:border-slate-700">
+                        <div className="flex justify-between font-semibold">
+                          <span className="text-slate-700 dark:text-slate-300">Total Savings (Cash + Payroll + Match):</span>
+                          <span className="text-slate-900 dark:text-white">
+                            {formatCurrency(totalSavingsMTD)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -356,16 +462,92 @@ export default function MonthlyPulsePage() {
             </CardContent>
           </Card>
 
-          {/* Savings Breakdown */}
+          {/* Savings */}
           <Card>
             <CardHeader>
               <CardTitle className="text-xl">Savings</CardTitle>
               <p className="text-sm text-slate-600 dark:text-slate-400">
-                Total: {formatCurrency(totalSavings)} ({formatPercent(savingsPct)})
+                Total Savings /month: {formatCurrency(totalSavingsMTD)} ({grossIncome ? ((totalSavingsMTD / grossIncome) * 100).toFixed(0) : savingsPct.toFixed(0)}% of Gross Income)
               </p>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
+              {/* Savings Breakdown Header - Expandable */}
+              <div className="mb-4">
+                <button
+                  onClick={() => setSavingsBreakdownExpanded(!savingsBreakdownExpanded)}
+                  className="w-full text-left"
+                >
+                  <div className="flex items-center justify-between text-sm mb-2">
+                    <span className="font-medium text-slate-700 dark:text-slate-300">Savings Breakdown</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-500 dark:text-slate-400">
+                        {formatCurrency(totalSavingsMTD)}
+                      </span>
+                      {savingsBreakdownExpanded ? (
+                        <ChevronUp className="h-4 w-4 text-slate-400" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-slate-400" />
+                      )}
+                    </div>
+                  </div>
+                </button>
+
+                {/* Savings Breakdown Details */}
+                {savingsBreakdownExpanded && (
+                  <div className="mt-3 space-y-2 pl-2 border-l-2 border-green-200 dark:border-green-800">
+                    {/* Cash Savings (Post-tax) */}
+                    <div className="text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-slate-600 dark:text-slate-400">Cash savings (Post-tax):</span>
+                        <span className="font-medium text-slate-900 dark:text-white">
+                          {formatCurrency(observedCashSavingsMTD)}
+                        </span>
+                      </div>
+                      <div className="text-slate-500 dark:text-slate-400 italic">observed</div>
+                    </div>
+
+                    {/* Payroll Savings (Pre-tax) */}
+                    {expectedPayrollSavingsMTD > 0 && (
+                      <div className="text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-slate-600 dark:text-slate-400">Payroll savings (Pre-tax):</span>
+                          <span className="font-medium text-slate-900 dark:text-white">
+                            {formatCurrency(expectedPayrollSavingsMTD)}
+                          </span>
+                        </div>
+                        <div className="text-slate-500 dark:text-slate-400 italic">estimated</div>
+                      </div>
+                    )}
+
+                    {/* Employer Match */}
+                    {expectedMatchMTD > 0 && (
+                      <div className="text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-slate-600 dark:text-slate-400">Employer match:</span>
+                          <span className="font-medium text-green-600 dark:text-green-400">
+                            +{formatCurrency(expectedMatchMTD)}
+                          </span>
+                        </div>
+                        <div className="text-slate-500 dark:text-slate-400 italic">estimated</div>
+                      </div>
+                    )}
+
+                    {/* Total Savings */}
+                    <div className="text-xs pt-2 border-t border-slate-200 dark:border-slate-700">
+                      <div className="flex justify-between font-semibold">
+                        <span className="text-slate-700 dark:text-slate-300">Total Savings (Cash + Payroll + Match):</span>
+                        <span className="text-slate-900 dark:text-white">
+                          {formatCurrency(totalSavingsMTD)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Savings Subcategories */}
+              <div className="space-y-3 border-t pt-4">
+                <p className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Cash Savings Categories:</p>
                 {breakdowns.savings.length > 0 ? (
                   breakdowns.savings.map((item) => {
                     const maxAmount = Math.max(...breakdowns.savings.map(s => s.amount), 1);

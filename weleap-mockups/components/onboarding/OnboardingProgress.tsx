@@ -110,7 +110,7 @@ const getStageFromPath = (pathname: string, isManualEntry: boolean): string => {
   }
   
   // Savings
-  if (pathname === '/onboarding/savings-plan') {
+  if (pathname === '/onboarding/payroll-contributions' || pathname === '/onboarding/savings-plan') {
     return 'savings';
   }
   
@@ -137,7 +137,7 @@ const getRouteForStage = (stageId: string, isManualEntry: boolean): string => {
     case 'income':
       return '/onboarding/monthly-plan-design';
     case 'savings':
-      return '/onboarding/savings-plan';
+      return '/onboarding/payroll-contributions';
     case 'plan':
       return '/onboarding/plan-final';
     default:

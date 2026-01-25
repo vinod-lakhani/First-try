@@ -13,6 +13,11 @@ export interface NWSComparisonProps {
   now: NWSState;   // A - actuals
   next: NWSState;  // R - recommended plan
   goal: NWSState;  // T - targets
+  totalSavings?: {
+    now?: number;   // Optional: Total savings for NOW (Cash + Payroll + Match)
+    next?: number;  // Optional: Total savings for NEXT (Cash + Payroll + Match)
+    goal?: number; // Optional: Total savings for GOAL (Cash + Payroll + Match)
+  };
 }
 
 const categoryColors = {
@@ -27,19 +32,24 @@ const categoryLabels = {
   savings: 'Savings',
 };
 
-export function NWSBars({ now, next, goal }: NWSComparisonProps) {
+export function NWSBars({ now, next, goal, totalSavings }: NWSComparisonProps) {
   const [hoveredBar, setHoveredBar] = useState<string | null>(null);
   const [hoveredSegment, setHoveredSegment] = useState<string | null>(null);
 
   const renderBar = (
     label: string,
     state: NWSState,
-    isHovered: boolean
+    isHovered: boolean,
+    savingsOverride?: number
   ) => {
+    const savingsAmount = savingsOverride !== undefined 
+      ? savingsOverride 
+      : state.income$ * state.savingsPct;
+    
     const segments = [
       { key: 'needs', pct: state.needsPct, amount: state.income$ * state.needsPct },
       { key: 'wants', pct: state.wantsPct, amount: state.income$ * state.wantsPct },
-      { key: 'savings', pct: state.savingsPct, amount: state.income$ * state.savingsPct },
+      { key: 'savings', pct: state.savingsPct, amount: savingsAmount },
     ];
 
     return (
@@ -163,7 +173,7 @@ export function NWSBars({ now, next, goal }: NWSComparisonProps) {
 
       {/* Goal (TARGET) */}
       <div className="space-y-2">
-        {renderBar('Goal', goal, hoveredBar === 'Goal')}
+        {renderBar('Goal', goal, hoveredBar === 'Goal', totalSavings?.goal)}
         
         {/* Delta annotations for GOAL */}
         <div className="flex gap-4 text-xs">

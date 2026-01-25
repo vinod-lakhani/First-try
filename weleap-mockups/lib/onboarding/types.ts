@@ -97,6 +97,53 @@ export interface Goal {
 }
 
 /**
+ * Payroll contribution preferences
+ */
+export interface PayrollContributions {
+  // 401(k) / Retirement Plan
+  /** Whether user has a retirement plan through work */
+  has401k?: boolean;
+  /** Whether employer matches contributions */
+  hasEmployerMatch?: "yes" | "no" | "not_sure";
+  /** Employer match percentage (0-100) */
+  employerMatchPct?: number | null;
+  /** Employer match cap as % of pay (0-15) */
+  employerMatchCapPct?: number | null;
+  /** Whether currently contributing to 401k */
+  currentlyContributing401k?: "yes" | "no";
+  /** Contribution type: percent of gross or dollar amount */
+  contributionType401k?: "percent_gross" | "amount" | null;
+  /** Contribution value (percentage 0-50 or dollar amount) */
+  contributionValue401k?: number | null;
+  /** Contribution frequency (only if contributionType401k=amount) */
+  contributionFrequency401k?: "per_paycheck" | "per_month" | null;
+  
+  // HSA
+  /** Whether user has an HSA */
+  hasHSA?: boolean;
+  /** Whether currently contributing to HSA */
+  currentlyContributingHSA?: "yes" | "no";
+  /** HSA contribution type: percent of gross or dollar amount */
+  contributionTypeHSA?: "percent_gross" | "amount" | null;
+  /** HSA contribution value (percentage 0-50 or dollar amount) */
+  contributionValueHSA?: number | null;
+  /** HSA contribution frequency (only if contributionTypeHSA=amount) */
+  contributionFrequencyHSA?: "per_paycheck" | "per_month" | null;
+  /** Whether employer contributes to HSA */
+  employerHSAContribution?: "yes" | "no" | "not_sure";
+  /** How Sidekick should treat HSA */
+  hsaIntent?: "medical" | "investing" | "decide";
+  
+  // Emergency Fund
+  /** Emergency fund target in months (3, 4, 5, or 6+) */
+  emergencyFundMonths?: 3 | 4 | 5 | 6;
+  
+  // Retirement Preference
+  /** Retirement account preference */
+  retirementPreference?: "roth" | "traditional" | "decide";
+}
+
+/**
  * Safety and strategy preferences
  */
 export interface SafetyStrategy {
@@ -247,6 +294,8 @@ export interface OnboardingState {
   goals: Goal[];
   
   // Strategy
+  /** Payroll contribution preferences */
+  payrollContributions?: PayrollContributions;
   /** Safety and strategy preferences */
   safetyStrategy?: SafetyStrategy;
   /** Risk and constraints */

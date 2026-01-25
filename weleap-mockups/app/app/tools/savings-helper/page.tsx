@@ -18,8 +18,9 @@ import type { OnboardingState } from '@/lib/onboarding/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
-import { X, ArrowRight } from 'lucide-react';
+import { X, ArrowRight, ChevronDown, ChevronUp, HelpCircle } from 'lucide-react';
 import { NetWorthChart } from '@/components/charts/NetWorthChart';
+import { calculateSavingsBreakdown } from '@/lib/utils/savingsCalculations';
 
 // Helper to get paychecks per month
 function getPaychecksPerMonth(frequency: string): number {
@@ -42,6 +43,19 @@ function SavingsHelperContent() {
   // Calculate monthly income - must be computed before any conditional returns
   const paychecksPerMonth = getPaychecksPerMonth(baselineState.income?.payFrequency || 'biweekly');
   const monthlyIncome = baselinePlanData?.paycheckAmount ? baselinePlanData.paycheckAmount * paychecksPerMonth : 0;
+  
+  // Calculate NetIncomeMonthly (take-home) and GrossIncomeMonthly
+  const netIncomeMonthly = useMemo(() => {
+    const income = baselineState.income;
+    if (!income) return monthlyIncome; // Fallback to monthlyIncome if no income data
+    return (income.netIncome$ || income.grossIncome$ || 0) * paychecksPerMonth;
+  }, [baselineState.income, paychecksPerMonth, monthlyIncome]);
+  
+  const grossIncomeMonthly = useMemo(() => {
+    const income = baselineState.income;
+    if (!income) return monthlyIncome * 1.25; // Estimate gross if missing (assume ~20% taxes)
+    return (income.grossIncome$ || income.netIncome$ || 0) * paychecksPerMonth;
+  }, [baselineState.income, paychecksPerMonth, monthlyIncome]);
 
   // All hooks must be called unconditionally, before any early returns
   // Get actuals from 3 months (actuals3m) - this is the first bar graph
@@ -129,7 +143,17 @@ function SavingsHelperContent() {
     };
   }, [baselineState.fixedExpenses, baselineState.debts, baselineState.income, paychecksPerMonth]);
 
+  // Calculate observed values from actuals (MUST be after actuals3m is defined)
+  const needsActualMonthly = useMemo(() => {
+    return netIncomeMonthly * actuals3m.needsPct;
+  }, [netIncomeMonthly, actuals3m.needsPct]);
+  
+  const wantsActualMonthly = useMemo(() => {
+    return netIncomeMonthly * actuals3m.wantsPct;
+  }, [netIncomeMonthly, actuals3m.wantsPct]);
+
   // Current plan distribution (baseline plan) - this is the second bar graph
+  // Use the income allocation logic: Cash Savings = Extra Debt Paydown + Emergency Savings + 401k Match + Retirement Tax-Advantaged + Brokerage
   const currentPlan = useMemo(() => {
     if (!baselinePlanData || !baselinePlanData.paycheckCategories) {
       return { needsPct: 0.5, wantsPct: 0.3, savingsPct: 0.2 };
@@ -140,12 +164,34 @@ function SavingsHelperContent() {
     const wantsCategories = baselinePlanData.paycheckCategories.filter(c => 
       c.key === 'fun_flexible'
     );
-    const savingsCategories = baselinePlanData.paycheckCategories.filter(c => 
-      c.key === 'emergency' || c.key === 'long_term_investing' || c.key === 'debt_extra'
-    );
+    
+    // Calculate cash savings using the income allocation logic structure:
+    // 1. Extra Debt Paydown (debt_extra)
+    // 2. Emergency Savings (emergency)
+    // 3. 401k Match (from long_term_investing.subCategories)
+    // 4. Retirement Tax-Advantaged (from long_term_investing.subCategories)
+    // 5. Brokerage (from long_term_investing.subCategories)
+    const debtExtraCategory = baselinePlanData.paycheckCategories.find(c => c.key === 'debt_extra');
+    const emergencyCategory = baselinePlanData.paycheckCategories.find(c => c.key === 'emergency');
+    const longTermCategory = baselinePlanData.paycheckCategories.find(c => c.key === 'long_term_investing');
+    
+    const monthlyDebtExtra = (debtExtraCategory?.amount || 0) * paychecksPerMonth;
+    const monthlyEmergency = (emergencyCategory?.amount || 0) * paychecksPerMonth;
+    
+    // Extract subCategories from long_term_investing
+    const match401kSub = longTermCategory?.subCategories?.find(s => s.key === '401k_match');
+    const retirementTaxAdvSub = longTermCategory?.subCategories?.find(s => s.key === 'retirement_tax_advantaged');
+    const brokerageSub = longTermCategory?.subCategories?.find(s => s.key === 'brokerage');
+    
+    const monthly401kMatch = (match401kSub?.amount || 0) * paychecksPerMonth;
+    const monthlyRetirementTaxAdv = (retirementTaxAdvSub?.amount || 0) * paychecksPerMonth;
+    const monthlyBrokerage = (brokerageSub?.amount || 0) * paychecksPerMonth;
+    
+    // Total cash savings = sum of all five categories
+    const monthlySavings = monthlyDebtExtra + monthlyEmergency + monthly401kMatch + monthlyRetirementTaxAdv + monthlyBrokerage;
+    
     const monthlyNeeds = needsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
     const monthlyWants = wantsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
-    const monthlySavings = savingsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
     const total = monthlyNeeds + monthlyWants + monthlySavings;
     if (total > 0) {
       return {
@@ -174,18 +220,145 @@ function SavingsHelperContent() {
     savingsPct: 0.2,
   };
 
+  // State for Total Savings Goal slider (MUST be before savingsCalculations useMemo that depends on it)
+  const [totalSavingsTargetPctGross, setTotalSavingsTargetPctGross] = useState(20); // Default 20% of gross
+  const [savingsExpanded, setSavingsExpanded] = useState<{ [key: string]: boolean }>({});
+
+  // Use centralized savings calculation for consistency
+  const savingsBreakdown = useMemo(() => {
+    // Calculate monthly needs and wants from actuals
+    return calculateSavingsBreakdown(
+      baselineState.income,
+      baselineState.payrollContributions,
+      needsActualMonthly,
+      wantsActualMonthly
+    );
+  }, [baselineState.income, baselineState.payrollContributions, needsActualMonthly, wantsActualMonthly]);
+
+  // Use centralized calculation for payroll + match
+  const payrollMatchData = useMemo(() => {
+    const savingsCalc = savingsBreakdown;
+    return {
+      payrollSavingsMTD: savingsCalc.payrollSavingsMTD,
+      matchMTD: savingsCalc.employerMatchMTD,
+      totalPayrollMatchMTD: savingsCalc.payrollSavingsMTD + savingsCalc.employerMatchMTD,
+      expected401kMTD: savingsCalc.preTaxSavingsTotal, // Approximate - could be split if needed
+      expectedHSAMTD: 0, // Could be enhanced to split 401k vs HSA if needed
+    };
+  }, [savingsBreakdown]);
+  
+  const cashSavingsObservedMonthly = savingsBreakdown.cashSavingsMTD;
+  const baseSavingsMonthly = savingsBreakdown.baseSavingsMonthly;
+
+  // Calculate all savings targets and values using new formulas
+  const savingsCalculations = useMemo(() => {
+    // Get target percentages (defaults or user-set)
+    const needsTargetPctNet = (baselineState.riskConstraints?.targets?.needsPct || 0.5) * 100;
+    const wantsTargetPctNet = (baselineState.riskConstraints?.targets?.wantsPct || 0.3) * 100;
+    const totalSavingsTargetPctGrossValue = totalSavingsTargetPctGross / 100;
+    
+    // Compute targets
+    const needsTarget$ = (needsTargetPctNet / 100) * netIncomeMonthly;
+    const wantsTarget$ = (wantsTargetPctNet / 100) * netIncomeMonthly;
+    const totalSavingsTarget$ = totalSavingsTargetPctGrossValue * grossIncomeMonthly;
+    
+    // Pre-tax savings
+    const preTaxSavings$ = payrollMatchData.payrollSavingsMTD;
+    const payrollPlusMatch$ = payrollMatchData.totalPayrollMatchMTD;
+    
+    // Cash savings floor: max(50, 0.01 * NetIncomeMonthly)
+    const cashSavingsFloor = Math.max(50, 0.01 * netIncomeMonthly);
+    
+    // Cash savings target = max(floor, TotalSavingsTarget$ - PayrollPlusMatch$)
+    const cashSavingsTarget$ = Math.max(cashSavingsFloor, totalSavingsTarget$ - payrollPlusMatch$);
+    
+    // Total savings all-in = CashSavingsObserved$ + PreTaxSavings$ + employerMatchMonthly
+    const totalSavingsAllIn$ = cashSavingsObservedMonthly + preTaxSavings$ + payrollMatchData.matchMTD;
+    
+    return {
+      needsTarget$,
+      wantsTarget$,
+      totalSavingsTarget$,
+      preTaxSavings$,
+      payrollPlusMatch$,
+      cashSavingsFloor,
+      cashSavingsTarget$,
+      totalSavingsAllIn$,
+      needsTargetPctNet,
+      wantsTargetPctNet,
+      totalSavingsTargetPctGross: totalSavingsTargetPctGrossValue,
+    };
+  }, [
+    netIncomeMonthly,
+    grossIncomeMonthly,
+    payrollMatchData,
+    cashSavingsObservedMonthly,
+    baselineState.riskConstraints?.targets,
+    totalSavingsTargetPctGross,
+  ]);
+
   // Calculate recommended distribution using computeIncomePlan - this is the third bar graph
   // Recommended plan starts from CURRENT PLAN and adjusts toward standard targets (50/30/20)
+  // IMPORTANT: Account for total savings (Cash + Payroll + Match) when calculating recommendations
+  // Use TotalSavingsTarget$ (gross-based) instead of requiring 20% cash savings
   const recommendedPlan = useMemo(() => {
-    if (!baselinePlanData || monthlyIncome === 0) {
+    if (!baselinePlanData || netIncomeMonthly === 0) {
       return { needsPct: 0.5, wantsPct: 0.3, savingsPct: 0.2 };
     }
     try {
-      console.log('[Savings Helper] Computing recommended plan:', {
+      // Calculate current total savings (Cash + Payroll + Match)
+      const currentCashSavings = netIncomeMonthly * currentPlan.savingsPct;
+      const currentTotalSavings = currentCashSavings + payrollMatchData.totalPayrollMatchMTD;
+      const currentTotalSavingsPct = currentTotalSavings / grossIncomeMonthly;
+      
+      // Use TotalSavingsTarget$ from savingsCalculations (gross-based, default 20%)
+      // This ensures we don't unfairly require 20% cash when user already saves pre-tax
+      const targetTotalSavings = savingsCalculations.totalSavingsTarget$;
+      
+      // Calculate how much cash savings needs to increase to reach target total savings
+      // Target cash savings = Target total savings - existing payroll + match
+      const targetCashSavings = Math.max(savingsCalculations.cashSavingsFloor, targetTotalSavings - payrollMatchData.totalPayrollMatchMTD);
+      const targetCashSavingsPct = targetCashSavings / netIncomeMonthly;
+
+      // Normalize targets to ensure they sum to 1.0
+      // If targetCashSavingsPct is less than standardTargets.savingsPct, we need to adjust needs/wants proportionally
+      const remainingForNeedsWants = 1.0 - targetCashSavingsPct;
+      const needsWantsRatio = standardTargets.needsPct / (standardTargets.needsPct + standardTargets.wantsPct);
+      const adjustedTargetNeedsPct = remainingForNeedsWants * needsWantsRatio;
+      const adjustedTargetWantsPct = remainingForNeedsWants * (1 - needsWantsRatio);
+
+      // Ensure the adjusted targets sum to exactly 1.0
+      const adjustedSum = adjustedTargetNeedsPct + adjustedTargetWantsPct + targetCashSavingsPct;
+      const adjustment = 1.0 - adjustedSum;
+      const finalTargetNeedsPct = adjustedTargetNeedsPct + (adjustment * needsWantsRatio);
+      const finalTargetWantsPct = adjustedTargetWantsPct + (adjustment * (1 - needsWantsRatio));
+      const finalTargetSavingsPct = targetCashSavingsPct;
+
+      console.log('[Savings Helper] Computing recommended plan with total savings:', {
         currentPlan: {
           needs: currentPlan.needsPct * 100,
           wants: currentPlan.wantsPct * 100,
           savings: currentPlan.savingsPct * 100,
+        },
+        currentTotalSavings: {
+          cash: currentCashSavings,
+          payrollMatch: payrollMatchData.totalPayrollMatchMTD,
+          total: currentTotalSavings,
+          totalPct: currentTotalSavingsPct * 100,
+        },
+        targetTotalSavings: {
+          target: targetTotalSavings,
+          targetPct: (targetTotalSavings / grossIncomeMonthly) * 100,
+        },
+        targetCashSavings: {
+          target: targetCashSavings,
+          targetPct: targetCashSavingsPct * 100,
+        },
+        adjustedTargets: {
+          needs: finalTargetNeedsPct * 100,
+          wants: finalTargetWantsPct * 100,
+          savings: finalTargetSavingsPct * 100,
+          sum: (finalTargetNeedsPct + finalTargetWantsPct + finalTargetSavingsPct) * 100,
         },
         standardTargets: {
           needs: standardTargets.needsPct * 100,
@@ -193,17 +366,17 @@ function SavingsHelperContent() {
           savings: standardTargets.savingsPct * 100,
         },
         shiftLimitPct: shiftLimitPct * 100,
-        savingsGap: (standardTargets.savingsPct - currentPlan.savingsPct) * 100,
+        savingsGap: (finalTargetSavingsPct - currentPlan.savingsPct) * 100,
       });
       
       const result = computeIncomePlan({
-        income$: monthlyIncome,
+        income$: netIncomeMonthly,
         actualNeedsPct: currentPlan.needsPct,
         actualWantsPct: currentPlan.wantsPct,
         actualSavingsPct: currentPlan.savingsPct,
-        targetNeedsPct: standardTargets.needsPct,
-        targetWantsPct: standardTargets.wantsPct,
-        targetSavingsPct: standardTargets.savingsPct,
+        targetNeedsPct: finalTargetNeedsPct,
+        targetWantsPct: finalTargetWantsPct,
+        targetSavingsPct: finalTargetSavingsPct, // Use adjusted target that accounts for payroll + match
         shiftLimitPct,
       });
       
@@ -293,7 +466,7 @@ function SavingsHelperContent() {
       console.error('[Savings Helper] Error computing recommended plan:', error);
       return currentPlan;
     }
-  }, [currentPlan, shiftLimitPct, monthlyIncome, baselinePlanData]);
+  }, [currentPlan, shiftLimitPct, netIncomeMonthly, baselinePlanData, payrollMatchData, savingsCalculations]);
 
   // Slider state - initialize with recommended plan
   const [needsPct, setNeedsPct] = useState(recommendedPlan.needsPct * 100);
@@ -393,6 +566,7 @@ function SavingsHelperContent() {
   }, [scenarioState, baselinePlanData, needsPct, wantsPct, monthlyIncome]);
 
   // Calculate income distribution from scenario plan - MUST be before early returns
+  // Use the income allocation logic: Cash Savings = Extra Debt Paydown + Emergency Savings + 401k Match + Retirement Tax-Advantaged + Brokerage
   const incomeDistribution = useMemo(() => {
     const planToUse = scenarioPlanData || baselinePlanData;
     if (!planToUse) {
@@ -412,13 +586,34 @@ function SavingsHelperContent() {
     const wantsCategories = planToUse.paycheckCategories.filter(c => 
       c.key === 'fun_flexible'
     );
-    const savingsCategories = planToUse.paycheckCategories.filter(c => 
-      c.key === 'emergency' || c.key === 'long_term_investing' || c.key === 'debt_extra'
-    );
+    
+    // Calculate cash savings using the income allocation logic structure:
+    // 1. Extra Debt Paydown (debt_extra)
+    // 2. Emergency Savings (emergency)
+    // 3. 401k Match (from long_term_investing.subCategories)
+    // 4. Retirement Tax-Advantaged (from long_term_investing.subCategories)
+    // 5. Brokerage (from long_term_investing.subCategories)
+    const debtExtraCategory = planToUse.paycheckCategories.find(c => c.key === 'debt_extra');
+    const emergencyCategory = planToUse.paycheckCategories.find(c => c.key === 'emergency');
+    const longTermCategory = planToUse.paycheckCategories.find(c => c.key === 'long_term_investing');
+    
+    const monthlyDebtExtra = (debtExtraCategory?.amount || 0) * paychecksPerMonth;
+    const monthlyEmergency = (emergencyCategory?.amount || 0) * paychecksPerMonth;
+    
+    // Extract subCategories from long_term_investing
+    const match401kSub = longTermCategory?.subCategories?.find(s => s.key === '401k_match');
+    const retirementTaxAdvSub = longTermCategory?.subCategories?.find(s => s.key === 'retirement_tax_advantaged');
+    const brokerageSub = longTermCategory?.subCategories?.find(s => s.key === 'brokerage');
+    
+    const monthly401kMatch = (match401kSub?.amount || 0) * paychecksPerMonth;
+    const monthlyRetirementTaxAdv = (retirementTaxAdvSub?.amount || 0) * paychecksPerMonth;
+    const monthlyBrokerage = (brokerageSub?.amount || 0) * paychecksPerMonth;
+    
+    // Total cash savings = sum of all five categories
+    const monthlySavings = monthlyDebtExtra + monthlyEmergency + monthly401kMatch + monthlyRetirementTaxAdv + monthlyBrokerage;
 
     const monthlyNeeds = needsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
     const monthlyWants = wantsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
-    const monthlySavings = savingsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
     const monthlyTotal = monthlyNeeds + monthlyWants + monthlySavings;
 
     const calculatedNeedsPct = monthlyTotal > 0 ? (monthlyNeeds / monthlyTotal) * 100 : 0;
@@ -447,12 +642,25 @@ function SavingsHelperContent() {
     const baselineWantsCategories = baselinePlanData.paycheckCategories.filter(c => 
       c.key === 'fun_flexible'
     );
-    const baselineSavingsCategories = baselinePlanData.paycheckCategories.filter(c => 
-      c.key === 'emergency' || c.key === 'long_term_investing' || c.key === 'debt_extra'
-    );
+    // Calculate baseline savings using income allocation logic structure
+    const baselineDebtExtraCategory = baselinePlanData.paycheckCategories.find(c => c.key === 'debt_extra');
+    const baselineEmergencyCategory = baselinePlanData.paycheckCategories.find(c => c.key === 'emergency');
+    const baselineLongTermCategory = baselinePlanData.paycheckCategories.find(c => c.key === 'long_term_investing');
+    
+    const baselineMonthlyDebtExtra = (baselineDebtExtraCategory?.amount || 0) * baselinePaychecksPerMonth;
+    const baselineMonthlyEmergency = (baselineEmergencyCategory?.amount || 0) * baselinePaychecksPerMonth;
+    
+    const baselineMatch401kSub = baselineLongTermCategory?.subCategories?.find(s => s.key === '401k_match');
+    const baselineRetirementTaxAdvSub = baselineLongTermCategory?.subCategories?.find(s => s.key === 'retirement_tax_advantaged');
+    const baselineBrokerageSub = baselineLongTermCategory?.subCategories?.find(s => s.key === 'brokerage');
+    
+    const baselineMonthly401kMatch = (baselineMatch401kSub?.amount || 0) * baselinePaychecksPerMonth;
+    const baselineMonthlyRetirementTaxAdv = (baselineRetirementTaxAdvSub?.amount || 0) * baselinePaychecksPerMonth;
+    const baselineMonthlyBrokerage = (baselineBrokerageSub?.amount || 0) * baselinePaychecksPerMonth;
+    
     const baselineMonthlyNeeds = baselineNeedsCategories.reduce((sum, c) => sum + c.amount, 0) * baselinePaychecksPerMonth;
     const baselineMonthlyWants = baselineWantsCategories.reduce((sum, c) => sum + c.amount, 0) * baselinePaychecksPerMonth;
-    const baselineMonthlySavings = baselineSavingsCategories.reduce((sum, c) => sum + c.amount, 0) * baselinePaychecksPerMonth;
+    const baselineMonthlySavings = baselineMonthlyDebtExtra + baselineMonthlyEmergency + baselineMonthly401kMatch + baselineMonthlyRetirementTaxAdv + baselineMonthlyBrokerage;
     
     // Use actual values from scenario plan data (incomeDistribution) vs baseline
     const needsDelta = incomeDistribution.monthlyNeeds - baselineMonthlyNeeds;
@@ -508,6 +716,21 @@ function SavingsHelperContent() {
     };
   }, [baselinePlanData, scenarioPlanData, incomeDistribution, monthlyIncome, baselineState.income?.payFrequency]);
 
+  // Calculate total savings (Cash + Payroll + Match) for each state - MUST be before early returns
+  // All states use the same cash savings calculation (baseSavingsMonthly - netPreTaxImpact)
+  // The difference between states is in the distribution percentages, not the cash savings amount
+  const totalSavingsByState = useMemo(() => {
+    // Use the correct cash savings calculation for all states
+    const cashSavingsForAllStates = cashSavingsObservedMonthly;
+
+    // Calculate total savings (Cash + Payroll + Match) for each state
+    return {
+      actuals3m: cashSavingsForAllStates + payrollMatchData.totalPayrollMatchMTD,
+      currentPlan: cashSavingsForAllStates + payrollMatchData.totalPayrollMatchMTD,
+      recommendedPlan: cashSavingsForAllStates + payrollMatchData.totalPayrollMatchMTD,
+    };
+  }, [cashSavingsObservedMonthly, payrollMatchData]);
+
   // All remaining hooks MUST be called before any early returns
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   
@@ -547,58 +770,144 @@ function SavingsHelperContent() {
 
   const { monthlyNeeds, monthlyWants, monthlySavings } = incomeDistribution;
 
-  // Helper to render a bar graph
-  const renderBarGraph = (
+  // Helper to render a comparison row with two visuals: Cash Budget (Net Income) + Total Savings (All-in)
+  const renderComparisonRow = (
     label: string,
     distribution: { needsPct: number; wantsPct: number; savingsPct: number },
-    income: number
+    netIncome: number,
+    totalSavingsAllIn: number,
+    totalSavingsTarget: number,
+    cashSavingsObserved: number,
+    payrollSavings: number,
+    match: number
   ) => {
-    const needsAmount = income * distribution.needsPct;
-    const wantsAmount = income * distribution.wantsPct;
-    const savingsAmount = income * distribution.savingsPct;
+    const needsAmount = netIncome * distribution.needsPct;
+    const wantsAmount = netIncome * distribution.wantsPct;
+    // Use the correct cash savings value from the breakdown, not the percentage calculation
+    const cashSavingsAmount = cashSavingsObserved;
+    // Recalculate percentages based on actual cash savings to match the breakdown
+    const totalAllocated = needsAmount + wantsAmount + cashSavingsAmount;
+    const needsPctActual = totalAllocated > 0 ? (needsAmount / totalAllocated) * 100 : 0;
+    const wantsPctActual = totalAllocated > 0 ? (wantsAmount / totalAllocated) * 100 : 0;
+    const cashSavingsPctActual = totalAllocated > 0 ? (cashSavingsAmount / totalAllocated) * 100 : 0;
+    const totalSavingsPct = totalSavingsTarget > 0 ? (totalSavingsAllIn / totalSavingsTarget) * 100 : 0;
 
     return (
-      <div className="space-y-2">
+      <div className="space-y-4">
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold text-slate-900 dark:text-white">
             {label}
           </span>
-          <span className="text-sm text-slate-600 dark:text-slate-400">
-            ${income.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} /month
-          </span>
         </div>
-        <div className="flex h-12 w-full overflow-hidden rounded-lg border-2 border-slate-200 dark:border-slate-700">
-          <div
-            className="bg-orange-500"
-            style={{ width: `${distribution.needsPct * 100}%` }}
-            title={`Needs: ${(distribution.needsPct * 100).toFixed(1)}%`}
-          />
-          <div
-            className="bg-blue-400"
-            style={{ width: `${distribution.wantsPct * 100}%` }}
-            title={`Wants: ${(distribution.wantsPct * 100).toFixed(1)}%`}
-          />
-          <div
-            className="bg-green-400"
-            style={{ width: `${distribution.savingsPct * 100}%` }}
-            title={`Savings: ${(distribution.savingsPct * 100).toFixed(1)}%`}
-          />
-        </div>
-        <div className="grid grid-cols-3 gap-2 text-xs">
-          <div>
-            <div className="mb-1 h-2 w-full rounded bg-orange-500" />
-            <div className="font-medium">Needs: ${(needsAmount / 1000).toFixed(1)}K</div>
-            <div className="text-slate-600 dark:text-slate-400">{(distribution.needsPct * 100).toFixed(1)}%</div>
+        
+        {/* Two visuals side by side */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {/* (i) Cash Budget (Net Income) stacked bar */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                Cash Budget (Net Income)
+              </span>
+              <HelpCircle className="h-3 w-3 text-slate-400" title="Money left after taxes and payroll deductions" />
+            </div>
+            <div className="flex h-12 w-full overflow-hidden rounded-lg border-2 border-slate-200 dark:border-slate-700">
+              <div
+                className="bg-orange-500"
+                style={{ width: `${needsPctActual}%` }}
+                title={`Needs: ${needsPctActual.toFixed(1)}%`}
+              />
+              <div
+                className="bg-blue-400"
+                style={{ width: `${wantsPctActual}%` }}
+                title={`Wants: ${wantsPctActual.toFixed(1)}%`}
+              />
+              <div
+                className="bg-green-400"
+                style={{ width: `${cashSavingsPctActual}%` }}
+                title={`Cash Savings: ${cashSavingsPctActual.toFixed(1)}%`}
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              <div>
+                <div className="mb-1 h-2 w-full rounded bg-orange-500" />
+                <div className="font-medium">Needs: ${(needsAmount / 1000).toFixed(1)}K</div>
+                <div className="text-slate-600 dark:text-slate-400">{needsPctActual.toFixed(1)}%</div>
+              </div>
+              <div>
+                <div className="mb-1 h-2 w-full rounded bg-blue-400" />
+                <div className="font-medium">Wants: ${(wantsAmount / 1000).toFixed(1)}K</div>
+                <div className="text-slate-600 dark:text-slate-400">{wantsPctActual.toFixed(1)}%</div>
+              </div>
+              <div>
+                <div className="mb-1 h-2 w-full rounded bg-green-400" />
+                <div className="font-medium">Cash: ${(cashSavingsAmount / 1000).toFixed(1)}K</div>
+                <div className="text-slate-600 dark:text-slate-400">{cashSavingsPctActual.toFixed(1)}%</div>
+              </div>
+            </div>
           </div>
-          <div>
-            <div className="mb-1 h-2 w-full rounded bg-blue-400" />
-            <div className="font-medium">Wants: ${(wantsAmount / 1000).toFixed(1)}K</div>
-            <div className="text-slate-600 dark:text-slate-400">{(distribution.wantsPct * 100).toFixed(1)}%</div>
-          </div>
-          <div>
-            <div className="mb-1 h-2 w-full rounded bg-green-400" />
-            <div className="font-medium">Savings: ${(savingsAmount / 1000).toFixed(1)}K</div>
-            <div className="text-slate-600 dark:text-slate-400">{(distribution.savingsPct * 100).toFixed(1)}%</div>
+
+          {/* (ii) Total Savings (All-in) progress bar */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                Total Savings (All-in)
+              </span>
+              <HelpCircle className="h-3 w-3 text-slate-400" title="Cash savings + Payroll savings + Employer match" />
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-semibold text-slate-900 dark:text-white">
+                  ${totalSavingsAllIn.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                </span>
+                <span className="text-slate-600 dark:text-slate-400">
+                  of ${totalSavingsTarget.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                </span>
+              </div>
+              <div className="h-4 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                <div
+                  className="h-full bg-green-500 transition-all"
+                  style={{ width: `${Math.min(100, totalSavingsPct)}%` }}
+                />
+              </div>
+              <div className="text-xs text-slate-600 dark:text-slate-400">
+                {totalSavingsPct.toFixed(1)}% of target
+              </div>
+              {/* Expandable breakdown */}
+              <button
+                onClick={() => setSavingsExpanded(prev => ({ ...prev, [label]: !prev[label] }))}
+                className="flex w-full items-center justify-between rounded-lg border border-slate-300 bg-white px-3 py-2 text-left text-xs hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700"
+              >
+                <span className="text-slate-600 dark:text-slate-400">Breakdown</span>
+                {savingsExpanded[label] ? (
+                  <ChevronUp className="h-4 w-4 text-slate-400" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-slate-400" />
+                )}
+              </button>
+              {savingsExpanded[label] && (
+                <div className="space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs dark:border-slate-700 dark:bg-slate-800">
+                  <div className="flex justify-between">
+                    <span className="text-slate-600 dark:text-slate-400">Cash savings (post-tax):</span>
+                    <span className={`font-medium ${cashSavingsObserved < 0 ? 'text-red-600 dark:text-red-400' : ''}`}>
+                      {cashSavingsObserved < 0 ? '-' : ''}${Math.abs(cashSavingsObserved).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      {cashSavingsObserved < 0 && <span className="text-xs text-slate-500 ml-1">(overspending)</span>}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-600 dark:text-slate-400">Payroll savings (pre-tax):</span>
+                    <span className="font-medium">${payrollSavings.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} <span className="text-xs text-slate-500">estimated</span></span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-600 dark:text-slate-400">Employer match:</span>
+                    <span className="font-medium">+${match.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} <span className="text-xs text-slate-500">estimated</span></span>
+                  </div>
+                  <div className="flex justify-between border-t border-slate-300 pt-1 dark:border-slate-600">
+                    <span className="font-semibold text-slate-900 dark:text-white">Total savings:</span>
+                    <span className="font-semibold text-slate-900 dark:text-white">${totalSavingsAllIn.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -660,15 +969,42 @@ function SavingsHelperContent() {
             </Button>
           </div>
 
-          {/* Three Bar Graphs */}
+          {/* Three Comparison Rows */}
           <Card>
             <CardHeader>
               <CardTitle>Income Distribution Comparison</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              {renderBarGraph('Past 3 Months Average', actuals3m, monthlyIncome)}
-              {renderBarGraph('Current Plan', currentPlan, monthlyIncome)}
-              {renderBarGraph('Recommended Plan', recommendedPlan, monthlyIncome)}
+              {renderComparisonRow(
+                'Past 3 Months Average',
+                actuals3m,
+                netIncomeMonthly,
+                totalSavingsByState.actuals3m,
+                savingsCalculations.totalSavingsTarget$,
+                cashSavingsObservedMonthly,
+                payrollMatchData.payrollSavingsMTD,
+                payrollMatchData.matchMTD
+              )}
+              {renderComparisonRow(
+                'Current Plan',
+                currentPlan,
+                netIncomeMonthly,
+                totalSavingsByState.currentPlan,
+                savingsCalculations.totalSavingsTarget$,
+                cashSavingsObservedMonthly,
+                payrollMatchData.payrollSavingsMTD,
+                payrollMatchData.matchMTD
+              )}
+              {renderComparisonRow(
+                'Recommended Plan',
+                recommendedPlan,
+                netIncomeMonthly,
+                totalSavingsByState.recommendedPlan,
+                savingsCalculations.totalSavingsTarget$,
+                cashSavingsObservedMonthly,
+                payrollMatchData.payrollSavingsMTD,
+                payrollMatchData.matchMTD
+              )}
             </CardContent>
           </Card>
 
@@ -758,20 +1094,145 @@ function SavingsHelperContent() {
                 </div>
               </div>
 
-              {/* Savings (calculated automatically) */}
+              {/* Total Savings Goal (All-in) Slider */}
               <div>
-                <h3 className="mb-4 font-semibold text-slate-900 dark:text-white">Savings</h3>
+                <h3 className="mb-4 font-semibold text-slate-900 dark:text-white">
+                  Total Savings Goal (All-in)
+                  <HelpCircle className="ml-2 inline h-4 w-4 text-slate-400" title="Total savings target as % of gross income (includes cash + payroll + match)" />
+                </h3>
+                <div className="space-y-4">
+                  <div>
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-sm text-slate-600 dark:text-slate-400">Percentage of Gross Income</span>
+                      <span className="text-sm font-semibold">{totalSavingsTargetPctGross.toFixed(1)}%</span>
+                    </div>
+                    <Slider
+                      value={[totalSavingsTargetPctGross]}
+                      onValueChange={([value]) => {
+                        setTotalSavingsTargetPctGross(Math.max(0, Math.min(50, value)));
+                      }}
+                      min={0}
+                      max={50}
+                      step={0.5}
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="space-y-2 rounded-lg border border-slate-300 bg-white p-4 dark:border-slate-600 dark:bg-slate-800">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-600 dark:text-slate-400">Cash savings needed (post-tax):</span>
+                      <span className="font-semibold">${savingsCalculations.cashSavingsTarget$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/mo</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-600 dark:text-slate-400">Payroll savings (pre-tax):</span>
+                      <span className="font-semibold">${savingsCalculations.preTaxSavings$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/mo <span className="text-xs text-slate-500">estimated</span></span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-600 dark:text-slate-400">Match:</span>
+                      <span className="font-semibold">+${payrollMatchData.matchMTD.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/mo <span className="text-xs text-slate-500">estimated</span></span>
+                    </div>
+                    <div className="flex justify-between border-t border-slate-300 pt-2 text-base dark:border-slate-600">
+                      <span className="font-semibold text-slate-900 dark:text-white">Total savings (all-in):</span>
+                      <span className="font-semibold text-slate-900 dark:text-white">${savingsCalculations.totalSavingsTarget$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/mo</span>
+                    </div>
+                    <div className="text-right text-xs text-slate-600 dark:text-slate-400">
+                      {((savingsCalculations.totalSavingsTarget$ / grossIncomeMonthly) * 100).toFixed(1)}% of gross income
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Cash Savings (calculated automatically from Needs/Wants) */}
+              <div>
+                <h3 className="mb-4 font-semibold text-slate-900 dark:text-white">Cash Savings (Post-tax)</h3>
                 <div className="rounded-lg border border-slate-300 bg-white px-4 py-3 dark:border-slate-600 dark:bg-slate-800">
                   <div className="text-right text-lg font-semibold">
                     ${monthlySavings.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} /month
                   </div>
                   <div className="mt-1 text-right text-sm text-slate-600 dark:text-slate-400">
-                    {savingsPct.toFixed(1)}% of income
+                    {savingsPct.toFixed(1)}% of net income
                   </div>
                 </div>
               </div>
             </CardContent>
           </Card>
+
+          {/* Sidekick Recommendations */}
+          {(() => {
+            const payrollContributions = baselineState.payrollContributions;
+            const recommendations = [];
+            
+            // Check for 401k match recommendation
+            if (payrollContributions?.has401k && payrollContributions?.hasEmployerMatch === "yes") {
+              const matchPct = payrollContributions.employerMatchPct || 0;
+              const matchCapPct = payrollContributions.employerMatchCapPct || 0;
+              const current401kPct = payrollContributions.contributionType401k === "percent_gross" 
+                ? (payrollContributions.contributionValue401k || 0)
+                : 0;
+              
+              // Calculate required 401k % to capture full match
+              const required401kPct = matchCapPct;
+              
+              if (current401kPct < required401kPct && matchCapPct > 0) {
+                const delta401kMonthly = ((required401kPct - current401kPct) / 100) * grossIncomeMonthly;
+                const deltaMatchMonthly = (delta401kMonthly * matchPct) / 100;
+                const deltaCashSavingsNeeded = -delta401kMonthly * (1 - 0.25); // Approximate tax savings (25% marginal rate)
+                const deltaTotalWealth = delta401kMonthly + deltaMatchMonthly;
+                
+                recommendations.push({
+                  type: 'match',
+                  headline: "You're missing free employer match",
+                  message: `Increase 401(k) to ${required401kPct.toFixed(1)}% to capture full match (+$${deltaMatchMonthly.toFixed(0)}/mo).`,
+                  impact: `Cash savings needed decreases by $${Math.abs(deltaCashSavingsNeeded).toFixed(0)}/mo. Total wealth moves +$${deltaTotalWealth.toFixed(0)}/mo.`,
+                });
+              }
+            }
+            
+            // Check for HSA recommendation
+            if (payrollContributions?.hasHSA && payrollContributions?.currentlyContributingHSA === "yes") {
+              const currentHSA = payrollMatchData.expectedHSAMTD;
+              const maxHSA = 4150 / 12; // 2024 HSA max for individual (simplified)
+              
+              if (currentHSA < maxHSA * 0.8) { // Recommend if under 80% of max
+                const deltaHSAMonthly = (maxHSA * 0.9) - currentHSA; // Recommend 90% of max
+                const deltaCashSavingsNeeded = -deltaHSAMonthly * (1 - 0.25); // Approximate tax savings
+                
+                recommendations.push({
+                  type: 'hsa',
+                  headline: "Maximize your HSA (triple tax advantage)",
+                  message: `Contribute $${deltaHSAMonthly.toFixed(0)}/mo more to HSA (estimated).`,
+                  impact: `Cash savings needed decreases by $${Math.abs(deltaCashSavingsNeeded).toFixed(0)}/mo.`,
+                });
+              }
+            }
+            
+            if (recommendations.length === 0) return null;
+            
+            return (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Sidekick Recommendations</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {recommendations.map((rec, idx) => (
+                    <div key={idx} className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+                      <div className="mb-2 font-semibold text-blue-900 dark:text-blue-100">
+                        {rec.headline}
+                      </div>
+                      <div className="mb-2 text-sm text-blue-800 dark:text-blue-200">
+                        {rec.message}
+                      </div>
+                      <div className="text-xs text-blue-700 dark:text-blue-300">
+                        Impact: {rec.impact}
+                      </div>
+                      <div className="mt-2 text-xs text-blue-600 dark:text-blue-400">
+                        <em>To edit payroll savings, use the "Edit payroll savings" option in the Savings Allocation screen.</em>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* Net Worth Projection */}
           <Card>

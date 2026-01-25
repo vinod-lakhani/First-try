@@ -87,6 +87,17 @@ const mockUserPlanData = {
     match401k: { amount: 575, percent: 40.1 },
     retirementTaxAdv: { amount: 174, percent: 12.2 },
   },
+  // Updated savings calculations using centralized formula
+  savingsCalculations: {
+    baseSavingsMonthly: 3412, // Income - Needs - Wants
+    preTaxSavingsTotal: 677, // 401k + HSA
+    taxSavingsMonthly: 169.25, // Pre-tax × 0.25
+    netPreTaxImpact: 507.75, // Pre-tax - Tax savings
+    cashSavingsMTD: 2904.25, // Base - Net pre-tax impact
+    payrollSavingsMTD: 677, // Pre-tax total
+    employerMatchMTD: 339, // Employer match
+    totalSavingsMTD: 3920.25, // Cash + Payroll + Match
+  },
   safetyStrategy: {
     liquidity: 'Medium',
     retirementFocus: 'High',
@@ -1159,6 +1170,20 @@ async function runComprehensiveTests() {
       },
     },
     {
+      question: 'How do I adjust my savings allocation?',
+      context: 'savings-plan',
+      validations: {
+        'Mentions buttons or controls': (a) => ({
+          pass: /button|\+|\-|plus|minus|input|box|control/i.test(a),
+          message: 'Should explain how to use +/- buttons and input boxes',
+        }),
+        'Explains real-time updates': (a) => ({
+          pass: /real.*time|update|immediate|cash.*balance|remaining/i.test(a),
+          message: 'Should mention that cash balance updates in real-time',
+        }),
+      },
+    },
+    {
       question: 'What am I looking at on this screen?',
       context: 'monthly-plan-current',
       validations: {
@@ -1207,8 +1232,8 @@ async function runComprehensiveTests() {
       context: 'savings-allocator',
       validations: {
         'Mentions debt allocation': (a) => ({
-          pass: /debt|payoff|allocate|slider|high.*apr|40%/i.test(a),
-          message: 'Should explain how to allocate money for debt payoff',
+          pass: /debt|payoff|allocate|button|\+|\-|input|high.*apr|40%/i.test(a),
+          message: 'Should explain how to allocate money for debt payoff using buttons/input boxes',
         }),
       },
     },
@@ -1333,12 +1358,58 @@ async function runComprehensiveTests() {
       },
     },
     {
-      question: 'Why is there a 40% limit on the emergency fund slider?',
+      question: 'Why is there a 40% limit on the emergency fund allocation?',
       context: 'savings-plan',
       validations: {
         'Explains 40% limit': (a) => ({
           pass: /40%|limit|cap|emergency|fund|reason|why|balance|debt|retirement/i.test(a),
           message: 'Should explain why there is a 40% limit on emergency fund',
+        }),
+        'Mentions buttons or controls': (a) => ({
+          pass: /button|input|control|adjust|\+|\-|plus|minus/i.test(a),
+          message: 'Should mention +/- buttons or input boxes for adjusting allocation',
+        }),
+      },
+    },
+    {
+      question: 'How do I adjust my savings allocation on the savings plan page?',
+      context: 'savings-plan',
+      validations: {
+        'Explains controls': (a) => ({
+          pass: /button|\+|\-|plus|minus|input|box|adjust|control/i.test(a),
+          message: 'Should explain how to use +/- buttons and input boxes to adjust allocations',
+        }),
+        'Mentions real-time updates': (a) => ({
+          pass: /real.*time|update|immediate|cash.*balance|remaining/i.test(a),
+          message: 'Should mention that cash balance updates in real-time',
+        }),
+      },
+    },
+    {
+      question: 'Why is my post-tax savings available different from my base savings?',
+      context: 'savings-plan',
+      validations: {
+        'Explains pre-tax impact': (a) => ({
+          pass: /pre.*tax|401k|hsa|tax.*saving|net.*impact|base.*savings/i.test(a),
+          message: 'Should explain how pre-tax contributions affect post-tax available',
+        }),
+        'Mentions calculation': (a) => ({
+          pass: /calculate|formula|base.*minus|net.*impact|tax.*saving/i.test(a),
+          message: 'Should explain the calculation: base savings - net pre-tax impact',
+        }),
+      },
+    },
+    {
+      question: 'What does "Total wealth moves" mean?',
+      context: 'savings-allocator',
+      validations: {
+        'Explains total wealth moves': (a) => ({
+          pass: /total.*wealth|moves|pre.*tax|post.*tax|employer.*match|all.*in/i.test(a),
+          message: 'Should explain that total wealth moves = cash + pre-tax + match',
+        }),
+        'Mentions calculation': (a) => ({
+          pass: /calculate|formula|include|add|sum/i.test(a),
+          message: 'Should explain how total wealth moves is calculated',
         }),
       },
     },
@@ -1357,8 +1428,36 @@ async function runComprehensiveTests() {
       context: 'savings-plan',
       validations: {
         'Provides clear guidance': (a) => ({
-          pass: /allocate|slider|emergency|debt|retirement|adjust|set|configure/i.test(a),
-          message: 'Should provide clear guidance on what to do',
+          pass: /allocate|button|\+|\-|input|emergency|debt|retirement|adjust|set|configure/i.test(a),
+          message: 'Should provide clear guidance on what to do using buttons/input boxes',
+        }),
+      },
+    },
+    {
+      question: 'Why is my cash savings different on different pages?',
+      context: 'financial-sidekick',
+      validations: {
+        'Explains consistency': (a) => ({
+          pass: /consistent|same|calculation|formula|centralized|match/i.test(a),
+          message: 'Should explain that all pages use the same centralized calculation',
+        }),
+        'Mentions calculation formula': (a) => ({
+          pass: /base.*savings|pre.*tax|tax.*saving|net.*impact|post.*tax/i.test(a),
+          message: 'Should explain the calculation formula',
+        }),
+      },
+    },
+    {
+      question: 'How is my post-tax savings calculated?',
+      context: 'savings-plan',
+      validations: {
+        'Explains formula': (a) => ({
+          pass: /base.*savings|income.*needs.*wants|pre.*tax|tax.*saving|net.*impact/i.test(a),
+          message: 'Should explain the calculation: base savings - net pre-tax impact',
+        }),
+        'Mentions tax savings': (a) => ({
+          pass: /tax.*saving|25%|marginal|rate|pre.*tax.*contribution/i.test(a),
+          message: 'Should mention tax savings from pre-tax contributions',
         }),
       },
     },

@@ -14,8 +14,7 @@ import { buildFinalPlanData, type FinalPlanData } from '@/lib/onboarding/plan';
 import type { OnboardingState } from '@/lib/onboarding/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Slider } from '@/components/ui/slider';
-import { X, ArrowRight } from 'lucide-react';
+import { X, ArrowRight, Plus, Minus } from 'lucide-react';
 import { NetWorthChart } from '@/components/charts/NetWorthChart';
 
 // Helper to get paychecks per month
@@ -432,41 +431,101 @@ function SavingsOptimizerContent() {
               </div>
             </div>
 
-            {/* Needs Slider */}
+            {/* Needs */}
             <div className="mb-6">
               <h2 className="mb-4 font-semibold text-slate-900 dark:text-white">Needs</h2>
               <div className="space-y-4">
                 <div>
                   <div className="mb-2 flex items-center justify-between">
                     <span className="text-sm text-slate-600 dark:text-slate-400">Percentage of Income</span>
-                    <span className="text-sm font-semibold">{needsPct.toFixed(1)}%</span>
                   </div>
-                  <Slider
-                    value={[needsPct]}
-                    onValueChange={([value]) => {
-                      let newNeedsPct = Math.max(0, Math.min(100, value));
-                      let newWantsPct = wantsPct;
-                      if (newNeedsPct + newWantsPct > 100) {
-                        newWantsPct = Math.max(0, 100 - newNeedsPct);
-                      }
-                      let newSavingsPct = 100 - newNeedsPct - newWantsPct;
-                      if (newSavingsPct < 0) {
-                        newSavingsPct = 0;
-                        newWantsPct = Math.max(0, 100 - newNeedsPct);
-                      }
-                      setNeedsPct(newNeedsPct);
-                      if (newWantsPct !== wantsPct) {
-                        setWantsPct(newWantsPct);
-                      }
-                      if (newSavingsPct !== savingsPct) {
-                        setSavingsPct(newSavingsPct);
-                      }
-                    }}
-                    min={0}
-                    max={100}
-                    step={0.5}
-                    className="w-full"
-                  />
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => {
+                        let newNeedsPct = Math.max(0, needsPct - 0.5);
+                        let newWantsPct = wantsPct;
+                        if (newNeedsPct + newWantsPct > 100) {
+                          newWantsPct = Math.max(0, 100 - newNeedsPct);
+                        }
+                        let newSavingsPct = 100 - newNeedsPct - newWantsPct;
+                        if (newSavingsPct < 0) {
+                          newSavingsPct = 0;
+                          newWantsPct = Math.max(0, 100 - newNeedsPct);
+                        }
+                        setNeedsPct(newNeedsPct);
+                        if (newWantsPct !== wantsPct) {
+                          setWantsPct(newWantsPct);
+                        }
+                        if (newSavingsPct !== savingsPct) {
+                          setSavingsPct(newSavingsPct);
+                        }
+                      }}
+                      className="h-10 w-10 shrink-0"
+                    >
+                      <Minus className="h-4 w-4" />
+                    </Button>
+                    <div className="flex-1 rounded-lg border border-slate-300 bg-white px-4 py-3 dark:border-slate-600 dark:bg-slate-800">
+                      <input
+                        type="number"
+                        value={needsPct.toFixed(1)}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value) || 0;
+                          let newNeedsPct = Math.max(0, Math.min(100, value));
+                          let newWantsPct = wantsPct;
+                          if (newNeedsPct + newWantsPct > 100) {
+                            newWantsPct = Math.max(0, 100 - newNeedsPct);
+                          }
+                          let newSavingsPct = 100 - newNeedsPct - newWantsPct;
+                          if (newSavingsPct < 0) {
+                            newSavingsPct = 0;
+                            newWantsPct = Math.max(0, 100 - newNeedsPct);
+                          }
+                          setNeedsPct(newNeedsPct);
+                          if (newWantsPct !== wantsPct) {
+                            setWantsPct(newWantsPct);
+                          }
+                          if (newSavingsPct !== savingsPct) {
+                            setSavingsPct(newSavingsPct);
+                          }
+                        }}
+                        className="w-full text-right text-lg font-semibold bg-transparent border-none outline-none"
+                        min={0}
+                        max={100}
+                        step={0.1}
+                      />
+                      <div className="text-right text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        %
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => {
+                        let newNeedsPct = Math.min(100, needsPct + 0.5);
+                        let newWantsPct = wantsPct;
+                        if (newNeedsPct + newWantsPct > 100) {
+                          newWantsPct = Math.max(0, 100 - newNeedsPct);
+                        }
+                        let newSavingsPct = 100 - newNeedsPct - newWantsPct;
+                        if (newSavingsPct < 0) {
+                          newSavingsPct = 0;
+                          newWantsPct = Math.max(0, 100 - newNeedsPct);
+                        }
+                        setNeedsPct(newNeedsPct);
+                        if (newWantsPct !== wantsPct) {
+                          setWantsPct(newWantsPct);
+                        }
+                        if (newSavingsPct !== savingsPct) {
+                          setSavingsPct(newSavingsPct);
+                        }
+                      }}
+                      className="h-10 w-10 shrink-0"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="flex-1 rounded-lg border border-slate-300 bg-white px-4 py-3 dark:border-slate-600 dark:bg-slate-800">
@@ -478,41 +537,101 @@ function SavingsOptimizerContent() {
               </div>
             </div>
 
-            {/* Wants Slider */}
+            {/* Wants */}
             <div className="mb-6">
               <h2 className="mb-4 font-semibold text-slate-900 dark:text-white">Wants</h2>
               <div className="space-y-4">
                 <div>
                   <div className="mb-2 flex items-center justify-between">
                     <span className="text-sm text-slate-600 dark:text-slate-400">Percentage of Income</span>
-                    <span className="text-sm font-semibold">{wantsPct.toFixed(1)}%</span>
                   </div>
-                  <Slider
-                    value={[wantsPct]}
-                    onValueChange={([value]) => {
-                      let newWantsPct = Math.max(0, Math.min(100, value));
-                      let newNeedsPct = needsPct;
-                      if (newNeedsPct + newWantsPct > 100) {
-                        newNeedsPct = Math.max(0, 100 - newWantsPct);
-                      }
-                      let newSavingsPct = 100 - newNeedsPct - newWantsPct;
-                      if (newSavingsPct < 0) {
-                        newSavingsPct = 0;
-                        newNeedsPct = Math.max(0, 100 - newWantsPct);
-                      }
-                      setWantsPct(newWantsPct);
-                      if (newNeedsPct !== needsPct) {
-                        setNeedsPct(newNeedsPct);
-                      }
-                      if (newSavingsPct !== savingsPct) {
-                        setSavingsPct(newSavingsPct);
-                      }
-                    }}
-                    min={0}
-                    max={100}
-                    step={0.5}
-                    className="w-full"
-                  />
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => {
+                        let newWantsPct = Math.max(0, wantsPct - 0.5);
+                        let newNeedsPct = needsPct;
+                        if (newNeedsPct + newWantsPct > 100) {
+                          newNeedsPct = Math.max(0, 100 - newWantsPct);
+                        }
+                        let newSavingsPct = 100 - newNeedsPct - newWantsPct;
+                        if (newSavingsPct < 0) {
+                          newSavingsPct = 0;
+                          newNeedsPct = Math.max(0, 100 - newWantsPct);
+                        }
+                        setWantsPct(newWantsPct);
+                        if (newNeedsPct !== needsPct) {
+                          setNeedsPct(newNeedsPct);
+                        }
+                        if (newSavingsPct !== savingsPct) {
+                          setSavingsPct(newSavingsPct);
+                        }
+                      }}
+                      className="h-10 w-10 shrink-0"
+                    >
+                      <Minus className="h-4 w-4" />
+                    </Button>
+                    <div className="flex-1 rounded-lg border border-slate-300 bg-white px-4 py-3 dark:border-slate-600 dark:bg-slate-800">
+                      <input
+                        type="number"
+                        value={wantsPct.toFixed(1)}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value) || 0;
+                          let newWantsPct = Math.max(0, Math.min(100, value));
+                          let newNeedsPct = needsPct;
+                          if (newNeedsPct + newWantsPct > 100) {
+                            newNeedsPct = Math.max(0, 100 - newWantsPct);
+                          }
+                          let newSavingsPct = 100 - newNeedsPct - newWantsPct;
+                          if (newSavingsPct < 0) {
+                            newSavingsPct = 0;
+                            newNeedsPct = Math.max(0, 100 - newWantsPct);
+                          }
+                          setWantsPct(newWantsPct);
+                          if (newNeedsPct !== needsPct) {
+                            setNeedsPct(newNeedsPct);
+                          }
+                          if (newSavingsPct !== savingsPct) {
+                            setSavingsPct(newSavingsPct);
+                          }
+                        }}
+                        className="w-full text-right text-lg font-semibold bg-transparent border-none outline-none"
+                        min={0}
+                        max={100}
+                        step={0.1}
+                      />
+                      <div className="text-right text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        %
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => {
+                        let newWantsPct = Math.min(100, wantsPct + 0.5);
+                        let newNeedsPct = needsPct;
+                        if (newNeedsPct + newWantsPct > 100) {
+                          newNeedsPct = Math.max(0, 100 - newWantsPct);
+                        }
+                        let newSavingsPct = 100 - newNeedsPct - newWantsPct;
+                        if (newSavingsPct < 0) {
+                          newSavingsPct = 0;
+                          newNeedsPct = Math.max(0, 100 - newWantsPct);
+                        }
+                        setWantsPct(newWantsPct);
+                        if (newNeedsPct !== needsPct) {
+                          setNeedsPct(newNeedsPct);
+                        }
+                        if (newSavingsPct !== savingsPct) {
+                          setSavingsPct(newSavingsPct);
+                        }
+                      }}
+                      className="h-10 w-10 shrink-0"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="flex-1 rounded-lg border border-slate-300 bg-white px-4 py-3 dark:border-slate-600 dark:bg-slate-800">

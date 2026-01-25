@@ -141,7 +141,7 @@ export async function mockPlaidConnect(): Promise<MockPlaidData> {
     {
       id: 'asset-2',
       name: 'Savings Account',
-      value$: 8500,
+      value$: 2500,
       type: 'cash',
       accountName: 'Chase Savings ••••5678',
     },

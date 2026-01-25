@@ -27,6 +27,7 @@ export function usePlanData(): FinalPlanData | null {
   const goals = useOnboardingStore((state) => state.goals);
   const riskConstraints = useOnboardingStore((state) => state.riskConstraints);
   const safetyStrategy = useOnboardingStore((state) => state.safetyStrategy);
+  const payrollContributions = useOnboardingStore((state) => state.payrollContributions);
   const initialPaycheckPlan = useOnboardingStore((state) => state.initialPaycheckPlan);
   const plaidConnected = useOnboardingStore((state) => state.plaidConnected);
   
@@ -51,6 +52,7 @@ export function usePlanData(): FinalPlanData | null {
     goals,
     riskConstraints,
     safetyStrategy,
+    payrollContributions, // Watch payroll contributions so plan recalculates when 401k/HSA changes
     initialPaycheckPlan,
     plaidConnected, // Also watch plaidConnected to detect when Plaid data is loaded
   ]);

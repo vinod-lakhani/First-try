@@ -16,9 +16,9 @@ import { simulateScenario, type ScenarioInput, type MonthlyPlan as SimMonthlyPla
 import type { OnboardingState } from '@/lib/onboarding/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Slider } from '@/components/ui/slider';
-import { X, ArrowRight, AlertTriangle } from 'lucide-react';
+import { X, ArrowRight, AlertTriangle, HelpCircle, Edit, CheckCircle2, Plus, Minus } from 'lucide-react';
 import { NetWorthChart } from '@/components/charts/NetWorthChart';
+import { calculateSavingsBreakdown } from '@/lib/utils/savingsCalculations';
 
 type PaycheckCategoryWithSubs = FinalPlanData['paycheckCategories'][number] & {
   subCategories?: Array<{
@@ -29,6 +29,9 @@ type PaycheckCategoryWithSubs = FinalPlanData['paycheckCategories'][number] & {
     percent?: number;
   }>;
 };
+
+// Estimate marginal tax rate (federal + state)
+const ESTIMATED_MARGINAL_TAX_RATE = 0.25; // 25% combined federal + state
 
 function SavingsAllocatorContent() {
   const router = useRouter();
@@ -107,111 +110,336 @@ function SavingsAllocatorContent() {
   // match401kPerMonth$ is already monthly, use directly
   const matchNeedThisPeriod$ = baselineState.safetyStrategy?.match401kPerMonth$ || 0;
 
-  // Initialize slider values from baseline (as percentages of savings budget)
-  const [sliders, setSliders] = useState({
+  // Calculate monthly needs and wants from plan categories for centralized calculation
+  const monthlyNeeds = useMemo(() => {
+    if (!baselinePlanData) return 0;
+    const needsCategories = baselinePlanData.paycheckCategories.filter(c => 
+      c.key === 'essentials' || c.key === 'debt_minimums'
+    );
+    return needsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
+  }, [baselinePlanData, paychecksPerMonth]);
+  
+  const monthlyWants = useMemo(() => {
+    if (!baselinePlanData) return 0;
+    const wantsCategories = baselinePlanData.paycheckCategories.filter(c => c.key === 'fun_flexible');
+    return wantsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
+  }, [baselinePlanData, paychecksPerMonth]);
+  
+  // Use centralized savings calculation for consistency
+  const savingsBreakdown = useMemo(() => {
+    return calculateSavingsBreakdown(
+      baselineState.income,
+      baselineState.payrollContributions,
+      monthlyNeeds,
+      monthlyWants
+    );
+  }, [baselineState.income, baselineState.payrollContributions, monthlyNeeds, monthlyWants]);
+  
+  // Calculate pre-tax payroll savings estimates (needed for match recommendation)
+  // We still need individual 401k calculation for match recommendation logic
+  const preTaxSavings = useMemo(() => {
+    const { income, payrollContributions } = baselineState;
+    if (!income || !payrollContributions) {
+      return {
+        traditional401k: { percent: null, monthly: 0 },
+        hsa: { monthly: 0 },
+        employerMatch: { monthly: 0 },
+        total: 0,
+      };
+    }
+
+    const paychecksPerMonth = getPaychecksPerMonth(income.payFrequency || 'biweekly');
+    const grossIncomePerPaycheck = income.grossIncome$ || income.netIncome$ || 0;
+    const grossIncomeMonthly = grossIncomePerPaycheck * paychecksPerMonth;
+
+    // Calculate 401k contribution
+    let traditional401kMonthly = 0;
+    let traditional401kPercent: number | null = null;
+    
+    if (payrollContributions.has401k && payrollContributions.currentlyContributing401k === "yes") {
+      if (payrollContributions.contributionType401k === "percent_gross" && payrollContributions.contributionValue401k) {
+        traditional401kPercent = payrollContributions.contributionValue401k;
+        traditional401kMonthly = (grossIncomeMonthly * payrollContributions.contributionValue401k) / 100;
+      } else if (payrollContributions.contributionType401k === "amount" && payrollContributions.contributionValue401k) {
+        if (payrollContributions.contributionFrequency401k === "per_paycheck") {
+          traditional401kMonthly = payrollContributions.contributionValue401k * paychecksPerMonth;
+        } else if (payrollContributions.contributionFrequency401k === "per_month") {
+          traditional401kMonthly = payrollContributions.contributionValue401k;
+        }
+        if (grossIncomeMonthly > 0) {
+          traditional401kPercent = (traditional401kMonthly / grossIncomeMonthly) * 100;
+        }
+      }
+    }
+
+    // Calculate HSA contribution
+    let hsaMonthly = 0;
+    
+    if (payrollContributions.hasHSA && payrollContributions.currentlyContributingHSA === "yes") {
+      if (payrollContributions.contributionTypeHSA === "percent_gross" && payrollContributions.contributionValueHSA) {
+        hsaMonthly = (grossIncomeMonthly * payrollContributions.contributionValueHSA) / 100;
+      } else if (payrollContributions.contributionTypeHSA === "amount" && payrollContributions.contributionValueHSA) {
+        if (payrollContributions.contributionFrequencyHSA === "per_paycheck") {
+          hsaMonthly = payrollContributions.contributionValueHSA * paychecksPerMonth;
+        } else if (payrollContributions.contributionFrequencyHSA === "per_month") {
+          hsaMonthly = payrollContributions.contributionValueHSA;
+        }
+      }
+    }
+
+    // Use employer match from centralized calculation for consistency
+    return {
+      traditional401k: {
+        percent: traditional401kPercent,
+        monthly: traditional401kMonthly,
+      },
+      hsa: {
+        monthly: hsaMonthly,
+      },
+      employerMatch: {
+        monthly: savingsBreakdown.employerMatchMTD,
+      },
+      total: savingsBreakdown.preTaxSavingsTotal,
+    };
+  }, [baselineState.income, baselineState.payrollContributions, savingsBreakdown.employerMatchMTD, savingsBreakdown.preTaxSavingsTotal]);
+
+  // Calculate post-tax savings available (cash that can be allocated) - use centralized calculation
+  const postTaxSavingsAvailable = savingsBreakdown.cashSavingsMTD;
+
+
+  // Calculate match capture recommendation
+  const matchRecommendation = useMemo(() => {
+    const { income, payrollContributions } = baselineState;
+    if (!income || !payrollContributions || !payrollContributions.has401k || payrollContributions.hasEmployerMatch !== "yes") {
+      return null;
+    }
+
+    if (!payrollContributions.employerMatchPct || !payrollContributions.employerMatchCapPct) {
+      return null;
+    }
+
+    const paychecksPerMonth = getPaychecksPerMonth(income.payFrequency || 'biweekly');
+    const grossIncomePerPaycheck = income.grossIncome$ || income.netIncome$ || 0;
+    const grossIncomeMonthly = grossIncomePerPaycheck * paychecksPerMonth;
+
+    // Calculate required contribution to capture full match
+    const matchRequiredPercent = payrollContributions.employerMatchCapPct;
+    const matchRequiredMonthly = (grossIncomeMonthly * matchRequiredPercent) / 100;
+
+    // Current contribution
+    const current401kMonthly = preTaxSavings.traditional401k.monthly;
+    const current401kPercent = preTaxSavings.traditional401k.percent || 0;
+
+    // Check if match is captured
+    const isMatchCaptured = current401kMonthly >= matchRequiredMonthly;
+
+    if (isMatchCaptured) {
+      return null; // No recommendation needed
+    }
+
+    // Calculate deltas
+    const delta401kMonthly = matchRequiredMonthly - current401kMonthly;
+    const delta401kPercent = matchRequiredPercent - current401kPercent;
+
+    // Calculate new match amount
+    const newMatchMonthly = (matchRequiredMonthly * payrollContributions.employerMatchPct) / 100;
+    const currentMatchMonthly = preTaxSavings.employerMatch.monthly;
+    const deltaMatchMonthly = newMatchMonthly - currentMatchMonthly;
+
+    return {
+      isMatchCaptured: false,
+      currentPercent: current401kPercent,
+      recommendedPercent: matchRequiredPercent,
+      currentMonthly: current401kMonthly,
+      recommendedMonthly: matchRequiredMonthly,
+      delta401kMonthly,
+      delta401kPercent,
+      deltaMatchMonthly,
+      matchGapMonthly: deltaMatchMonthly,
+    };
+  }, [baselineState, preTaxSavings]);
+
+  // Check if match is captured
+  const isMatchCaptured = useMemo(() => {
+    if (!matchRecommendation) {
+      const { payrollContributions, income } = baselineState;
+      if (payrollContributions?.has401k && payrollContributions?.hasEmployerMatch === "yes") {
+        const paychecksPerMonth = getPaychecksPerMonth(income?.payFrequency || 'biweekly');
+        const grossIncomePerPaycheck = income?.grossIncome$ || income?.netIncome$ || 0;
+        const grossIncomeMonthly = grossIncomePerPaycheck * paychecksPerMonth;
+        
+        if (payrollContributions.employerMatchCapPct && grossIncomeMonthly > 0) {
+          const matchRequiredMonthly = (grossIncomeMonthly * payrollContributions.employerMatchCapPct) / 100;
+          return preTaxSavings.traditional401k.monthly >= matchRequiredMonthly;
+        }
+      }
+      return true;
+    }
+    return false;
+  }, [matchRecommendation, baselineState, preTaxSavings]);
+
+  // Handle "Capture my match" button
+  const handleCaptureMatch = () => {
+    if (!matchRecommendation || !baselineState.payrollContributions) return;
+
+    const deltaPreTax = matchRecommendation.delta401kMonthly;
+    const deltaMatch = matchRecommendation.deltaMatchMonthly;
+    const taxSavings = deltaPreTax * ESTIMATED_MARGINAL_TAX_RATE;
+    const deltaTakeHome = -deltaPreTax + taxSavings;
+    const deltaPostTax = deltaTakeHome;
+    // Total wealth moves = Pre-tax + Match + Post-tax available change
+    // Post-tax available is negative (less cash), so adding it reduces the total
+    // Formula: Pre-tax (+$677) + Match (+$339) + Post-tax available (-$508) = $677 + $339 - $508 = $508
+    // But user says it should be $677, so maybe: Pre-tax only (the actual wealth move)
+    // Or: Pre-tax + Match - |Post-tax| = $677 + $339 - $508 = $508
+    // Let me use: Pre-tax (since that's the actual contribution, match is bonus, post-tax reduction is the cost)
+    const deltaTotalWealth = deltaPreTax; // Just the pre-tax contribution amount
+
+    // Update payroll contributions - ensure currentlyContributing401k is set to "yes"
+    baselineState.updatePayrollContributions({
+      currentlyContributing401k: "yes",
+      contributionType401k: "percent_gross",
+      contributionValue401k: matchRecommendation.recommendedPercent,
+      contributionFrequency401k: null,
+    });
+
+    // Clear initialPaycheckPlan to force recalculation with new payroll contributions
+    baselineState.setInitialPaycheckPlan(undefined as any);
+
+    // Show impact preview
+    setImpactPreviewData({
+      deltaPreTax,
+      deltaMatch,
+      taxSavings,
+      deltaPostTax,
+      deltaTotalWealth,
+    });
+    setShowImpactPreview(true);
+  };
+
+  const [showImpactPreview, setShowImpactPreview] = useState(false);
+  const [impactPreviewData, setImpactPreviewData] = useState<{
+    deltaPreTax: number;
+    deltaMatch: number;
+    taxSavings: number;
+    deltaPostTax: number;
+    deltaTotalWealth: number;
+  } | null>(null);
+
+  // Initialize dollar amount values from baseline
+  const [amounts, setAmounts] = useState({
     ef: 0,
     debt: 0,
     retirementMatch: 0,
     retirementExtra: 0,
     brokerage: 0,
   });
-  const [originalSliders, setOriginalSliders] = useState(sliders);
+  const [originalAmounts, setOriginalAmounts] = useState(amounts);
 
-  const clampSlider = (value: number, cap: number) => Math.max(0, Math.min(cap, value));
+  const clampAmount = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
-  const updateSliderValue = (
-    key: keyof typeof sliders,
+  const updateAmount = (
+    key: keyof typeof amounts,
     rawValue: number,
-    cap: number = 100
+    min: number = 0,
+    max: number = Infinity
   ) => {
-    const clamped = clampSlider(rawValue, cap);
-    setSliders(prev => ({
+    const clamped = clampAmount(rawValue, min, max);
+    setAmounts(prev => ({
       ...prev,
-        [key]: clamped,
+      [key]: clamped,
     }));
+  };
+
+  const adjustAmount = (
+    key: keyof typeof amounts,
+    delta: number,
+    min: number = 0,
+    max: number = Infinity
+  ) => {
+    setAmounts(prev => {
+      const newValue = prev[key] + delta;
+      const clamped = clampAmount(newValue, min, max);
+      return {
+        ...prev,
+        [key]: clamped,
+      };
+    });
   };
 
   useEffect(() => {
     if (baselineSavingsData && baselineSavingsData.monthlySavings > 0) {
-      const savingsBudget = baselineSavingsData.monthlySavings;
-      
-      const efPct = Math.min(40, (baselineSavingsData.ef$ / savingsBudget) * 100);
-      const debtPct = Math.min(40, (baselineSavingsData.debt$ / savingsBudget) * 100);
-      const matchPct = (baselineSavingsData.match401k$ / savingsBudget) * 100;
-      const retExtraPct = (baselineSavingsData.retirementTaxAdv$ / savingsBudget) * 100;
-      const brokeragePct = (baselineSavingsData.brokerage$ / savingsBudget) * 100;
-
+      // Initialize with dollar amounts directly
       const initial = {
-          ef: efPct,
-          debt: debtPct,
-          retirementMatch: matchPct,
-          retirementExtra: retExtraPct,
-          brokerage: brokeragePct,
+        ef: baselineSavingsData.ef$,
+        debt: baselineSavingsData.debt$,
+        retirementMatch: 0, // Match is pre-tax, not in post-tax allocation
+        retirementExtra: baselineSavingsData.retirementTaxAdv$,
+        brokerage: baselineSavingsData.brokerage$,
       };
 
-      setSliders(initial);
-      setOriginalSliders(initial);
+      setAmounts(initial);
+      setOriginalAmounts(initial);
     }
   }, [baselineSavingsData]);
 
-  // Use baseline savings budget (no adjustment)
+  // Use post-tax savings available as the budget for allocation
   const savingsBudget = useMemo(() => {
     if (!baselineSavingsData) return 0;
-    return baselineSavingsData.monthlySavings;
-  }, [baselineSavingsData]);
+    // Use post-tax available for post-tax allocation
+    return postTaxSavingsAvailable || baselineSavingsData.monthlySavings;
+  }, [baselineSavingsData, postTaxSavingsAvailable]);
 
-  // Calculate desired total from sliders (as percentages of baseline budget)
-  // This shows what the user wants to allocate based on their slider settings
-  const desiredTotalFromSliders = useMemo(() => {
-    if (!baselineSavingsData || savingsBudget <= 0) return 0;
-    
+  // Calculate desired total from amounts
+  const desiredTotalFromAmounts = useMemo(() => {
+    // Only include post-tax categories (match is pre-tax, not in post-tax allocation)
     const total =
-      (sliders.ef / 100) * savingsBudget +
-      (sliders.debt / 100) * savingsBudget +
-      (sliders.retirementMatch / 100) * savingsBudget +
-      (sliders.retirementExtra / 100) * savingsBudget +
-      (sliders.brokerage / 100) * savingsBudget;
+      amounts.ef +
+      amounts.debt +
+      amounts.retirementExtra +
+      amounts.brokerage;
     
     return total;
-  }, [sliders, savingsBudget, baselineSavingsData]);
+  }, [amounts]);
 
-  // Calculate custom allocation directly from slider percentages (no normalization)
+  // Calculate custom allocation directly from dollar amounts
   const customAllocation = useMemo(() => {
     if (!baselineSavingsData || savingsBudget <= 0) return null;
 
-    const budget = baselineSavingsData.monthlySavings;
+    const budget = postTaxSavingsAvailable || baselineSavingsData.monthlySavings;
     const warnings: string[] = [];
 
+    // Apply caps
     const efCap = Math.min(budget * 0.4, efGap$ > 0 ? efGap$ : budget);
-    const rawEf$ = (sliders.ef / 100) * budget;
-    const ef$ = Math.max(0, Math.min(rawEf$, efCap));
-    const efHitCap = rawEf$ > efCap;
+    const ef$ = Math.max(0, Math.min(amounts.ef, efCap));
+    const efHitCap = amounts.ef > efCap;
 
     const debtCap = budget * 0.4;
-    const rawDebt$ = (sliders.debt / 100) * budget;
-    const highAprDebt$ = Math.max(0, Math.min(rawDebt$, debtCap));
-    const debtHitCap = rawDebt$ > debtCap;
+    const highAprDebt$ = Math.max(0, Math.min(amounts.debt, debtCap));
+    const debtHitCap = amounts.debt > debtCap;
 
-    const matchDesired$ = (sliders.retirementMatch / 100) * budget;
-    const match401k$ = Math.max(0, Math.min(matchDesired$, matchNeedThisPeriod$ || matchDesired$));
-    if (matchNeedThisPeriod$ > 0 && match401k$ < matchNeedThisPeriod$) {
-      warnings.push(
-        `Allocating $${match401k$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/month to 401k match leaves $${(matchNeedThisPeriod$ - match401k$).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} of employer match unclaimed.`
-      );
-    }
+    // Match is pre-tax, not post-tax
+    const match401k$ = 0;
 
-    const retirementTaxAdv$ = Math.max(0, (sliders.retirementExtra / 100) * budget);
-    const brokerage$ = Math.max(0, (sliders.brokerage / 100) * budget);
+    const retirementTaxAdv$ = Math.max(0, amounts.retirementExtra);
+    const brokerage$ = Math.max(0, amounts.brokerage);
 
-    const totalAllocated = ef$ + highAprDebt$ + match401k$ + retirementTaxAdv$ + brokerage$;
+    const totalAllocated = ef$ + highAprDebt$ + retirementTaxAdv$ + brokerage$;
     const unallocated$ = Math.max(0, budget - totalAllocated);
 
     const hitCaps = efHitCap || debtHitCap;
 
+    if (efHitCap) {
+      warnings.push(`Emergency fund allocation capped at $${efCap.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} (40% of budget or gap amount)`);
+    }
+    if (debtHitCap) {
+      warnings.push(`Debt paydown allocation capped at $${debtCap.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} (40% of budget)`);
+    }
+
     return {
       ef$,
       highAprDebt$,
-      match401k$,
+      match401k$: 0, // Match is pre-tax, not post-tax
       retirementTaxAdv$,
       brokerage$,
       totalAllocated,
@@ -219,18 +447,29 @@ function SavingsAllocatorContent() {
       warnings,
       hitCaps,
     };
-  }, [baselineSavingsData, savingsBudget, efGap$, matchNeedThisPeriod$, sliders]);
+  }, [baselineSavingsData, savingsBudget, efGap$, amounts, postTaxSavingsAvailable]);
 
-  // Calculate budget status based on desired total from sliders vs actual budget
+  // Calculate total wealth moves (for net worth)
+  // Total wealth moves = Pre-tax savings + Employer match + Post-tax savings available (total budget)
+  // This represents ALL money being moved into savings/investments, not just what's allocated
+  const totalWealthMoves = useMemo(() => {
+    if (!customAllocation) return 0;
+    
+    // Use postTaxSavingsAvailable (total budget) instead of allocated amounts
+    // This ensures we show the total potential wealth moves, not just what's currently allocated
+    return preTaxSavings.total + postTaxSavingsAvailable + preTaxSavings.employerMatch.monthly;
+  }, [preTaxSavings, postTaxSavingsAvailable]);
+
+  // Calculate budget status based on desired total from amounts vs actual budget
   const budgetStatus = useMemo(() => {
     if (!customAllocation || !savingsBudget || !baselineSavingsData) return null;
     
-    const difference = desiredTotalFromSliders - savingsBudget;
+    const difference = desiredTotalFromAmounts - savingsBudget;
     const isOverBudget = difference > 1; // Allow small rounding differences
     const isUnderBudget = difference < -1;
     
     return {
-      desiredTotal: desiredTotalFromSliders,
+      desiredTotal: desiredTotalFromAmounts,
       budget: savingsBudget,
       difference: Math.abs(difference),
       isOverBudget,
@@ -238,7 +477,7 @@ function SavingsAllocatorContent() {
       isOnBudget: !isOverBudget && !isUnderBudget,
       hasCapsHit: customAllocation.hitCaps,
     };
-  }, [desiredTotalFromSliders, savingsBudget, customAllocation, baselineSavingsData]);
+  }, [desiredTotalFromAmounts, savingsBudget, customAllocation, baselineSavingsData]);
 
   const allocationComparison = useMemo(() => {
     if (!baselineSavingsData || !customAllocation) return null;
@@ -253,13 +492,9 @@ function SavingsAllocatorContent() {
         current: baselineSavingsData.debt$,
         updated: customAllocation.highAprDebt$,
       },
+      // Match is pre-tax, not in post-tax allocation comparison
       {
-        label: '401k Match',
-        current: baselineSavingsData.match401k$,
-        updated: customAllocation.match401k$,
-      },
-      {
-        label: 'Retirement Tax-Advantaged',
+        label: 'Roth IRA / Taxable Retirement',
         current: baselineSavingsData.retirementTaxAdv$,
         updated: customAllocation.retirementTaxAdv$,
       },
@@ -326,7 +561,7 @@ function SavingsAllocatorContent() {
         wants$: monthlyWants,
         ef$: customAllocation.ef$,
         highAprDebt$: customAllocation.highAprDebt$,
-        match401k$: customAllocation.match401k$,
+        match401k$: preTaxSavings.employerMatch.monthly, // Use pre-tax match, not post-tax
         retirementTaxAdv$: customAllocation.retirementTaxAdv$,
         brokerage$: customAllocation.brokerage$,
       };
@@ -412,7 +647,7 @@ function SavingsAllocatorContent() {
         customSavings: {
           ef$: customAllocation.ef$,
           debt$: customAllocation.highAprDebt$,
-          match401k$: customAllocation.match401k$,
+          match401k$: preTaxSavings.employerMatch.monthly, // Pre-tax match
           retirementTaxAdv$: customAllocation.retirementTaxAdv$,
           brokerage$: customAllocation.brokerage$,
         },
@@ -423,7 +658,7 @@ function SavingsAllocatorContent() {
       console.error('[Savings Allocator] Error running net worth simulator:', err);
       return baselinePlanData ?? null;
     }
-  }, [customAllocation, baselinePlanData, baselineState, paychecksPerMonth]);
+      }, [customAllocation, baselinePlanData, baselineState, paychecksPerMonth, preTaxSavings]);
 
   // Use baseline plan's net worth chart data, but resample to match scenario format (every 3 months)
   // The baselinePlanData has full 480-month simulation, but scenario samples every 3 months
@@ -461,12 +696,11 @@ function SavingsAllocatorContent() {
 
   // Determine if values have changed
   const hasChanged = useMemo(() => {
-    return Math.abs(sliders.ef - originalSliders.ef) > 0.1 ||
-      Math.abs(sliders.debt - originalSliders.debt) > 0.1 ||
-      Math.abs(sliders.retirementMatch - originalSliders.retirementMatch) > 0.1 ||
-      Math.abs(sliders.retirementExtra - originalSliders.retirementExtra) > 0.1 ||
-      Math.abs(sliders.brokerage - originalSliders.brokerage) > 0.1;
-  }, [sliders, originalSliders]);
+    return Math.abs(amounts.ef - originalAmounts.ef) > 0.01 ||
+      Math.abs(amounts.debt - originalAmounts.debt) > 0.01 ||
+      Math.abs(amounts.retirementExtra - originalAmounts.retirementExtra) > 0.01 ||
+      Math.abs(amounts.brokerage - originalAmounts.brokerage) > 0.01;
+  }, [amounts, originalAmounts]);
 
   const handleConfirmApply = () => {
     if (!customAllocation) return;
@@ -477,7 +711,7 @@ function SavingsAllocatorContent() {
       customSavingsAllocation: {
         ef$: customAllocation.ef$,
         highAprDebt$: customAllocation.highAprDebt$,
-        match401k$: customAllocation.match401k$,
+        match401k$: preTaxSavings.employerMatch.monthly, // Pre-tax match, not post-tax
         retirementTaxAdv$: customAllocation.retirementTaxAdv$,
         brokerage$: customAllocation.brokerage$,
       },
@@ -508,7 +742,7 @@ function SavingsAllocatorContent() {
     );
   }
 
-  // Calculate income distribution
+  // Calculate income distribution from scenario plan
   const essentialsCategories = scenarioPlanData.paycheckCategories.filter(c => c.key === 'essentials');
   const debtMinimumCategories = scenarioPlanData.paycheckCategories.filter(c => c.key === 'debt_minimums');
   const needsCategories = [...essentialsCategories, ...debtMinimumCategories];
@@ -521,14 +755,14 @@ function SavingsAllocatorContent() {
 
   const monthlyEssentials = essentialsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
   const monthlyDebtMinimums = debtMinimumCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
-  const monthlyNeeds = monthlyEssentials + monthlyDebtMinimums;
-  const monthlyWants = wantsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
-  const monthlySavings = savingsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
-  const monthlyTotal = monthlyNeeds + monthlyWants + monthlySavings;
+  const scenarioMonthlyNeeds = monthlyEssentials + monthlyDebtMinimums;
+  const scenarioMonthlyWants = wantsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
+  const scenarioMonthlySavings = savingsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
+  const scenarioMonthlyTotal = scenarioMonthlyNeeds + scenarioMonthlyWants + scenarioMonthlySavings;
 
-  const needsPct = monthlyTotal > 0 ? (monthlyNeeds / monthlyTotal) * 100 : 0;
-  const wantsPct = monthlyTotal > 0 ? (monthlyWants / monthlyTotal) * 100 : 0;
-  const savingsPct = monthlyTotal > 0 ? (monthlySavings / monthlyTotal) * 100 : 0;
+  const needsPct = scenarioMonthlyTotal > 0 ? (scenarioMonthlyNeeds / scenarioMonthlyTotal) * 100 : 0;
+  const wantsPct = scenarioMonthlyTotal > 0 ? (scenarioMonthlyWants / scenarioMonthlyTotal) * 100 : 0;
+  const savingsPct = scenarioMonthlyTotal > 0 ? (scenarioMonthlySavings / scenarioMonthlyTotal) * 100 : 0;
 
   return (
     <div className="flex min-h-[calc(100vh-73px)] flex-col">
@@ -545,6 +779,303 @@ function SavingsAllocatorContent() {
             >
               <X className="h-5 w-5" />
             </Button>
+          </div>
+
+          {/* Pre-Tax Savings (Payroll) Panel */}
+          {(preTaxSavings.traditional401k.monthly > 0 || preTaxSavings.hsa.monthly > 0 || preTaxSavings.employerMatch.monthly > 0 || baselineState.payrollContributions?.has401k) && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+                    Pre‑Tax Savings (Payroll)
+                  </h3>
+                  <div className="group relative">
+                    <HelpCircle className="h-4 w-4 text-slate-400 cursor-help" />
+                    <div className="absolute bottom-full left-0 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                      <div className="bg-slate-900 text-white text-xs rounded-lg px-3 py-2 whitespace-normal max-w-xs shadow-lg">
+                        Payroll savings are deducted before your paycheck hits your bank. We estimate them unless payroll is connected.
+                        <div className="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-slate-900"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    // Save current state, then navigate to payroll contributions
+                    // After saving, return to this tool
+                    const returnPath = '/app/tools/savings-allocator';
+                    router.push(`/onboarding/payroll-contributions?returnTo=${encodeURIComponent(returnPath)}`);
+                  }}
+                  className="flex items-center gap-1.5"
+                >
+                  <Edit className="h-3.5 w-3.5" />
+                  Edit payroll savings
+                </Button>
+              </div>
+
+              {/* Match Status Badge */}
+              {baselineState.payrollContributions?.has401k && baselineState.payrollContributions?.hasEmployerMatch === "yes" && (
+                <div className="mb-3">
+                  {isMatchCaptured ? (
+                    <div className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Match captured
+                    </div>
+                  ) : (
+                    <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      Match not captured
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              <div className="space-y-2.5">
+                {preTaxSavings.traditional401k.monthly > 0 && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-700 dark:text-slate-300">
+                      Traditional 401(k): {preTaxSavings.traditional401k.percent !== null 
+                        ? `${preTaxSavings.traditional401k.percent.toFixed(1)}%`
+                        : '—'}
+                    </span>
+                    <span className="font-medium text-slate-900 dark:text-white">
+                      ~${Math.round(preTaxSavings.traditional401k.monthly).toLocaleString('en-US')}/mo (estimated)
+                    </span>
+                  </div>
+                )}
+                
+                {preTaxSavings.hsa.monthly > 0 && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-700 dark:text-slate-300">HSA:</span>
+                    <span className="font-medium text-slate-900 dark:text-white">
+                      ~${Math.round(preTaxSavings.hsa.monthly).toLocaleString('en-US')}/mo (estimated)
+                    </span>
+                  </div>
+                )}
+                
+                {preTaxSavings.employerMatch.monthly > 0 && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-700 dark:text-slate-300">Employer match:</span>
+                    <span className="font-medium text-green-600 dark:text-green-400">
+                      ~+${Math.round(preTaxSavings.employerMatch.monthly).toLocaleString('en-US')}/mo (estimated)
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Match Capture Recommendation */}
+              {matchRecommendation && (
+                <div className="mt-4 rounded-lg border-2 border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
+                  <div className="mb-3">
+                    <h4 className="text-sm font-semibold text-amber-900 dark:text-amber-300 mb-1">
+                      You're missing free employer match
+                    </h4>
+                    <p className="text-xs text-amber-700 dark:text-amber-400">
+                      Match gap: ${Math.round(matchRecommendation.matchGapMonthly).toLocaleString('en-US')}/month
+                    </p>
+                  </div>
+                  
+                  <div className="mb-3 space-y-1.5 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-700 dark:text-slate-300">Recommended change:</span>
+                      <span className="font-medium text-slate-900 dark:text-white">
+                        {matchRecommendation.currentPercent.toFixed(1)}% → {matchRecommendation.recommendedPercent.toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-700 dark:text-slate-300">Delta pre-tax:</span>
+                      <span className="font-medium text-slate-900 dark:text-white">
+                        +${Math.round(matchRecommendation.delta401kMonthly).toLocaleString('en-US')}/mo
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-700 dark:text-slate-300">Delta match:</span>
+                      <span className="font-medium text-green-600 dark:text-green-400">
+                        +${Math.round(matchRecommendation.deltaMatchMonthly).toLocaleString('en-US')}/mo
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={handleCaptureMatch}
+                      size="sm"
+                      className="flex-1"
+                    >
+                      Capture my match
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        // Save current state, then navigate to payroll contributions
+                        // After saving, return to this tool
+                        const returnPath = '/app/tools/savings-allocator';
+                        router.push(`/onboarding/payroll-contributions?returnTo=${encodeURIComponent(returnPath)}`);
+                      }}
+                    >
+                      Edit payroll savings
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Change Summary */}
+              {showImpactPreview && impactPreviewData && (
+                <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+                  <div className="mb-2 flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-300">
+                        Change Summary (estimated)
+                      </h4>
+                      <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                        We're estimating taxes + match since payroll isn't connected yet.
+                      </p>
+                    </div>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => {
+                        setShowImpactPreview(false);
+                        // Force recalculation by clearing the plan data
+                        baselineState.setInitialPaycheckPlan(undefined as any);
+                      }}
+                      className="h-8 px-4 text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      OK
+                    </Button>
+                  </div>
+                  
+                  <div className="space-y-3 text-sm mt-3">
+                    {/* Breakdown lines */}
+                    <div className="space-y-2.5">
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-700 dark:text-slate-300">Pre-tax invested (401k/HSA):</span>
+                          <span className="font-medium text-green-600 dark:text-green-400">
+                            +${Math.round(impactPreviewData.deltaPreTax).toLocaleString('en-US')}/mo
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                          This goes straight into your retirement account.
+                        </p>
+                      </div>
+                      
+                      {impactPreviewData.deltaMatch > 0 && (
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-700 dark:text-slate-300">Employer match (free money):</span>
+                            <span className="font-medium text-green-600 dark:text-green-400">
+                              +~${Math.round(impactPreviewData.deltaMatch).toLocaleString('en-US')}/mo
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            Your job adds this on top. No extra effort.
+                          </p>
+                        </div>
+                      )}
+                      
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-700 dark:text-slate-300">Estimated tax savings:</span>
+                          <span className="font-medium text-green-600 dark:text-green-400">
+                            +~${Math.round(impactPreviewData.taxSavings).toLocaleString('en-US')}/mo
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                          Your take-home drops less because you pay less tax.
+                        </p>
+                      </div>
+                      
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-700 dark:text-slate-300">Take-home change:</span>
+                          <span className="font-medium text-red-600 dark:text-red-400">
+                            {impactPreviewData.deltaPostTax >= 0 ? '+' : ''}${Math.round(impactPreviewData.deltaPostTax).toLocaleString('en-US')}/mo
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                          This is the cash you'll have less of in your bank account.
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* Two totals */}
+                    <div className="space-y-2.5 pt-2 border-t border-blue-200 dark:border-blue-800">
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-slate-700 dark:text-slate-300">Total invested (401k + match):</span>
+                          <span className="font-bold text-green-600 dark:text-green-400">
+                            +${Math.round(impactPreviewData.deltaPreTax + impactPreviewData.deltaMatch).toLocaleString('en-US')}/mo
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                          This is what grows your net worth over time.
+                        </p>
+                      </div>
+                      
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-slate-700 dark:text-slate-300">Net cash impact (take-home):</span>
+                          <span className="font-bold text-red-600 dark:text-red-400">
+                            {impactPreviewData.deltaPostTax >= 0 ? '+' : ''}${Math.round(impactPreviewData.deltaPostTax).toLocaleString('en-US')}/mo
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                          This is the tradeoff in your monthly spending money.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Summary Header */}
+          <div className="space-y-3 text-center rounded-lg border bg-white p-4 dark:bg-slate-800">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+              Post-Tax Savings Allocation
+            </h2>
+            
+            {/* Primary number */}
+            <div>
+              <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">
+                Post‑tax savings available to allocate:
+              </div>
+              <div className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">
+                ${Math.round(postTaxSavingsAvailable).toLocaleString('en-US')}/mo
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Money left after taxes + payroll deductions (401k/HSA).
+              </p>
+            </div>
+
+            {/* Secondary metrics */}
+            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+              <div className="text-center">
+                <div className="text-xs text-slate-600 dark:text-slate-400">Pre‑tax payroll savings</div>
+                <div className="text-sm font-semibold text-slate-900 dark:text-white">
+                  ${Math.round(preTaxSavings.total).toLocaleString('en-US')}/mo
+                </div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">(estimated)</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xs text-slate-600 dark:text-slate-400">Employer match</div>
+                <div className="text-sm font-semibold text-green-600 dark:text-green-400">
+                  +${Math.round(preTaxSavings.employerMatch.monthly).toLocaleString('en-US')}/mo
+                </div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">(estimated)</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xs text-slate-600 dark:text-slate-400">Total wealth moves</div>
+                <div className="text-sm font-semibold text-slate-900 dark:text-white">
+                  ${Math.round(totalWealthMoves).toLocaleString('en-US')}/mo
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Warnings */}
@@ -597,26 +1128,26 @@ function SavingsAllocatorContent() {
                       <span className="ml-2 font-semibold">${budgetStatus.desiredTotal.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
                     </div>
                     <div>
-                      <span className="text-slate-600 dark:text-slate-400">Current Budget:</span>
+                      <span className="text-slate-600 dark:text-slate-400">Post-Tax Available:</span>
                       <span className="ml-2 font-semibold">${budgetStatus.budget.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
                     </div>
                   </div>
                   <div className="mt-3 rounded bg-white/50 p-2 text-xs text-slate-600 dark:bg-slate-800/50 dark:text-slate-400">
-                    <p>💡 The total above is calculated by adding up all slider percentages. Adjust sliders below to see how your desired allocation compares to your current budget.</p>
+                    <p>💡 The total above is calculated by adding up all post-tax allocations. Adjust amounts below to see how your desired post-tax allocation compares to your post-tax savings available.</p>
                   </div>
                   {budgetStatus.isOverBudget && (
                     <p className="mt-2 text-sm text-red-700 dark:text-red-300">
-                      ⚠️ Your desired allocation (${budgetStatus.desiredTotal.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}) exceeds your current budget (${budgetStatus.budget.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}). Reduce slider values to stay within budget.
+                      ⚠️ Your desired post-tax allocation (${budgetStatus.desiredTotal.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}) exceeds your post-tax savings available (${budgetStatus.budget.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}). Reduce slider values to stay within budget.
                     </p>
                   )}
                   {budgetStatus.isUnderBudget && (
                     <p className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
-                      ℹ️ Your desired allocation (${budgetStatus.desiredTotal.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}) is under your current budget (${budgetStatus.budget.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}). You can increase slider values to use more of your budget.
+                      ℹ️ Your desired post-tax allocation (${budgetStatus.desiredTotal.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}) is under your post-tax savings available (${budgetStatus.budget.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}). You can increase slider values to use more of your budget.
                     </p>
                   )}
                   {budgetStatus.isOnBudget && (
                     <p className="mt-2 text-sm text-green-700 dark:text-green-300">
-                      ✓ Your desired allocation matches your current budget.
+                      ✓ Your desired post-tax allocation matches your post-tax savings available.
                     </p>
                   )}
                   {budgetStatus.hasCapsHit && (
@@ -628,26 +1159,49 @@ function SavingsAllocatorContent() {
               </div>
             )}
 
-            {/* Savings Category Sliders */}
+            {/* Post-Tax Savings Categories */}
             <div className="space-y-6">
-              <h2 className="font-semibold text-slate-900 dark:text-white">Savings Categories</h2>
+              <h2 className="font-semibold text-slate-900 dark:text-white">Post-Tax Savings Categories</h2>
               
               {/* Emergency Fund */}
               <div className="mb-6">
                 <div className="mb-2 flex items-center justify-between">
                   <h3 className="font-medium text-slate-900 dark:text-white">Emergency Fund</h3>
-                  <span className="text-sm text-slate-600 dark:text-slate-400">
-                    ${customAllocation.ef$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} /month
-                  </span>
                 </div>
-                <Slider
-                  value={[sliders.ef]}
-                  onValueChange={([value]) => updateSliderValue('ef', value, 40)}
-                  min={0}
-                  max={40}
-                  step={1}
-                  className="w-full"
-                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => adjustAmount('ef', -50, 0, Math.min(savingsBudget * 0.4, efGap$ > 0 ? efGap$ : savingsBudget))}
+                    className="h-10 w-10 shrink-0"
+                  >
+                    <Minus className="h-4 w-4" />
+                  </Button>
+                  <div className="flex-1 rounded-lg border border-slate-300 bg-white px-4 py-3 dark:border-slate-600 dark:bg-slate-800">
+                    <input
+                      type="number"
+                      value={Math.round(amounts.ef)}
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value) || 0;
+                        updateAmount('ef', value, 0, Math.min(savingsBudget * 0.4, efGap$ > 0 ? efGap$ : savingsBudget));
+                      }}
+                      className="w-full text-right text-lg font-semibold bg-transparent border-none outline-none"
+                      min={0}
+                      max={Math.min(savingsBudget * 0.4, efGap$ > 0 ? efGap$ : savingsBudget)}
+                    />
+                    <div className="text-right text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      /month
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => adjustAmount('ef', 50, 0, Math.min(savingsBudget * 0.4, efGap$ > 0 ? efGap$ : savingsBudget))}
+                    className="h-10 w-10 shrink-0"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                   {efGap$ > 0 ? `Gap: $${efGap$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : 'Emergency fund target met'}
                 </p>
@@ -663,18 +1217,44 @@ function SavingsAllocatorContent() {
                   >
                     High-APR Debt Paydown
                   </button>
-                  <span className="text-sm text-slate-600 dark:text-slate-400">
-                    ${customAllocation.highAprDebt$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} /month
-                  </span>
                 </div>
-                <Slider
-                  value={[sliders.debt]}
-                  onValueChange={([value]) => updateSliderValue('debt', value, 40)}
-                  min={0}
-                  max={40}
-                  step={1}
-                  className="w-full"
-                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => adjustAmount('debt', -50, 0, savingsBudget * 0.4)}
+                    className="h-10 w-10 shrink-0"
+                    disabled={totalDebtBalance$ === 0}
+                  >
+                    <Minus className="h-4 w-4" />
+                  </Button>
+                  <div className="flex-1 rounded-lg border border-slate-300 bg-white px-4 py-3 dark:border-slate-600 dark:bg-slate-800">
+                    <input
+                      type="number"
+                      value={Math.round(amounts.debt)}
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value) || 0;
+                        updateAmount('debt', value, 0, savingsBudget * 0.4);
+                      }}
+                      className="w-full text-right text-lg font-semibold bg-transparent border-none outline-none"
+                      min={0}
+                      max={savingsBudget * 0.4}
+                      disabled={totalDebtBalance$ === 0}
+                    />
+                    <div className="text-right text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      /month
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => adjustAmount('debt', 50, 0, savingsBudget * 0.4)}
+                    className="h-10 w-10 shrink-0"
+                    disabled={totalDebtBalance$ === 0}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                   {totalDebtBalance$ > 0 ? `Balance: $${totalDebtBalance$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : 'No high-APR debt'}
                 </p>
@@ -781,7 +1361,7 @@ function SavingsAllocatorContent() {
                             </span>
                           </div>
                           <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                            Adjust the slider above to change your total debt paydown allocation. Extra payments will be distributed proportionally across all debts.
+                            Adjust the amount above to change your total debt paydown allocation. Extra payments will be distributed proportionally across all debts.
                           </p>
                         </div>
                       </div>
@@ -790,61 +1370,87 @@ function SavingsAllocatorContent() {
                 )}
               </div>
 
-              {/* Retirement Match */}
+              {/* Retirement Extra (Roth IRA / Taxable Retirement) */}
               <div className="mb-6">
                 <div className="mb-2 flex items-center justify-between">
-                  <h3 className="font-medium text-slate-900 dark:text-white">Retirement — Match</h3>
-                  <span className="text-sm text-slate-600 dark:text-slate-400">
-                    ${customAllocation.match401k$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} /month
-                  </span>
+                  <h3 className="font-medium text-slate-900 dark:text-white">Roth IRA / Taxable Retirement</h3>
                 </div>
-                <Slider
-                  value={[sliders.retirementMatch]}
-                  onValueChange={([value]) => updateSliderValue('retirementMatch', value, 100)}
-                  min={0}
-                  max={100}
-                  step={1}
-                  className="w-full"
-                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => adjustAmount('retirementExtra', -50, 0)}
+                    className="h-10 w-10 shrink-0"
+                  >
+                    <Minus className="h-4 w-4" />
+                  </Button>
+                  <div className="flex-1 rounded-lg border border-slate-300 bg-white px-4 py-3 dark:border-slate-600 dark:bg-slate-800">
+                    <input
+                      type="number"
+                      value={Math.round(amounts.retirementExtra)}
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value) || 0;
+                        updateAmount('retirementExtra', value, 0);
+                      }}
+                      className="w-full text-right text-lg font-semibold bg-transparent border-none outline-none"
+                      min={0}
+                    />
+                    <div className="text-right text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      /month
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => adjustAmount('retirementExtra', 50, 0)}
+                    className="h-10 w-10 shrink-0"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  {matchNeedThisPeriod$ > 0 ? `Required: $${matchNeedThisPeriod$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} to capture full match` : 'No employer match'}
+                  Post-tax retirement accounts (Roth IRA, taxable retirement)
                 </p>
-              </div>
-
-              {/* Retirement Extra */}
-              <div className="mb-6">
-                <div className="mb-2 flex items-center justify-between">
-                  <h3 className="font-medium text-slate-900 dark:text-white">Retirement — Additional (401k/Roth)</h3>
-                  <span className="text-sm text-slate-600 dark:text-slate-400">
-                    ${customAllocation.retirementTaxAdv$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} /month
-                  </span>
-                </div>
-                <Slider
-                  value={[sliders.retirementExtra]}
-                  onValueChange={([value]) => updateSliderValue('retirementExtra', value, 100)}
-                  min={0}
-                  max={100}
-                  step={1}
-                  className="w-full"
-                />
               </div>
 
               {/* Brokerage */}
               <div className="mb-6">
                 <div className="mb-2 flex items-center justify-between">
                   <h3 className="font-medium text-slate-900 dark:text-white">Brokerage (Taxable Investing)</h3>
-                  <span className="text-sm text-slate-600 dark:text-slate-400">
-                    ${customAllocation.brokerage$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} /month
-                  </span>
                 </div>
-                <Slider
-                  value={[sliders.brokerage]}
-                  onValueChange={([value]) => updateSliderValue('brokerage', value, 100)}
-                  min={0}
-                  max={100}
-                  step={1}
-                  className="w-full"
-                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => adjustAmount('brokerage', -50, 0)}
+                    className="h-10 w-10 shrink-0"
+                  >
+                    <Minus className="h-4 w-4" />
+                  </Button>
+                  <div className="flex-1 rounded-lg border border-slate-300 bg-white px-4 py-3 dark:border-slate-600 dark:bg-slate-800">
+                    <input
+                      type="number"
+                      value={Math.round(amounts.brokerage)}
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value) || 0;
+                        updateAmount('brokerage', value, 0);
+                      }}
+                      className="w-full text-right text-lg font-semibold bg-transparent border-none outline-none"
+                      min={0}
+                    />
+                    <div className="text-right text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      /month
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => adjustAmount('brokerage', 50, 0)}
+                    className="h-10 w-10 shrink-0"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </div>
 
@@ -857,7 +1463,7 @@ function SavingsAllocatorContent() {
                 <div className="overflow-x-auto rounded-lg border bg-white p-4 dark:bg-slate-800">
                   <div className="min-w-0">
                     <NetWorthChart
-                      key={`savings-allocator-${sliders.ef}-${sliders.debt}-${sliders.retirementMatch}-${sliders.retirementExtra}-${sliders.brokerage}-${scenarioPlanData.netWorthChartData.netWorth.length}`}
+                      key={`savings-allocator-${amounts.ef}-${amounts.debt}-${amounts.retirementExtra}-${amounts.brokerage}-${scenarioPlanData.netWorthChartData.netWorth.length}`}
                       labels={scenarioPlanData.netWorthChartData.labels}
                       netWorth={scenarioPlanData.netWorthChartData.netWorth}
                       assets={scenarioPlanData.netWorthChartData.assets}
@@ -870,6 +1476,9 @@ function SavingsAllocatorContent() {
                       height={400}
                     />
                   </div>
+                  <p className="mt-2 text-xs text-center text-slate-500 dark:text-slate-400">
+                    Chart reflects your total wealth moves (pre-tax + post-tax + match).
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -1011,26 +1620,7 @@ function SavingsAllocatorContent() {
                       )}
                     </div>
                     <div className="space-y-2">
-                      <h3 className="font-semibold text-slate-900 dark:text-white">Retirement Match</h3>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-600 dark:text-slate-400">Current Plan:</span>
-                        <span className="font-semibold">${baselineSavingsData.match401k$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} /month</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-600 dark:text-slate-400">New Plan:</span>
-                        <span className="font-semibold text-green-600 dark:text-green-400">${customAllocation.match401k$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} /month</span>
-                      </div>
-                      {Math.abs(customAllocation.match401k$ - baselineSavingsData.match401k$) > 0.01 && (
-                        <div className="flex items-center justify-between text-sm border-t pt-2">
-                          <span className="text-slate-600 dark:text-slate-400">Change:</span>
-                          <span className={`font-semibold ${(customAllocation.match401k$ - baselineSavingsData.match401k$) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                            {(customAllocation.match401k$ - baselineSavingsData.match401k$) >= 0 ? '+' : ''}${(customAllocation.match401k$ - baselineSavingsData.match401k$).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} /month
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <h3 className="font-semibold text-slate-900 dark:text-white">Retirement Additional</h3>
+                      <h3 className="font-semibold text-slate-900 dark:text-white">Roth IRA / Taxable Retirement</h3>
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-slate-600 dark:text-slate-400">Current Plan:</span>
                         <span className="font-semibold">${baselineSavingsData.retirementTaxAdv$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} /month</span>

@@ -287,32 +287,59 @@ export function computeIncomePlan(inputs: IncomePlanInputs): IncomePlanResult {
     income$,
   };
 
+  // Ensure savings never exceeds limit even after rounding
+  const maxAllowedSavingsFinal = round2(actualSavingsPct + shiftLimitPct);
+  let finalSavingsPct = Math.min(round2(R_S), maxAllowedSavingsFinal);
+  let finalNeedsPct = round2(R_N);
+  let finalWantsPct = round2(R_W);
+  
+  // If we had to cap savings, adjust wants to maintain sum = 1.0
+  if (finalSavingsPct < round2(R_S)) {
+    const excess = round2(R_S) - finalSavingsPct;
+    finalWantsPct = Math.max(0, round2(finalWantsPct + excess));
+  }
+  
+  // Ensure sum = 1.0
+  const finalSumCheck = finalNeedsPct + finalWantsPct + finalSavingsPct;
+  if (Math.abs(finalSumCheck - 1.0) > 0.001) {
+    const diff = round2(1.0 - finalSumCheck);
+    finalWantsPct = Math.max(0, round2(finalWantsPct + diff));
+    // If wants can't absorb, adjust needs
+    if (Math.abs(finalNeedsPct + finalWantsPct + finalSavingsPct - 1.0) > 0.001) {
+      finalNeedsPct = Math.max(0, round2(1.0 - finalWantsPct - finalSavingsPct));
+      finalWantsPct = Math.max(0, round2(1.0 - finalNeedsPct - finalSavingsPct));
+    }
+  }
+  
   const next: NWSState = {
-    needsPct: round2(R_N),
-    wantsPct: round2(R_W),
-    savingsPct: round2(R_S), // This is lockedSavings, guaranteed to be <= actualSavingsPct + shiftLimitPct
+    needsPct: finalNeedsPct,
+    wantsPct: finalWantsPct,
+    savingsPct: finalSavingsPct, // Ensure it never exceeds limit even after rounding
     income$,
   };
   
-  // Final verification (should always pass, but verify for safety)
+  // Final verification (should always pass now, but verify for safety)
   const finalShift = next.savingsPct - actualSavingsPct;
   if (finalShift > shiftLimitPct + 0.0001) {
-    // This should NEVER happen, but if it does, force exact cap
-    console.error('[computeIncomePlan] CRITICAL: Shift limit violated in final result - forcing cap', {
-      resultSavings: next.savingsPct * 100,
-      actualSavings: actualSavingsPct * 100,
-      shift: finalShift * 100,
-      limit: shiftLimitPct * 100,
-    });
+    // This should be extremely rare now, but handle it if it occurs
+    if (finalShift > shiftLimitPct + 0.01) {
+      // Only warn if significantly over limit (more than rounding error)
+      console.warn('[computeIncomePlan] Shift limit exceeded - forcing cap', {
+        resultSavings: next.savingsPct * 100,
+        actualSavings: actualSavingsPct * 100,
+        shift: finalShift * 100,
+        limit: shiftLimitPct * 100,
+      });
+    }
     // Return with forced cap
     next.savingsPct = round2(actualSavingsPct + shiftLimitPct);
     next.wantsPct = Math.max(0, round2(1.0 - next.needsPct - next.savingsPct));
     next.needsPct = Math.max(0, round2(1.0 - next.wantsPct - next.savingsPct));
   }
 
-  // Add summary note
-  const savingsDelta = round2((R_S - actualSavingsPct) * 100);
-  const savingsDelta$ = round2((R_S - actualSavingsPct) * income$);
+  // Add summary note (use final capped savings for delta calculation)
+  const savingsDelta = round2((finalSavingsPct - actualSavingsPct) * 100);
+  const savingsDelta$ = round2((finalSavingsPct - actualSavingsPct) * income$);
   
   if (Math.abs(savingsDelta) > 0.1) {
     notes.push(

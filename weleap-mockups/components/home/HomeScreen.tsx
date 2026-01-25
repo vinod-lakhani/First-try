@@ -6,12 +6,16 @@
 
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, TrendingUp, TrendingDown, PiggyBank, Target } from 'lucide-react';
+import { ArrowRight, TrendingUp, TrendingDown, PiggyBank, Target, ChevronDown, ChevronUp } from 'lucide-react';
 import type { HomeScreenData } from '@/lib/home/types';
 import { formatCurrency, formatPercent } from '@/lib/feed/utils';
+import { useOnboardingStore } from '@/lib/onboarding/store';
+import { getPaychecksPerMonth, usePlanData } from '@/lib/onboarding/usePlanData';
+import { calculateSavingsBreakdown } from '@/lib/utils/savingsCalculations';
 
 interface HomeScreenProps {
   data: HomeScreenData;
@@ -19,14 +23,52 @@ interface HomeScreenProps {
 
 export function HomeScreen({ data }: HomeScreenProps) {
   const router = useRouter();
+  const state = useOnboardingStore();
+  const [savingsExpanded, setSavingsExpanded] = useState(false);
+  const planData = usePlanData(); // Get plan data for consistent calculation
 
   const { summary, insights, netWorth, goals } = data;
 
-  // Determine pulse headline
-  const savingsDelta = summary.savings$ - summary.plannedSavings$;
-  const pulseHeadline = savingsDelta >= 0
-    ? `You're on track this month: +${formatCurrency(Math.abs(savingsDelta))} vs your savings plan.`
-    : `You're behind by ${formatCurrency(Math.abs(savingsDelta))} on your savings this month.`;
+  // Use centralized savings calculation for consistency
+  const paychecksPerMonth = getPaychecksPerMonth(state.income?.payFrequency || 'monthly');
+  const payrollContributions = state.payrollContributions;
+  const income = state.income;
+  
+  // Calculate monthly needs and wants from plan categories
+  const monthlyNeeds = planData && planData.paycheckCategories
+    ? planData.paycheckCategories
+        .filter(c => c.key === 'essentials' || c.key === 'debt_minimums')
+        .reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth
+    : 0;
+  
+  const monthlyWants = planData && planData.paycheckCategories
+    ? planData.paycheckCategories
+        .filter(c => c.key === 'fun_flexible')
+        .reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth
+    : 0;
+  
+  // Use centralized calculation function
+  const savingsBreakdown = calculateSavingsBreakdown(income, payrollContributions, monthlyNeeds, monthlyWants);
+  
+  const observedCashSavingsMTD = savingsBreakdown.cashSavingsMTD;
+  const expectedPayrollSavingsMTD = savingsBreakdown.payrollSavingsMTD;
+  const expectedMatchMTD = savingsBreakdown.employerMatchMTD;
+  const totalSavingsMTD = savingsBreakdown.totalSavingsMTD;
+  
+  // Debug: Log calculation to verify consistency
+  console.log('[HomeScreen] Savings Breakdown:', savingsBreakdown);
+
+  // Calculate targets
+  const targetCashSavingsMTD = summary.plannedSavings$; // For now, use planned savings as target for cash
+  const targetPayrollSavingsMTD = expectedPayrollSavingsMTD; // Target equals expected
+  const targetMatchMTD = expectedMatchMTD; // Target equals expected match
+  const targetTotalSavingsMTD = targetCashSavingsMTD + targetPayrollSavingsMTD + targetMatchMTD;
+
+  // Determine pulse headline - compare Total Savings vs Total Savings Target
+  const deltaVsPlan = totalSavingsMTD - targetTotalSavingsMTD;
+  const pulseHeadline = deltaVsPlan >= 0
+    ? `You're on track this month: +${formatCurrency(Math.abs(deltaVsPlan))} vs your savings plan.`
+    : `You're behind by ${formatCurrency(Math.abs(deltaVsPlan))} on your savings this month.`;
 
   const handleAction = (action: typeof insights[0]['ctaAction']) => {
     if (!action) return;
@@ -103,23 +145,87 @@ export function HomeScreen({ data }: HomeScreenProps) {
                   </p>
                 </div>
 
-                {/* Savings */}
+                {/* Savings - Expandable */}
                 <div>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-slate-600 dark:text-slate-400">Savings</span>
-                    <span className="font-medium">
-                      {formatPercent((summary.savings$ / summary.income$) * 100)} ({formatCurrency(summary.savings$)})
-                    </span>
-                  </div>
-                  <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-green-500 transition-all"
-                      style={{ width: `${(summary.savings$ / summary.income$) * 100}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Target: {formatPercent(summary.targetSavingsPct)}
-                  </p>
+                  <button
+                    onClick={() => setSavingsExpanded(!savingsExpanded)}
+                    className="w-full"
+                  >
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-slate-600 dark:text-slate-400">Savings</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">
+                          {formatPercent((totalSavingsMTD / summary.income$) * 100)} ({formatCurrency(totalSavingsMTD)})
+                        </span>
+                        {savingsExpanded ? (
+                          <ChevronUp className="h-4 w-4 text-slate-400" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 text-slate-400" />
+                        )}
+                      </div>
+                    </div>
+                    <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-green-500 transition-all"
+                        style={{ width: `${Math.min((totalSavingsMTD / summary.income$) * 100, 100)}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Target: {formatPercent(summary.targetSavingsPct)}
+                    </p>
+                  </button>
+
+                  {/* Savings Breakdown */}
+                  {savingsExpanded && (
+                    <div className="mt-3 space-y-2 pl-2 border-l-2 border-green-200 dark:border-green-800">
+                      {/* Cash Savings (Post-tax) */}
+                      <div className="text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-slate-600 dark:text-slate-400">Cash savings (Post-tax):</span>
+                          <span className="font-medium text-slate-900 dark:text-white">
+                            {formatCurrency(observedCashSavingsMTD)}
+                          </span>
+                        </div>
+                        <div className="text-slate-500 dark:text-slate-400 italic">observed</div>
+                      </div>
+
+                      {/* Payroll Savings (Pre-tax) */}
+                      {expectedPayrollSavingsMTD > 0 && (
+                        <div className="text-xs">
+                          <div className="flex justify-between">
+                            <span className="text-slate-600 dark:text-slate-400">Payroll savings (Pre-tax):</span>
+                            <span className="font-medium text-slate-900 dark:text-white">
+                              {formatCurrency(expectedPayrollSavingsMTD)}
+                            </span>
+                          </div>
+                          <div className="text-slate-500 dark:text-slate-400 italic">estimated</div>
+                        </div>
+                      )}
+
+                      {/* Employer Match */}
+                      {expectedMatchMTD > 0 && (
+                        <div className="text-xs">
+                          <div className="flex justify-between">
+                            <span className="text-slate-600 dark:text-slate-400">Employer match:</span>
+                            <span className="font-medium text-green-600 dark:text-green-400">
+                              +{formatCurrency(expectedMatchMTD)}
+                            </span>
+                          </div>
+                          <div className="text-slate-500 dark:text-slate-400 italic">estimated</div>
+                        </div>
+                      )}
+
+                      {/* Total Savings */}
+                      <div className="text-xs pt-2 border-t border-slate-200 dark:border-slate-700">
+                        <div className="flex justify-between font-semibold">
+                          <span className="text-slate-700 dark:text-slate-300">Total Savings (Cash + Payroll + Match):</span>
+                          <span className="text-slate-900 dark:text-white">
+                            {formatCurrency(totalSavingsMTD)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 

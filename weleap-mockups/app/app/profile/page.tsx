@@ -20,6 +20,7 @@ import Link from 'next/link';
 export default function ProfilePage() {
   const router = useRouter();
   const state = useOnboardingStore();
+  const { resetOnboarding } = state;
   
   // Build profile data from store
   const profileData = useMemo<ProfilePageData>(() => {
@@ -340,6 +341,50 @@ export default function ProfilePage() {
                       Allow anonymized usage data to improve WeLeap
                     </span>
                   </label>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Clear All Data Section */}
+          <Card className="border-red-200 dark:border-red-800">
+            <CardHeader>
+              <CardTitle className="text-xl text-red-600 dark:text-red-400">Danger Zone</CardTitle>
+              <CardDescription>
+                Clear all onboarding data to start fresh. This action cannot be undone.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
+                  <p className="text-sm text-red-800 dark:text-red-200 mb-3">
+                    This will delete all your onboarding data including:
+                  </p>
+                  <ul className="text-sm text-red-700 dark:text-red-300 space-y-1 list-disc list-inside mb-4">
+                    <li>Income information</li>
+                    <li>Expenses and debts</li>
+                    <li>Assets and goals</li>
+                    <li>Payroll contributions</li>
+                    <li>Savings allocations</li>
+                    <li>All plan data</li>
+                  </ul>
+                  <Button
+                    onClick={() => {
+                      if (confirm('Are you sure you want to clear all data? This action cannot be undone.')) {
+                        // Clear localStorage explicitly to ensure all persisted data is removed
+                        if (typeof window !== 'undefined') {
+                          localStorage.removeItem('weleap-onboarding-storage');
+                        }
+                        resetOnboarding();
+                        router.push('/onboarding/ribbit-intro');
+                      }
+                    }}
+                    variant="destructive"
+                    className="w-full"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Clear All Data & Start Over
+                  </Button>
                 </div>
               </div>
             </CardContent>

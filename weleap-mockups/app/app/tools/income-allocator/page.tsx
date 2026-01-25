@@ -20,6 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Slider } from '@/components/ui/slider';
 import { X, Info } from 'lucide-react';
 import { NetWorthChart } from '@/components/charts/NetWorthChart';
+import { calculateSavingsBreakdown } from '@/lib/utils/savingsCalculations';
 
 // Helper to get paychecks per month
 function getPaychecksPerMonth(frequency: string): number {
@@ -326,6 +327,45 @@ export default function IncomeAllocatorPage() {
   // Don't compute a recommendation - just use the current plan directly
   const recommendedPlan = currentPlan;
 
+
+  // Calculate monthly needs and wants from plan categories for centralized calculation
+  const monthlyNeeds = useMemo(() => {
+    if (!planData) return 0;
+    const paychecksPerMonth = getPaychecksPerMonth(income?.payFrequency || 'biweekly');
+    const needsCategories = planData.paycheckCategories.filter(c => 
+      c.key === 'essentials' || c.key === 'debt_minimums'
+    );
+    return needsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
+  }, [planData, income?.payFrequency]);
+  
+  const monthlyWants = useMemo(() => {
+    if (!planData) return 0;
+    const paychecksPerMonth = getPaychecksPerMonth(income?.payFrequency || 'biweekly');
+    const wantsCategories = planData.paycheckCategories.filter(c => c.key === 'fun_flexible');
+    return wantsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
+  }, [planData, income?.payFrequency]);
+  
+  // Use centralized savings calculation for consistency
+  const savingsBreakdown = useMemo(() => {
+    return calculateSavingsBreakdown(
+      income,
+      state.payrollContributions,
+      monthlyNeeds,
+      monthlyWants
+    );
+  }, [income, state.payrollContributions, monthlyNeeds, monthlyWants]);
+  
+  const payrollMatchData = useMemo(() => {
+    return {
+      expectedPayrollSavingsMTD: savingsBreakdown.payrollSavingsMTD,
+      expectedMatchMTD: savingsBreakdown.employerMatchMTD,
+      preTaxSavingsTotal: savingsBreakdown.preTaxSavingsTotal,
+      taxSavingsMonthly: savingsBreakdown.taxSavingsMonthly,
+    };
+  }, [savingsBreakdown]);
+  
+  const baseSavingsMonthly = savingsBreakdown.baseSavingsMonthly;
+
   // Build the result with NOW (actuals), NEXT (recommended plan preserving savings), and GOAL (targets)
   const planResult = useMemo<IncomePlanResult | null>(() => {
     if (!monthlyIncome || monthlyIncome === 0 || !recommendedPlan) return null;
@@ -336,6 +376,16 @@ export default function IncomeAllocatorPage() {
       savingsPct: targetSavingsPct / 100,
       income$: monthlyIncome,
     };
+
+    // Calculate cash savings using centralized calculation
+    const nowCashSavings = savingsBreakdown.cashSavingsMTD;
+    const nextCashSavings = savingsBreakdown.cashSavingsMTD;
+    const goalCashSavings = savingsBreakdown.cashSavingsMTD;
+
+    // Calculate total savings (Cash + Payroll + Match) for each state
+    const nowTotalSavings = nowCashSavings + payrollMatchData.expectedPayrollSavingsMTD + payrollMatchData.expectedMatchMTD;
+    const nextTotalSavings = nextCashSavings + payrollMatchData.expectedPayrollSavingsMTD + payrollMatchData.expectedMatchMTD;
+    const goalTotalSavings = goalCashSavings + payrollMatchData.expectedPayrollSavingsMTD + payrollMatchData.expectedMatchMTD;
 
     // Generate notes explaining the current plan
     const notes: string[] = [];
@@ -353,7 +403,7 @@ export default function IncomeAllocatorPage() {
       }
     }
 
-    return {
+    const result = {
       now: {
         needsPct: actuals.needsPct,
         wantsPct: actuals.wantsPct,
@@ -363,8 +413,14 @@ export default function IncomeAllocatorPage() {
       next: recommendedPlan, // Use recommended plan that preserves savings
       goal,
       notes,
+      totalSavings: {
+        now: nowTotalSavings,
+        next: nextTotalSavings,
+        goal: goalTotalSavings,
+      },
     };
-  }, [monthlyIncome, actuals, recommendedPlan, currentPlan, targetNeedsPct, targetWantsPct, targetSavingsPct]);
+    return result;
+  }, [monthlyIncome, actuals, recommendedPlan, currentPlan, targetNeedsPct, targetWantsPct, targetSavingsPct, totalSavings]);
 
   const handleTargetChange = (
     category: 'needs' | 'wants' | 'savings',
@@ -503,6 +559,7 @@ export default function IncomeAllocatorPage() {
                 now={planResult.now}
                 next={planResult.next}
                 goal={planResult.goal}
+                totalSavings={planResult.totalSavings as { now: number; next: number; goal: number } | undefined}
               />
             </CardContent>
           </Card>

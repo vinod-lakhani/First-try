@@ -36,6 +36,12 @@ interface IncomeDistributionChartProps {
     why?: string;
   }>;
   size?: number;
+  totalSavings?: number; // Optional: Total savings including Cash + Payroll + Match
+  savingsBreakdown?: Array<{ // Optional: Custom savings breakdown to show instead of category-based breakdown
+    label: string;
+    amount: number;
+    percent: number;
+  }>;
 }
 
 export function IncomeDistributionChart({
@@ -43,6 +49,8 @@ export function IncomeDistributionChart({
   grossIncome,
   categories,
   size = 280,
+  totalSavings,
+  savingsBreakdown,
 }: IncomeDistributionChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<any>(null);
@@ -86,30 +94,40 @@ export function IncomeDistributionChart({
     },
     {
       label: 'Savings',
-      amount: categories
-        .filter(
-          (c) =>
-            c.label === 'Extra Debt Paydown' ||
-            c.label === 'Emergency Savings' ||
-            c.label === 'Long-Term Investing'
-        )
-        .reduce((sum, c) => sum + c.amount, 0),
+      amount: totalSavings !== undefined 
+        ? totalSavings // Use totalSavings if provided (includes Cash + Payroll + Match)
+        : categories
+            .filter(
+              (c) =>
+                c.label === 'Extra Debt Paydown' ||
+                c.label === 'Emergency Savings' ||
+                c.label === 'Long-Term Investing'
+            )
+            .reduce((sum, c) => sum + c.amount, 0),
       percent: 0,
       color: '#14b8a6', // teal
-      breakdown: categories
-        .filter(
-          (c) =>
-            c.label === 'Extra Debt Paydown' ||
-            c.label === 'Emergency Savings' ||
-            c.label === 'Long-Term Investing'
-        )
-        .map((c) => ({
-          label: c.label,
-          amount: c.amount,
-          percent: c.percent,
-          color: c.color,
-          description: c.why,
-        })),
+      breakdown: savingsBreakdown 
+        ? savingsBreakdown.map((item) => ({
+            label: item.label,
+            amount: item.amount,
+            percent: item.percent,
+            color: '#14b8a6', // teal
+            description: undefined,
+          }))
+        : categories
+            .filter(
+              (c) =>
+                c.label === 'Extra Debt Paydown' ||
+                c.label === 'Emergency Savings' ||
+                c.label === 'Long-Term Investing'
+            )
+            .map((c) => ({
+              label: c.label,
+              amount: c.amount,
+              percent: c.percent,
+              color: c.color,
+              description: c.why,
+            })),
     },
   ].filter((cat) => cat.amount > 0.01); // Only show categories with meaningful amounts
 

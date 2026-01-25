@@ -118,8 +118,8 @@ export default function MonthlyPlanDesignPage() {
     };
 
     setInitialPaycheckPlan(paycheckPlan);
-    setCurrentStep('savings-plan');
-    router.push('/onboarding/savings-plan');
+    setCurrentStep('payroll-contributions');
+    router.push('/onboarding/payroll-contributions');
   };
 
   if (!currentIncome || currentIncome <= 0) {
