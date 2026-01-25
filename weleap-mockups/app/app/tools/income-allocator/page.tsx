@@ -420,7 +420,7 @@ export default function IncomeAllocatorPage() {
       },
     };
     return result;
-  }, [monthlyIncome, actuals, recommendedPlan, currentPlan, targetNeedsPct, targetWantsPct, targetSavingsPct, totalSavings]);
+  }, [monthlyIncome, actuals, recommendedPlan, currentPlan, targetNeedsPct, targetWantsPct, targetSavingsPct, savingsBreakdown, payrollMatchData]);
 
   const handleTargetChange = (
     category: 'needs' | 'wants' | 'savings',
