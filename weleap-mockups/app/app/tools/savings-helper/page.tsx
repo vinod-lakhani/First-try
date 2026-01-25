@@ -808,7 +808,9 @@ function SavingsHelperContent() {
               <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
                 Cash Budget (Net Income)
               </span>
-              <HelpCircle className="h-3 w-3 text-slate-400" title="Money left after taxes and payroll deductions" />
+              <span title="Money left after taxes and payroll deductions">
+                <HelpCircle className="h-3 w-3 text-slate-400" />
+              </span>
             </div>
             <div className="flex h-12 w-full overflow-hidden rounded-lg border-2 border-slate-200 dark:border-slate-700">
               <div
@@ -1098,7 +1100,9 @@ function SavingsHelperContent() {
               <div>
                 <h3 className="mb-4 font-semibold text-slate-900 dark:text-white">
                   Total Savings Goal (All-in)
-                  <HelpCircle className="ml-2 inline h-4 w-4 text-slate-400" title="Total savings target as % of gross income (includes cash + payroll + match)" />
+                  <span title="Total savings target as % of gross income (includes cash + payroll + match)" className="inline">
+                    <HelpCircle className="ml-2 inline h-4 w-4 text-slate-400" />
+                  </span>
                 </h3>
                 <div className="space-y-4">
                   <div>
