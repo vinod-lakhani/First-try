@@ -1262,11 +1262,26 @@ If users ask about:
 - Confirmation that their plan is saved
 
 **Guidance You Can Provide**:
-- **MANDATORY - Savings Breakdown Questions**: When users ask "what makes up my savings" or "break down my savings" or "what is my savings composed of", you MUST:
-  * Reference the savings breakdown shown on the Income Distribution Chart
-  * Show the three components: Cash Savings + Payroll Savings (pre-tax) + 401K Match = Total Savings
-  * Use the exact dollar amounts from userPlanData.savingsAllocation if available
-  * Explain: "Your total savings of $X/month is made up of: Cash Savings $A (post-tax), Payroll Savings $B (pre-tax 401k/HSA), and 401K Match $C (free money from employer)"
+- **MANDATORY - Savings Breakdown Questions**: When users ask "what makes up my savings" or "break down my savings" or "what is my savings composed of" or "walk me through my savings breakdown", you MUST:
+  * **PART 1 - Total Savings Composition**: First show what makes up the TOTAL savings:
+    - Cash Savings (post-tax): $X/month
+    - Payroll Savings (pre-tax 401k/HSA): $Y/month  
+    - 401K Match (free money from employer): $Z/month
+    - **Total Savings = $X + $Y + $Z = $Total/month**
+    - Use the exact dollar amounts from the "Total Monthly Savings Breakdown" section
+  
+  * **PART 2 - Post-Tax Cash Allocation**: Then show how the POST-TAX CASH SAVINGS is allocated:
+    - Emergency Fund: $A/month (X% of post-tax cash)
+    - Extra Debt Payoff: $B/month (Y% of post-tax cash)
+    - Retirement Tax-Advantaged (IRA/401k): $C/month (Z% of post-tax cash)
+    - Taxable Brokerage: $D/month (W% of post-tax cash)
+    - **Total Post-Tax Cash Available to Allocate = $A + $B + $C + $D = $TotalPostTax/month**
+    - Use the exact dollar amounts from userPlanData.savingsAllocation if available
+  
+  * **CRITICAL**: Your response must include BOTH parts:
+    1. The total savings breakdown (Cash + Pre-tax + Match) - this shows the COMPLETE picture
+    2. The post-tax cash allocation (how post-tax cash is distributed) - this shows WHERE the post-tax money goes
+  * **Format**: Start with "Here's your complete savings breakdown:" then show both parts clearly separated
   
 - **MANDATORY - Savings Allocation Questions**: When users ask about how their savings is allocated or "where does my savings go", you MUST:
   * Reference the Savings Allocation section (how post-tax cash savings is distributed)
@@ -1769,7 +1784,10 @@ The user is in the onboarding flow, which guides them through setting up their f
       if (monthlyMatch > 0) {
         prompt += `  - 401K Match (free money from employer): $${Math.round(monthlyMatch).toLocaleString()}/month\n`;
       }
-      prompt += `- **CRITICAL**: When users ask "what makes up my savings" or "break down my savings" or "what is my savings composed of", you MUST show this exact breakdown with dollar amounts: Cash Savings $${Math.round(cashSavingsMTD).toLocaleString()} + Payroll Savings $${Math.round(preTaxTotal).toLocaleString()} + 401K Match $${Math.round(monthlyMatch).toLocaleString()} = Total Savings $${Math.round(totalSavingsMTD).toLocaleString()}\n`;
+      prompt += `- **CRITICAL**: When users ask "what makes up my savings" or "break down my savings" or "walk me through my savings breakdown", you MUST:\n`;
+      prompt += `  1. Show this TOTAL savings breakdown: Cash Savings $${Math.round(cashSavingsMTD).toLocaleString()} + Payroll Savings $${Math.round(preTaxTotal).toLocaleString()} + 401K Match $${Math.round(monthlyMatch).toLocaleString()} = Total Savings $${Math.round(totalSavingsMTD).toLocaleString()}\n`;
+      prompt += `  2. THEN show the post-tax cash allocation breakdown (if savingsAllocation data is available below)\n`;
+      prompt += `  3. Make it clear that the total includes BOTH pre-tax (401k/HSA) and post-tax (cash) components\n`;
       prompt += `\n`;
     } else if (userPlanData.monthlySavings && typeof userPlanData.monthlySavings === 'number') {
       // Fallback: use monthlySavings if we don't have all the data for calculation
@@ -1794,7 +1812,10 @@ The user is in the onboarding flow, which guides them through setting up their f
         if (monthlyMatch > 0) {
           prompt += `  - 401K Match (free money from employer): $${Math.round(monthlyMatch).toLocaleString()}/month\n`;
         }
-        prompt += `- **CRITICAL**: When users ask "what makes up my savings" or "break down my savings", you MUST show this breakdown: Cash Savings + Payroll Savings + 401K Match = Total Savings\n`;
+        prompt += `- **CRITICAL**: When users ask "what makes up my savings" or "break down my savings" or "walk me through my savings breakdown", you MUST:\n`;
+        prompt += `  1. Show this TOTAL savings breakdown: Cash Savings + Payroll Savings + 401K Match = Total Savings\n`;
+        prompt += `  2. THEN show the post-tax cash allocation breakdown (if savingsAllocation data is available below)\n`;
+        prompt += `  3. Make it clear that the total includes BOTH pre-tax (401k/HSA) and post-tax (cash) components\n`;
       }
       prompt += `\n`;
     }
@@ -2094,6 +2115,9 @@ The user is in the onboarding flow, which guides them through setting up their f
       const totalSavings = typeof userPlanData.savingsAllocation.total === 'number' ? userPlanData.savingsAllocation.total : 0;
       prompt += `- Total post-tax cash savings allocated: $${Math.round(totalSavings).toLocaleString()}/month\n`;
       prompt += `- **CRITICAL**: This shows WHERE the post-tax cash savings goes (Emergency Fund, Debt, Retirement, Brokerage)\n`;
+      prompt += `- **CRITICAL**: When users ask for "savings breakdown", you MUST show BOTH:\n`;
+      prompt += `  1. Total Savings Breakdown (from section above): Cash + Pre-tax + Match = Total\n`;
+      prompt += `  2. Post-Tax Cash Allocation (this section): How post-tax cash is distributed\n`;
       prompt += `- Breakdown:\n`;
       
       if (userPlanData.savingsAllocation.emergencyFund?.amount > 0) {
@@ -2122,6 +2146,10 @@ The user is in the onboarding flow, which guides them through setting up their f
         prompt += `  - Taxable Brokerage: $${Math.round(brokAmount).toLocaleString()}/month (${brokPercent.toFixed(1)}% of savings)\n`;
       }
       prompt += `- **CRITICAL**: When users ask "where does my savings go" or "how is my savings allocated", you MUST show this breakdown with exact dollar amounts\n`;
+      prompt += `- **CRITICAL**: When users ask for "savings breakdown" or "walk me through my savings breakdown", you MUST show BOTH:\n`;
+      prompt += `  1. Total Savings Breakdown: Cash Savings + Payroll Savings (pre-tax) + 401K Match = Total Savings\n`;
+      prompt += `  2. Post-Tax Cash Allocation (this section): How the post-tax cash portion is distributed across goals\n`;
+      prompt += `  Format: Start with total savings composition, then show post-tax cash allocation\n`;
       prompt += `\n`;
     }
   }
@@ -2380,6 +2408,26 @@ EXAMPLES OF CORRECT RESPONSES
 **Example 16: No Closing Phrases**
 ❌ WRONG: "Your allocation is Needs $2,320, Wants $880, Savings $800. Total: $4,000 ✓. If you have any other questions, just let me know!"
 ✅ CORRECT: "Your allocation is Needs $2,320, Wants $880, Savings $800. Total: $4,000 ✓"
+
+**Example 17: Complete Savings Breakdown (Pre-tax + Post-tax + Match + Allocation)**
+❌ WRONG: "Here's your savings breakdown based on your current monthly savings allocation: **Total Post-tax Cash Savings Available to Allocate: $3,243/month**. Emergency Fund: $1,162 (35.8%), Extra Debt Payoff: $697 (21.5%), 401(k) Employer Match: $339 (10.4%), Retirement Tax-Advantaged: $523 (16.1%), Taxable Brokerage: $523 (16.1%)."
+✅ CORRECT: "Here's your complete savings breakdown:
+
+**Total Monthly Savings: $4,382/month**
+Your total savings is made up of:
+- Cash Savings (post-tax): $3,243/month
+- Payroll Savings (pre-tax 401k/HSA): $800/month
+- 401K Match (free money from employer): $339/month
+Total: $3,243 + $800 + $339 = $4,382 ✓
+
+**Post-Tax Cash Allocation: $3,243/month**
+Your post-tax cash savings is allocated as:
+- Emergency Fund: $1,162/month (35.8% of post-tax cash)
+- Extra Debt Payoff: $697/month (21.5% of post-tax cash)
+- Retirement Tax-Advantaged (IRA/401k): $523/month (16.1% of post-tax cash)
+- Taxable Brokerage: $523/month (16.1% of post-tax cash)
+- 401(k) Employer Match: $339/month (10.4% of post-tax cash)
+Total: $1,162 + $697 + $523 + $523 + $339 = $3,243 ✓"
 
 **Example 17: Tax Strategy for Lower Retirement Income**
 ❌ WRONG: "If you expect lower income in retirement, consider Traditional 401(k)."
