@@ -359,7 +359,7 @@ function buildSystemPromptInternal(context?: string, userPlanData?: any): string
     userPlanData = {};
   }
   
-  let prompt = `You are Ribbit, a friendly and helpful financial assistant for the WeLeap personal finance app. 
+  let prompt: string = `You are Ribbit, a friendly and helpful financial assistant for the WeLeap personal finance app. 
 You help users understand their financial plans, make better decisions, and answer questions about their money.
 
 ================================================================================
@@ -603,13 +603,13 @@ SAVINGS CALCULATIONS - CENTRALIZED FORMULA (CRITICAL FOR ACCURACY)
 - **Consistency Across Pages**: All pages (Income tab, Monthly Pulse, Savings Plan, Plan Final, Savings Allocator, Savings Helper) use the same centralized calculation formula, so values should match everywhere. If users report discrepancies, explain that all pages now use the same calculation and values should be consistent.
 
 **Pages Using Centralized Calculation**:
-- Income Tab (`/app/app/income`): Shows savings breakdown with Cash Savings, Payroll Savings, and Employer Match
-- Monthly Pulse (`/app/app/tools/monthly-pulse`): Shows monthly progress with same savings breakdown
+- Income Tab (path: app/app/income): Shows savings breakdown with Cash Savings, Payroll Savings, and Employer Match
+- Monthly Pulse (path: app/app/tools/monthly-pulse): Shows monthly progress with same savings breakdown
 - Home Screen: Monthly Pulse card uses same calculations
-- Savings Plan (`/onboarding/savings-plan`): Uses +/- buttons and input boxes (not sliders) for allocation
-- Plan Final (`/onboarding/plan-final`): Shows complete plan with consistent savings calculations
-- Savings Allocator (`/app/app/tools/savings-allocator`): Uses +/- buttons and input boxes, shows total wealth moves
-- Savings Helper (`/app/app/tools/savings-helper`): Uses centralized calculations for all scenarios
+- Savings Plan (path: onboarding/savings-plan): Uses +/- buttons and input boxes (not sliders) for allocation
+- Plan Final (path: onboarding/plan-final): Shows complete plan with consistent savings calculations
+- Savings Allocator (path: app/app/tools/savings-allocator): Uses +/- buttons and input boxes, shows total wealth moves
+- Savings Helper (path: app/app/tools/savings-helper): Uses centralized calculations for all scenarios
 
 **When Users See Discrepancies**:
 - **MANDATORY**: If users ask "Why is my cash savings different on different pages?" or report discrepancies, you MUST:
@@ -1519,8 +1519,9 @@ The user is in the onboarding flow, which guides them through setting up their f
     
     // Income
     if (userPlanData.monthlyIncome) {
+      const monthlyIncome = typeof userPlanData.monthlyIncome === 'number' ? userPlanData.monthlyIncome : 0;
       prompt += `**Income:**\n`;
-      prompt += `- Monthly income: $${Math.round(userPlanData.monthlyIncome).toLocaleString()}\n\n`;
+      prompt += `- Monthly income: $${Math.round(monthlyIncome).toLocaleString()}\n\n`;
     }
 
     // Expenses Breakdown
@@ -1563,7 +1564,8 @@ The user is in the onboarding flow, which guides them through setting up their f
     if (userPlanData.expenseBreakdown && userPlanData.expenseBreakdown.length > 0) {
       prompt += `**Expenses:**\n`;
       userPlanData.expenseBreakdown.forEach((exp: any) => {
-        prompt += `- ${exp.name}: $${Math.round(exp.amount).toLocaleString()}/month`;
+        const expAmount = typeof exp.amount === 'number' ? exp.amount : 0;
+        prompt += `- ${exp.name}: $${Math.round(expAmount).toLocaleString()}/month`;
         if (exp.category) {
           prompt += ` (${exp.category})`;
         }
@@ -1779,8 +1781,10 @@ The user is in the onboarding flow, which guides them through setting up their f
     // Emergency Fund
     if (userPlanData.emergencyFund) {
       prompt += `**Emergency Fund:**\n`;
-      prompt += `- Current: $${Math.round(userPlanData.emergencyFund.current).toLocaleString()}\n`;
-      prompt += `- Target: $${Math.round(userPlanData.emergencyFund.target).toLocaleString()} (${userPlanData.emergencyFund.monthsTarget} months)\n`;
+      const efCurrent = typeof userPlanData.emergencyFund.current === 'number' ? userPlanData.emergencyFund.current : 0;
+      const efTarget = typeof userPlanData.emergencyFund.target === 'number' ? userPlanData.emergencyFund.target : 0;
+      prompt += `- Current: $${Math.round(efCurrent).toLocaleString()}\n`;
+      prompt += `- Target: $${Math.round(efTarget).toLocaleString()} (${userPlanData.emergencyFund.monthsTarget} months)\n`;
       if (userPlanData.emergencyFund.monthsToTarget) {
         prompt += `- Months to target: ${userPlanData.emergencyFund.monthsToTarget}\n`;
       }
@@ -1813,7 +1817,8 @@ The user is in the onboarding flow, which guides them through setting up their f
     
     // Add annual income for tax calculations if monthly income is available
     if (userPlanData.monthlyIncome) {
-      const annualIncome = userPlanData.monthlyIncome * 12;
+      const monthlyIncome = typeof userPlanData.monthlyIncome === 'number' ? userPlanData.monthlyIncome : 0;
+      const annualIncome = monthlyIncome * 12;
       prompt += `**Annual Income:**\n`;
       prompt += `- Annual income: $${Math.round(annualIncome).toLocaleString()}\n`;
       prompt += `  → Use this for Roth vs Traditional 401k decisions (cutoff: $190K single / $230K married)\n`;
@@ -1823,32 +1828,42 @@ The user is in the onboarding flow, which guides them through setting up their f
     // Net Worth
     if (userPlanData.netWorth) {
       prompt += `**Net Worth (with Growth Projections):**\n`;
-      prompt += `- Current net worth: $${Math.round(userPlanData.netWorth.current).toLocaleString()}\n`;
+      const currentNetWorth = typeof userPlanData.netWorth.current === 'number' ? userPlanData.netWorth.current : 0;
+      prompt += `- Current net worth: $${Math.round(currentNetWorth).toLocaleString()}\n`;
       if (userPlanData.netWorth.currentAssets !== undefined) {
-        prompt += `- Current assets: $${Math.round(userPlanData.netWorth.currentAssets).toLocaleString()}\n`;
+        const currentAssets = typeof userPlanData.netWorth.currentAssets === 'number' ? userPlanData.netWorth.currentAssets : 0;
+        prompt += `- Current assets: $${Math.round(currentAssets).toLocaleString()}\n`;
       }
       if (userPlanData.netWorth.currentLiabilities !== undefined) {
-        prompt += `- Current liabilities: $${Math.round(userPlanData.netWorth.currentLiabilities).toLocaleString()}\n`;
+        const currentLiabilities = typeof userPlanData.netWorth.currentLiabilities === 'number' ? userPlanData.netWorth.currentLiabilities : 0;
+        prompt += `- Current liabilities: $${Math.round(currentLiabilities).toLocaleString()}\n`;
       }
       if (userPlanData.netWorth.projections && userPlanData.netWorth.projections.length > 0) {
         prompt += `- Projected net worth (BASELINE - with growth factored in):\n`;
         prompt += `  These are the baseline projections from your current plan. Use these values when calculating the impact of additional savings.\n`;
         userPlanData.netWorth.projections.forEach((proj: any) => {
-          prompt += `  - ${proj.label}: $${Math.round(proj.value).toLocaleString()}`;
+          const projValue = typeof proj?.value === 'number' ? proj.value : 0;
+          prompt += `  - ${proj?.label || 'Projection'}: $${Math.round(projValue).toLocaleString()}`;
           if (proj.months !== undefined && proj.months > 0) {
             prompt += ` (${proj.months} months)`;
           }
           // Include asset breakdown if available - format clearly for LLM
           if (proj.assetBreakdown) {
             prompt += `\n    --- ASSET BREAKDOWN (USE THESE EXACT VALUES) ---\n`;
-            prompt += `    Cash/Emergency Fund: $${Math.round(proj.assetBreakdown.cash || 0).toLocaleString()}\n`;
-            prompt += `    Brokerage: $${Math.round(proj.assetBreakdown.brokerage || 0).toLocaleString()}\n`;
-            prompt += `    Retirement (401k/IRA): $${Math.round(proj.assetBreakdown.retirement || 0).toLocaleString()}\n`;
+            const cash = typeof proj.assetBreakdown.cash === 'number' ? proj.assetBreakdown.cash : 0;
+            const brokerage = typeof proj.assetBreakdown.brokerage === 'number' ? proj.assetBreakdown.brokerage : 0;
+            const retirement = typeof proj.assetBreakdown.retirement === 'number' ? proj.assetBreakdown.retirement : 0;
+            const totalAssets = typeof proj.assetBreakdown.totalAssets === 'number' ? proj.assetBreakdown.totalAssets : 0;
+            const liabilities = typeof proj.assetBreakdown.liabilities === 'number' ? proj.assetBreakdown.liabilities : 0;
+            prompt += `    Cash/Emergency Fund: $${Math.round(cash).toLocaleString()}\n`;
+            prompt += `    Brokerage: $${Math.round(brokerage).toLocaleString()}\n`;
+            prompt += `    Retirement (401k/IRA): $${Math.round(retirement).toLocaleString()}\n`;
             if (proj.assetBreakdown.hsa !== undefined && proj.assetBreakdown.hsa > 0) {
-              prompt += `    HSA: $${Math.round(proj.assetBreakdown.hsa).toLocaleString()}\n`;
+              const hsa = typeof proj.assetBreakdown.hsa === 'number' ? proj.assetBreakdown.hsa : 0;
+              prompt += `    HSA: $${Math.round(hsa).toLocaleString()}\n`;
             }
-            prompt += `    Total Assets: $${Math.round(proj.assetBreakdown.totalAssets || 0).toLocaleString()}\n`;
-            prompt += `    Liabilities: $${Math.round(proj.assetBreakdown.liabilities || 0).toLocaleString()}\n`;
+            prompt += `    Total Assets: $${Math.round(totalAssets).toLocaleString()}\n`;
+            prompt += `    Liabilities: $${Math.round(liabilities).toLocaleString()}\n`;
             prompt += `    --- END ASSET BREAKDOWN ---\n`;
           }
           prompt += `\n`;
@@ -1862,19 +1877,26 @@ The user is in the onboarding flow, which guides them through setting up their f
         // Include current asset breakdown if available
         if (userPlanData.netWorth.currentAssetBreakdown) {
           prompt += `- Current asset breakdown (Today):\n`;
-          prompt += `  - Cash/Emergency Fund: $${Math.round(userPlanData.netWorth.currentAssetBreakdown.cash).toLocaleString()}\n`;
-          prompt += `  - Brokerage: $${Math.round(userPlanData.netWorth.currentAssetBreakdown.brokerage).toLocaleString()}\n`;
-          prompt += `  - Retirement (401k/IRA): $${Math.round(userPlanData.netWorth.currentAssetBreakdown.retirement).toLocaleString()}\n`;
+          const cash = typeof userPlanData.netWorth.currentAssetBreakdown.cash === 'number' ? userPlanData.netWorth.currentAssetBreakdown.cash : 0;
+          const brokerage = typeof userPlanData.netWorth.currentAssetBreakdown.brokerage === 'number' ? userPlanData.netWorth.currentAssetBreakdown.brokerage : 0;
+          const retirement = typeof userPlanData.netWorth.currentAssetBreakdown.retirement === 'number' ? userPlanData.netWorth.currentAssetBreakdown.retirement : 0;
+          const totalAssets = typeof userPlanData.netWorth.currentAssetBreakdown.totalAssets === 'number' ? userPlanData.netWorth.currentAssetBreakdown.totalAssets : 0;
+          const liabilities = typeof userPlanData.netWorth.currentAssetBreakdown.liabilities === 'number' ? userPlanData.netWorth.currentAssetBreakdown.liabilities : 0;
+          prompt += `  - Cash/Emergency Fund: $${Math.round(cash).toLocaleString()}\n`;
+          prompt += `  - Brokerage: $${Math.round(brokerage).toLocaleString()}\n`;
+          prompt += `  - Retirement (401k/IRA): $${Math.round(retirement).toLocaleString()}\n`;
           if (userPlanData.netWorth.currentAssetBreakdown.hsa !== undefined) {
-            prompt += `  - HSA: $${Math.round(userPlanData.netWorth.currentAssetBreakdown.hsa).toLocaleString()}\n`;
+            const hsa = typeof userPlanData.netWorth.currentAssetBreakdown.hsa === 'number' ? userPlanData.netWorth.currentAssetBreakdown.hsa : 0;
+            prompt += `  - HSA: $${Math.round(hsa).toLocaleString()}\n`;
           }
-          prompt += `  - Total Assets: $${Math.round(userPlanData.netWorth.currentAssetBreakdown.totalAssets).toLocaleString()}\n`;
-          prompt += `  - Liabilities: $${Math.round(userPlanData.netWorth.currentAssetBreakdown.liabilities).toLocaleString()}\n`;
+          prompt += `  - Total Assets: $${Math.round(totalAssets).toLocaleString()}\n`;
+          prompt += `  - Liabilities: $${Math.round(liabilities).toLocaleString()}\n`;
           prompt += `\n`;
         }
         
         if (userPlanData.netWorth.chartDataMonths) {
-          prompt += `  - Chart data available for ${userPlanData.netWorth.chartDataMonths} months (${Math.round(userPlanData.netWorth.chartDataMonths / 12)} years)\n`;
+          const chartMonths = typeof userPlanData.netWorth.chartDataMonths === 'number' ? userPlanData.netWorth.chartDataMonths : 0;
+          prompt += `  - Chart data available for ${chartMonths} months (${Math.round(chartMonths / 12)} years)\n`;
         }
         prompt += `\n*IMPORTANT: All data provided above (projections, breakdowns, allocations) is pre-calculated with growth factored in. Use these exact values directly - don't recalculate or describe generically.*\n`;
       }
@@ -1884,23 +1906,34 @@ The user is in the onboarding flow, which guides them through setting up their f
     // Savings Allocation Breakdown
     if (userPlanData.savingsAllocation) {
       prompt += `**Savings Allocation (Monthly):**\n`;
-      prompt += `- Total monthly savings: $${Math.round(userPlanData.savingsAllocation.total).toLocaleString()}\n`;
+      const totalSavings = typeof userPlanData.savingsAllocation.total === 'number' ? userPlanData.savingsAllocation.total : 0;
+      prompt += `- Total monthly savings: $${Math.round(totalSavings).toLocaleString()}\n`;
       prompt += `- Breakdown:\n`;
       
       if (userPlanData.savingsAllocation.emergencyFund?.amount > 0) {
-        prompt += `  - Emergency Fund: $${Math.round(userPlanData.savingsAllocation.emergencyFund.amount).toLocaleString()}/month (${userPlanData.savingsAllocation.emergencyFund.percent.toFixed(1)}% of savings)\n`;
+        const efAmount = typeof userPlanData.savingsAllocation.emergencyFund.amount === 'number' ? userPlanData.savingsAllocation.emergencyFund.amount : 0;
+        const efPercent = typeof userPlanData.savingsAllocation.emergencyFund.percent === 'number' ? userPlanData.savingsAllocation.emergencyFund.percent : 0;
+        prompt += `  - Emergency Fund: $${Math.round(efAmount).toLocaleString()}/month (${efPercent.toFixed(1)}% of savings)\n`;
       }
       if (userPlanData.savingsAllocation.debtPayoff?.amount > 0) {
-        prompt += `  - Extra Debt Payoff: $${Math.round(userPlanData.savingsAllocation.debtPayoff.amount).toLocaleString()}/month (${userPlanData.savingsAllocation.debtPayoff.percent.toFixed(1)}% of savings)\n`;
+        const debtAmount = typeof userPlanData.savingsAllocation.debtPayoff.amount === 'number' ? userPlanData.savingsAllocation.debtPayoff.amount : 0;
+        const debtPercent = typeof userPlanData.savingsAllocation.debtPayoff.percent === 'number' ? userPlanData.savingsAllocation.debtPayoff.percent : 0;
+        prompt += `  - Extra Debt Payoff: $${Math.round(debtAmount).toLocaleString()}/month (${debtPercent.toFixed(1)}% of savings)\n`;
       }
       if (userPlanData.savingsAllocation.match401k?.amount > 0) {
-        prompt += `  - 401(k) Employer Match: $${Math.round(userPlanData.savingsAllocation.match401k.amount).toLocaleString()}/month (${userPlanData.savingsAllocation.match401k.percent.toFixed(1)}% of savings)\n`;
+        const matchAmount = typeof userPlanData.savingsAllocation.match401k.amount === 'number' ? userPlanData.savingsAllocation.match401k.amount : 0;
+        const matchPercent = typeof userPlanData.savingsAllocation.match401k.percent === 'number' ? userPlanData.savingsAllocation.match401k.percent : 0;
+        prompt += `  - 401(k) Employer Match: $${Math.round(matchAmount).toLocaleString()}/month (${matchPercent.toFixed(1)}% of savings)\n`;
       }
       if (userPlanData.savingsAllocation.retirementTaxAdv?.amount > 0) {
-        prompt += `  - Retirement Tax-Advantaged (IRA/401k): $${Math.round(userPlanData.savingsAllocation.retirementTaxAdv.amount).toLocaleString()}/month (${userPlanData.savingsAllocation.retirementTaxAdv.percent.toFixed(1)}% of savings)\n`;
+        const retAmount = typeof userPlanData.savingsAllocation.retirementTaxAdv.amount === 'number' ? userPlanData.savingsAllocation.retirementTaxAdv.amount : 0;
+        const retPercent = typeof userPlanData.savingsAllocation.retirementTaxAdv.percent === 'number' ? userPlanData.savingsAllocation.retirementTaxAdv.percent : 0;
+        prompt += `  - Retirement Tax-Advantaged (IRA/401k): $${Math.round(retAmount).toLocaleString()}/month (${retPercent.toFixed(1)}% of savings)\n`;
       }
       if (userPlanData.savingsAllocation.brokerage?.amount > 0) {
-        prompt += `  - Taxable Brokerage: $${Math.round(userPlanData.savingsAllocation.brokerage.amount).toLocaleString()}/month (${userPlanData.savingsAllocation.brokerage.percent.toFixed(1)}% of savings)\n`;
+        const brokAmount = typeof userPlanData.savingsAllocation.brokerage.amount === 'number' ? userPlanData.savingsAllocation.brokerage.amount : 0;
+        const brokPercent = typeof userPlanData.savingsAllocation.brokerage.percent === 'number' ? userPlanData.savingsAllocation.brokerage.percent : 0;
+        prompt += `  - Taxable Brokerage: $${Math.round(brokAmount).toLocaleString()}/month (${brokPercent.toFixed(1)}% of savings)\n`;
       }
       prompt += `\n`;
     }
