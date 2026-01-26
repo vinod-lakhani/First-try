@@ -945,15 +945,41 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
   const monthlyDebtMinimums = totalDebtMinPayments$ * paychecksPerMonth;
   const monthlyEssentials = Math.max(0, monthlyNeedsTotal - monthlyDebtMinimums);
 
+  console.log('[buildFinalPlanData] Savings allocation inputs:', {
+    monthlySavingsBudget,
+    incomeAllocSavings$: incomeAlloc.savings$,
+    paychecksPerMonth,
+    hasCustomAllocation: !!safetyStrategy?.customSavingsAllocation,
+    customAllocationTotal: safetyStrategy?.customSavingsAllocation 
+      ? (safetyStrategy.customSavingsAllocation.ef$ + 
+         safetyStrategy.customSavingsAllocation.highAprDebt$ + 
+         safetyStrategy.customSavingsAllocation.match401k$ + 
+         safetyStrategy.customSavingsAllocation.retirementTaxAdv$ + 
+         safetyStrategy.customSavingsAllocation.brokerage$)
+      : 0,
+  });
+
   // Use custom savings allocation if provided, otherwise calculate from engine
+  // CRITICAL: If custom allocation exists but savings budget changed, we should recalculate
+  // to ensure sub-categories reflect the new budget. For now, always recalculate from engine
+  // to ensure consistency when needs/wants change.
   let savingsAlloc;
-  if (safetyStrategy?.customSavingsAllocation) {
-    // Use custom allocation (already in monthly amounts)
+  const customAlloc = safetyStrategy?.customSavingsAllocation;
+  const customAllocTotal = customAlloc 
+    ? (customAlloc.ef$ + customAlloc.highAprDebt$ + customAlloc.match401k$ + customAlloc.retirementTaxAdv$ + customAlloc.brokerage$)
+    : 0;
+  
+  // Only use custom allocation if it matches the current savings budget (within tolerance)
+  // This ensures that when needs/wants change, the allocation recalculates
+  const budgetMatches = Math.abs(customAllocTotal - monthlySavingsBudget) < 1;
+  
+  if (customAlloc && budgetMatches) {
+    // Use custom allocation (already in monthly amounts) - budget hasn't changed
     // Calculate routing info from the allocation percentages
-    const totalRetirement = safetyStrategy.customSavingsAllocation.match401k$ + safetyStrategy.customSavingsAllocation.retirementTaxAdv$;
-    const totalInvesting = totalRetirement + safetyStrategy.customSavingsAllocation.brokerage$;
+    const totalRetirement = customAlloc.match401k$ + customAlloc.retirementTaxAdv$;
+    const totalInvesting = totalRetirement + customAlloc.brokerage$;
     const retirePct = totalInvesting > 0 ? totalRetirement / totalInvesting : 0.5;
-    const brokerPct = totalInvesting > 0 ? safetyStrategy.customSavingsAllocation.brokerage$ / totalInvesting : 0.5;
+    const brokerPct = totalInvesting > 0 ? customAlloc.brokerage$ / totalInvesting : 0.5;
     
     // Determine account type based on income and IDR status
     const incomeSingle$ = income.incomeSingle$ || income.annualSalary$ || incomePeriod$ * paychecksPerMonth * 12;
@@ -961,11 +987,11 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
     const acctType = (onIDR || incomeSingle$ >= 190000) ? "Traditional401k" : "Roth";
     
     savingsAlloc = {
-      ef$: safetyStrategy.customSavingsAllocation.ef$,
-      highAprDebt$: safetyStrategy.customSavingsAllocation.highAprDebt$,
-      match401k$: safetyStrategy.customSavingsAllocation.match401k$,
-      retirementTaxAdv$: safetyStrategy.customSavingsAllocation.retirementTaxAdv$,
-      brokerage$: safetyStrategy.customSavingsAllocation.brokerage$,
+      ef$: customAlloc.ef$,
+      highAprDebt$: customAlloc.highAprDebt$,
+      match401k$: customAlloc.match401k$,
+      retirementTaxAdv$: customAlloc.retirementTaxAdv$,
+      brokerage$: customAlloc.brokerage$,
       routing: {
         acctType,
         splitRetirePct: round2(retirePct * 100),
@@ -973,22 +999,30 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
       },
       notes: ['Using custom savings allocation from user adjustments'],
     };
-    console.log('[buildFinalPlanData] Using custom savings allocation:', savingsAlloc);
+    console.log('[buildFinalPlanData] Using custom savings allocation (budget matches):', savingsAlloc);
   } else {
-    // Calculate from engine
+    // Calculate from engine - either no custom allocation or budget changed
+    if (customAlloc && !budgetMatches) {
+      console.log('[buildFinalPlanData] Custom allocation exists but budget changed, recalculating:', {
+        customAllocTotal,
+        monthlySavingsBudget,
+        difference: monthlySavingsBudget - customAllocTotal,
+      });
+    }
     savingsAlloc = allocateSavings({
-    savingsBudget$: monthlySavingsBudget,
-    efTarget$,
-    efBalance$,
-    highAprDebts,
-    matchNeedThisPeriod$: safetyStrategy?.match401kPerMonth$ || 0,
-    incomeSingle$: income.incomeSingle$ || income.annualSalary$ || incomePeriod$ * paychecksPerMonth * 12,
-    onIDR: safetyStrategy?.onIDR || false,
-    liquidity: safetyStrategy?.liquidity || 'Medium',
-    retirementFocus: safetyStrategy?.retirementFocus || 'Medium',
-    iraRoomThisYear$: safetyStrategy?.iraRoomThisYear$ || 7000,
-    k401RoomThisYear$: safetyStrategy?.k401RoomThisYear$ || 23000,
-  });
+      savingsBudget$: monthlySavingsBudget,
+      efTarget$,
+      efBalance$,
+      highAprDebts,
+      matchNeedThisPeriod$: safetyStrategy?.match401kPerMonth$ || 0,
+      incomeSingle$: income.incomeSingle$ || income.annualSalary$ || incomePeriod$ * paychecksPerMonth * 12,
+      onIDR: safetyStrategy?.onIDR || false,
+      liquidity: safetyStrategy?.liquidity || 'Medium',
+      retirementFocus: safetyStrategy?.retirementFocus || 'Medium',
+      iraRoomThisYear$: safetyStrategy?.iraRoomThisYear$ || 7000,
+      k401RoomThisYear$: safetyStrategy?.k401RoomThisYear$ || 23000,
+    });
+    console.log('[buildFinalPlanData] Calculated savings allocation from engine:', savingsAlloc);
   }
   
   // Convert savings allocation back to per-paycheck for paycheck categories (for backward compatibility)

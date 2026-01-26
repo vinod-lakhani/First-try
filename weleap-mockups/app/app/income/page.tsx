@@ -70,14 +70,28 @@ export default function IncomePage() {
 
   // Calculate breakdowns from plan categories - must be called unconditionally
   // Show all individual subcategories, not lumped together
+  // CRITICAL: This must recalculate when planData changes (which happens when riskConstraints change)
   const breakdowns = useMemo(() => {
     if (!planData) {
+      console.log('[Income Page] No planData, returning empty breakdowns');
       return {
         needs: [],
         wants: [],
         savings: [],
       };
     }
+    
+    console.log('[Income Page] Calculating breakdowns from planData:', {
+      paycheckCategoriesCount: planData.paycheckCategories.length,
+      categories: planData.paycheckCategories.map(c => ({
+        key: c.key,
+        label: c.label,
+        amount: c.amount,
+        hasSubCategories: !!c.subCategories,
+        subCategoriesCount: c.subCategories?.length || 0,
+      })),
+      riskConstraints: state.riskConstraints,
+    });
 
     // For Needs: Break down essentials into individual fixed expenses, plus show debt minimums separately
     const needsList: Array<{ label: string; amount: number }> = [];
@@ -184,12 +198,22 @@ export default function IncomePage() {
       }
     }
 
-    return {
+    const result = {
       needs: needsList.sort((a, b) => b.amount - a.amount),
       wants: wantsList.sort((a, b) => b.amount - a.amount),
       savings: savingsList, // Keep order: Extra Debt Paydown, Emergency Savings, Retirement Tax-Advantaged, Brokerage (401k Match excluded - it's pre-tax)
     };
-  }, [planData, paychecksPerMonth, state.fixedExpenses, state.debts]);
+    
+    console.log('[Income Page] Calculated breakdowns:', {
+      needsCount: result.needs.length,
+      wantsCount: result.wants.length,
+      savingsCount: result.savings.length,
+      savingsBreakdown: result.savings.map(s => ({ label: s.label, amount: s.amount })),
+      totalSavings: result.savings.reduce((sum, s) => sum + s.amount, 0),
+    });
+    
+    return result;
+  }, [planData, paychecksPerMonth, state.fixedExpenses, state.debts, state.riskConstraints]);
 
   // Calculate totals from plan data to ensure consistency
   // Needs = essentials + debt_minimums from paycheckCategories
