@@ -515,10 +515,10 @@ function SavingsAllocatorContent() {
     const ef$ = Math.max(0, Math.min(amounts.ef, efGap$ > 0 ? efGap$ : Infinity));
     const efExceedsTarget = amounts.ef > efTarget;
 
-    // Debt: Keep 40% cap for debt paydown
-    const debtCap = budget * 0.4;
-    const highAprDebt$ = Math.max(0, Math.min(amounts.debt, debtCap));
-    const debtHitCap = amounts.debt > debtCap;
+    // Debt: Use user's amount (no hard cap, but 40% is recommended target)
+    const debtTarget = budget * 0.4; // 40% target (recommendation, not a cap)
+    const highAprDebt$ = Math.max(0, amounts.debt);
+    const debtExceedsTarget = amounts.debt > debtTarget;
 
     // Match is pre-tax, not post-tax
     const match401k$ = 0;
@@ -529,13 +529,13 @@ function SavingsAllocatorContent() {
     const totalAllocated = ef$ + highAprDebt$ + retirementTaxAdv$ + brokerage$;
     const unallocated$ = Math.max(0, budget - totalAllocated);
 
-    const hitCaps = efHitCap || debtHitCap;
+    const hitCaps = false; // No caps anymore, just targets
 
-    if (efHitCap) {
-      warnings.push(`Emergency fund allocation capped at $${efCap.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} (40% of budget or gap amount)`);
+    if (efExceedsTarget && ef$ > efTarget) {
+      warnings.push(`Emergency fund allocation ($${ef$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}) exceeds the recommended 40% target ($${efTarget.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}).`);
     }
-    if (debtHitCap) {
-      warnings.push(`Debt paydown allocation capped at $${debtCap.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} (40% of budget)`);
+    if (debtExceedsTarget && highAprDebt$ > debtTarget) {
+      warnings.push(`Debt paydown allocation ($${highAprDebt$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}) exceeds the recommended 40% target ($${debtTarget.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}).`);
     }
 
     return {
@@ -1385,12 +1385,15 @@ function SavingsAllocatorContent() {
                   >
                     High-APR Debt Paydown
                   </button>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    Target: {((savingsBudget * 0.4) / savingsBudget * 100).toFixed(0)}% of budget
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
                     size="icon"
-                    onClick={() => adjustAmount('debt', -50, 0, savingsBudget * 0.4)}
+                    onClick={() => adjustAmount('debt', -50, 0, Infinity)}
                     className="h-10 w-10 shrink-0"
                     disabled={totalDebtBalance$ === 0}
                   >
@@ -1402,11 +1405,10 @@ function SavingsAllocatorContent() {
                       value={Math.round(amounts.debt)}
                       onChange={(e) => {
                         const value = parseFloat(e.target.value) || 0;
-                        updateAmount('debt', value, 0, savingsBudget * 0.4);
+                        updateAmount('debt', value, 0, Infinity);
                       }}
                       className="w-full text-right text-lg font-semibold bg-transparent border-none outline-none"
                       min={0}
-                      max={savingsBudget * 0.4}
                       disabled={totalDebtBalance$ === 0}
                     />
                     <div className="text-right text-xs text-slate-500 dark:text-slate-400 mt-1">
@@ -1422,9 +1424,9 @@ function SavingsAllocatorContent() {
                       console.log('[Savings Allocator] Plus button clicked for debt:', {
                         currentAmount: amounts.debt,
                         savingsBudget,
-                        max: savingsBudget * 0.4,
+                        target40Percent: savingsBudget * 0.4,
                       });
-                      adjustAmount('debt', 50, 0, savingsBudget * 0.4);
+                      adjustAmount('debt', 50, 0, Infinity);
                     }}
                     className="h-10 w-10 shrink-0"
                     disabled={totalDebtBalance$ === 0}
@@ -1433,6 +1435,11 @@ function SavingsAllocatorContent() {
                     <Plus className="h-4 w-4" />
                   </Button>
                 </div>
+                {amounts.debt > savingsBudget * 0.4 && (
+                  <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                    ℹ️ Exceeds 40% target (${(savingsBudget * 0.4).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}). You can allocate more if needed.
+                  </p>
+                )}
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                   {totalDebtBalance$ > 0 ? `Balance: $${totalDebtBalance$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : 'No high-APR debt'}
                 </p>
