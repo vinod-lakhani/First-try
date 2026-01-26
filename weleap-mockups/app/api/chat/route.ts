@@ -1766,33 +1766,72 @@ The user is in the onboarding flow, which guides them through setting up their f
     // CRITICAL: Total Savings = Pre-tax (401k/HSA) + Match + Post-tax Cash
     // This is different from Savings Allocation (how post-tax cash is distributed)
     // Use pre-calculated savings breakdown if available (from centralized function), otherwise calculate
+    // BUT: If savingsBreakdown shows $0 for pre-tax but payrollContributions has values, use payrollContributions
+    let finalCashSavingsMTD = 0;
+    let finalPayrollSavingsMTD = 0;
+    let finalEmployerMatchMTD = 0;
+    let finalTotalSavingsMTD = 0;
+    let usingPayrollContributionsFallback = false;
+    
     if (userPlanData.savingsBreakdown) {
       // Use pre-calculated values from centralized function (most accurate)
       const sb = userPlanData.savingsBreakdown;
-      const cashSavingsMTD = typeof sb.cashSavingsMTD === 'number' ? sb.cashSavingsMTD : 0;
-      const payrollSavingsMTD = typeof sb.payrollSavingsMTD === 'number' ? sb.payrollSavingsMTD : 0;
-      const employerMatchMTD = typeof sb.employerMatchMTD === 'number' ? sb.employerMatchMTD : 0;
-      const totalSavingsMTD = typeof sb.totalSavingsMTD === 'number' ? sb.totalSavingsMTD : 0;
+      finalCashSavingsMTD = typeof sb.cashSavingsMTD === 'number' ? sb.cashSavingsMTD : 0;
+      finalPayrollSavingsMTD = typeof sb.payrollSavingsMTD === 'number' ? sb.payrollSavingsMTD : 0;
+      finalEmployerMatchMTD = typeof sb.employerMatchMTD === 'number' ? sb.employerMatchMTD : 0;
+      finalTotalSavingsMTD = typeof sb.totalSavingsMTD === 'number' ? sb.totalSavingsMTD : 0;
+      
+      // CRITICAL FIX: If savingsBreakdown shows $0 for pre-tax but payrollContributions has values, use payrollContributions
+      if (userPlanData.payrollContributions && (finalPayrollSavingsMTD === 0 || finalEmployerMatchMTD === 0)) {
+        const pc = userPlanData.payrollContributions;
+        const monthly401k = typeof pc.monthly401kContribution === 'number' ? pc.monthly401kContribution : 0;
+        const monthlyHSA = typeof pc.monthlyHSAContribution === 'number' ? pc.monthlyHSAContribution : 0;
+        const monthlyMatch = typeof pc.monthlyEmployerMatch === 'number' ? pc.monthlyEmployerMatch : 0;
+        const preTaxTotal = monthly401k + monthlyHSA;
+        
+        // If we have pre-tax or match values from payrollContributions, use them
+        if (preTaxTotal > 0 || monthlyMatch > 0) {
+          console.log('[Chat API] savingsBreakdown shows $0 but payrollContributions has values, using payrollContributions');
+          usingPayrollContributionsFallback = true;
+          finalPayrollSavingsMTD = preTaxTotal;
+          finalEmployerMatchMTD = monthlyMatch;
+          
+          // Recalculate cash savings and total
+          // Cash savings = base savings - (pre-tax - tax savings) - match
+          // But we need base savings. If we have monthlySavings, that's the base
+          if (userPlanData.monthlySavings && typeof userPlanData.monthlySavings === 'number') {
+            const baseSavings = typeof userPlanData.monthlySavings === 'number' ? userPlanData.monthlySavings : 0;
+            const taxSavings = preTaxTotal * 0.25; // Estimated marginal tax rate
+            const netPreTaxImpact = preTaxTotal - taxSavings;
+            finalCashSavingsMTD = Math.max(0, baseSavings - netPreTaxImpact);
+            finalTotalSavingsMTD = finalCashSavingsMTD + finalPayrollSavingsMTD + finalEmployerMatchMTD;
+          } else {
+            // Keep existing cash savings, just update total
+            finalTotalSavingsMTD = finalCashSavingsMTD + finalPayrollSavingsMTD + finalEmployerMatchMTD;
+          }
+        }
+      }
       
       // Debug logging
-      console.log('[Chat API] Using pre-calculated savings breakdown:', {
-        cashSavingsMTD,
-        payrollSavingsMTD,
-        employerMatchMTD,
-        totalSavingsMTD,
+      console.log('[Chat API] Final savings breakdown:', {
+        cashSavingsMTD: finalCashSavingsMTD,
+        payrollSavingsMTD: finalPayrollSavingsMTD,
+        employerMatchMTD: finalEmployerMatchMTD,
+        totalSavingsMTD: finalTotalSavingsMTD,
+        usingPayrollContributionsFallback,
         payrollContributions: userPlanData.payrollContributions,
       });
       
-      prompt += `**TOTAL MONTHLY SAVINGS BREAKDOWN (Pre-Calculated - USE THESE EXACT VALUES):**\n`;
+      prompt += `**TOTAL MONTHLY SAVINGS BREAKDOWN${usingPayrollContributionsFallback ? ' (Using Payroll Contributions Data)' : ' (Pre-Calculated)'} - USE THESE EXACT VALUES:**\n`;
       prompt += `**CRITICAL FORMULA**: Total Savings = Pre-tax (401k/HSA) + Employer Match + Post-tax Cash\n`;
-      prompt += `- **Total Monthly Savings**: $${Math.round(totalSavingsMTD).toLocaleString()}/month\n`;
-      prompt += `- **Breakdown of Total Savings (what makes up the $${Math.round(totalSavingsMTD).toLocaleString()}):**\n`;
-      prompt += `  1. Payroll Savings (pre-tax 401k/HSA): $${Math.round(payrollSavingsMTD).toLocaleString()}/month\n`;
-      prompt += `  2. 401K Match (free money from employer): $${Math.round(employerMatchMTD).toLocaleString()}/month\n`;
-      prompt += `  3. Cash Savings (post-tax): $${Math.round(cashSavingsMTD).toLocaleString()}/month\n`;
-      prompt += `- **VERIFICATION**: Pre-tax $${Math.round(payrollSavingsMTD).toLocaleString()} + Match $${Math.round(employerMatchMTD).toLocaleString()} + Post-tax Cash $${Math.round(cashSavingsMTD).toLocaleString()} = Total Savings $${Math.round(totalSavingsMTD).toLocaleString()} ✓\n`;
+      prompt += `- **Total Monthly Savings**: $${Math.round(finalTotalSavingsMTD).toLocaleString()}/month\n`;
+      prompt += `- **Breakdown of Total Savings (what makes up the $${Math.round(finalTotalSavingsMTD).toLocaleString()}):**\n`;
+      prompt += `  1. Payroll Savings (pre-tax 401k/HSA): $${Math.round(finalPayrollSavingsMTD).toLocaleString()}/month\n`;
+      prompt += `  2. 401K Match (free money from employer): $${Math.round(finalEmployerMatchMTD).toLocaleString()}/month\n`;
+      prompt += `  3. Cash Savings (post-tax): $${Math.round(finalCashSavingsMTD).toLocaleString()}/month\n`;
+      prompt += `- **VERIFICATION**: Pre-tax $${Math.round(finalPayrollSavingsMTD).toLocaleString()} + Match $${Math.round(finalEmployerMatchMTD).toLocaleString()} + Post-tax Cash $${Math.round(finalCashSavingsMTD).toLocaleString()} = Total Savings $${Math.round(finalTotalSavingsMTD).toLocaleString()} ✓\n`;
       prompt += `- **CRITICAL - MANDATORY RULE**: When users ask "what makes up my savings" or "break down my savings" or "walk me through my savings breakdown" or "what is my savings plan", you MUST:\n`;
-      prompt += `  1. Show this EXACT TOTAL savings breakdown: Total Savings = Pre-tax $${Math.round(payrollSavingsMTD).toLocaleString()} + Match $${Math.round(employerMatchMTD).toLocaleString()} + Post-tax Cash $${Math.round(cashSavingsMTD).toLocaleString()} = $${Math.round(totalSavingsMTD).toLocaleString()}\n`;
+      prompt += `  1. Show this EXACT TOTAL savings breakdown: Total Savings = Pre-tax $${Math.round(finalPayrollSavingsMTD).toLocaleString()} + Match $${Math.round(finalEmployerMatchMTD).toLocaleString()} + Post-tax Cash $${Math.round(finalCashSavingsMTD).toLocaleString()} = $${Math.round(finalTotalSavingsMTD).toLocaleString()}\n`;
       prompt += `  2. NEVER say "not explicitly provided" or "not available" - these values ARE provided above and you MUST use them\n`;
       prompt += `  3. If pre-tax or match values are $0, still show them explicitly: "Pre-tax (401k/HSA): $0/month" and "401K Match: $0/month"\n`;
       prompt += `  4. Make it clear that Total Savings includes ALL THREE components: Pre-tax + Match + Post-tax Cash\n`;
