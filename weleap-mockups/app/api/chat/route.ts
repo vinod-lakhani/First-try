@@ -1757,9 +1757,31 @@ The user is in the onboarding flow, which guides them through setting up their f
 
     // Savings Breakdown (Total Savings Composition - Cash + Pre-tax + Match)
     // This is different from Savings Allocation (how post-tax cash is distributed)
-    // Calculate using centralized formula if we have the necessary data
-    if (userPlanData.monthlyIncome && userPlanData.monthlyNeeds !== undefined && userPlanData.monthlyWants !== undefined && userPlanData.payrollContributions) {
-      // We can calculate the savings breakdown using the centralized formula
+    // Use pre-calculated savings breakdown if available (from centralized function), otherwise calculate
+    if (userPlanData.savingsBreakdown) {
+      // Use pre-calculated values from centralized function (most accurate)
+      const sb = userPlanData.savingsBreakdown;
+      const cashSavingsMTD = typeof sb.cashSavingsMTD === 'number' ? sb.cashSavingsMTD : 0;
+      const payrollSavingsMTD = typeof sb.payrollSavingsMTD === 'number' ? sb.payrollSavingsMTD : 0;
+      const employerMatchMTD = typeof sb.employerMatchMTD === 'number' ? sb.employerMatchMTD : 0;
+      const totalSavingsMTD = typeof sb.totalSavingsMTD === 'number' ? sb.totalSavingsMTD : 0;
+      
+      prompt += `**Total Monthly Savings Breakdown (Pre-Calculated - USE THESE EXACT VALUES):**\n`;
+      prompt += `- Total savings: $${Math.round(totalSavingsMTD).toLocaleString()}/month\n`;
+      prompt += `- **Savings Breakdown (what makes up total savings) - USE THESE EXACT VALUES:**\n`;
+      prompt += `  - Cash Savings (post-tax): $${Math.round(cashSavingsMTD).toLocaleString()}/month\n`;
+      prompt += `  - Payroll Savings (pre-tax 401k/HSA): $${Math.round(payrollSavingsMTD).toLocaleString()}/month\n`;
+      prompt += `  - 401K Match (free money from employer): $${Math.round(employerMatchMTD).toLocaleString()}/month\n`;
+      prompt += `  - **VERIFICATION**: $${Math.round(cashSavingsMTD).toLocaleString()} + $${Math.round(payrollSavingsMTD).toLocaleString()} + $${Math.round(employerMatchMTD).toLocaleString()} = $${Math.round(totalSavingsMTD).toLocaleString()} ✓\n`;
+      prompt += `- **CRITICAL - MANDATORY RULE**: When users ask "what makes up my savings" or "break down my savings" or "walk me through my savings breakdown" or "what is my savings plan", you MUST:\n`;
+      prompt += `  1. Show this EXACT TOTAL savings breakdown with the dollar amounts above: Cash Savings $${Math.round(cashSavingsMTD).toLocaleString()} + Payroll Savings $${Math.round(payrollSavingsMTD).toLocaleString()} + 401K Match $${Math.round(employerMatchMTD).toLocaleString()} = Total Savings $${Math.round(totalSavingsMTD).toLocaleString()}\n`;
+      prompt += `  2. NEVER say "not explicitly provided" or "not available" - these values ARE provided above and you MUST use them\n`;
+      prompt += `  3. If pre-tax or match values are $0, still show them: "Payroll Savings: $0/month" and "401K Match: $0/month"\n`;
+      prompt += `  4. THEN show the post-tax cash allocation breakdown (if savingsAllocation data is available below)\n`;
+      prompt += `  5. Make it clear that the total includes BOTH pre-tax (401k/HSA) and post-tax (cash) components\n`;
+      prompt += `\n`;
+    } else if (userPlanData.monthlyIncome && userPlanData.monthlyNeeds !== undefined && userPlanData.monthlyWants !== undefined && userPlanData.payrollContributions) {
+      // Fallback: Calculate using centralized formula logic if we have the necessary data
       const monthlyIncome = typeof userPlanData.monthlyIncome === 'number' ? userPlanData.monthlyIncome : 0;
       const monthlyNeeds = typeof userPlanData.monthlyNeeds === 'number' ? userPlanData.monthlyNeeds : 0;
       const monthlyWants = typeof userPlanData.monthlyWants === 'number' ? userPlanData.monthlyWants : 0;

@@ -15,6 +15,7 @@ import { sendChatMessage } from '@/lib/chat/chatService';
 import { useOnboardingStore } from '@/lib/onboarding/store';
 import { usePlanData } from '@/lib/onboarding/usePlanData';
 import { getPaychecksPerMonth } from '@/lib/onboarding/usePlanData';
+import { calculateSavingsBreakdown } from '@/lib/utils/savingsCalculations';
 import ReactMarkdown from 'react-markdown';
 
 interface Message {
@@ -265,6 +266,23 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
         };
       }
 
+      // Calculate savings breakdown using centralized function for consistency
+      let savingsBreakdownData = undefined;
+      if (store.income && store.payrollContributions) {
+        const savingsCalc = calculateSavingsBreakdown(
+          store.income,
+          store.payrollContributions,
+          monthlyNeeds,
+          monthlyWants
+        );
+        savingsBreakdownData = {
+          cashSavingsMTD: savingsCalc.cashSavingsMTD,
+          payrollSavingsMTD: savingsCalc.payrollSavingsMTD,
+          employerMatchMTD: savingsCalc.employerMatchMTD,
+          totalSavingsMTD: savingsCalc.totalSavingsMTD,
+        };
+      }
+
       // Call ChatGPT API with comprehensive data
       const aiResponseText = await sendChatMessage({
         messages: [...messages, userMessage],
@@ -284,6 +302,7 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
           safetyStrategy,
           payrollContributions: payrollContributionsData,
           savingsAllocation: savingsAllocationData,
+          savingsBreakdown: savingsBreakdownData,
         },
       });
 
