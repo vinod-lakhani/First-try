@@ -267,8 +267,11 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
       }
 
       // Calculate savings breakdown using centralized function for consistency
+      // But also use payrollContributionsData if available to ensure we have the right values
       let savingsBreakdownData = undefined;
+      
       if (store.income && store.payrollContributions) {
+        // Try centralized function first
         const savingsCalc = calculateSavingsBreakdown(
           store.income,
           store.payrollContributions,
@@ -283,36 +286,65 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
           monthlyNeeds,
           monthlyWants,
           calculated: savingsCalc,
+          payrollContributionsData,
         });
         
-        savingsBreakdownData = {
-          cashSavingsMTD: savingsCalc.cashSavingsMTD,
-          payrollSavingsMTD: savingsCalc.payrollSavingsMTD,
-          employerMatchMTD: savingsCalc.employerMatchMTD,
-          totalSavingsMTD: savingsCalc.totalSavingsMTD,
-        };
-      } else {
-        // If we don't have payroll contributions in store, but we calculated payrollContributionsData,
-        // we can still provide the breakdown using the calculated values
+        // Use centralized function results, but verify against payrollContributionsData if available
         if (payrollContributionsData) {
           const monthly401k = payrollContributionsData.monthly401kContribution || 0;
           const monthlyHSA = payrollContributionsData.monthlyHSAContribution || 0;
           const monthlyMatch = payrollContributionsData.monthlyEmployerMatch || 0;
           const preTaxTotal = monthly401k + monthlyHSA;
           
-          // Calculate cash savings from monthlySavings
-          const cashSavings = monthlySavings - preTaxTotal - monthlyMatch;
-          const totalSavings = cashSavings + preTaxTotal + monthlyMatch;
-          
+          // If centralized function returned $0 for pre-tax but we have calculated values, use calculated values
+          if (savingsCalc.payrollSavingsMTD === 0 && preTaxTotal > 0) {
+            console.log('[OnboardingChat] Centralized function returned $0 pre-tax, using calculated payrollContributionsData values');
+            const cashSavings = monthlySavings - preTaxTotal - monthlyMatch;
+            const totalSavings = cashSavings + preTaxTotal + monthlyMatch;
+            
+            savingsBreakdownData = {
+              cashSavingsMTD: Math.max(0, cashSavings),
+              payrollSavingsMTD: preTaxTotal,
+              employerMatchMTD: monthlyMatch,
+              totalSavingsMTD: totalSavings,
+            };
+          } else {
+            // Use centralized function results
+            savingsBreakdownData = {
+              cashSavingsMTD: savingsCalc.cashSavingsMTD,
+              payrollSavingsMTD: savingsCalc.payrollSavingsMTD,
+              employerMatchMTD: savingsCalc.employerMatchMTD,
+              totalSavingsMTD: savingsCalc.totalSavingsMTD,
+            };
+          }
+        } else {
+          // Use centralized function results
           savingsBreakdownData = {
-            cashSavingsMTD: Math.max(0, cashSavings),
-            payrollSavingsMTD: preTaxTotal,
-            employerMatchMTD: monthlyMatch,
-            totalSavingsMTD: totalSavings,
+            cashSavingsMTD: savingsCalc.cashSavingsMTD,
+            payrollSavingsMTD: savingsCalc.payrollSavingsMTD,
+            employerMatchMTD: savingsCalc.employerMatchMTD,
+            totalSavingsMTD: savingsCalc.totalSavingsMTD,
           };
-          
-          console.log('[OnboardingChat] Fallback Savings Breakdown (from payrollContributionsData):', savingsBreakdownData);
         }
+      } else if (payrollContributionsData) {
+        // Fallback: Use calculated payrollContributionsData if store data not available
+        const monthly401k = payrollContributionsData.monthly401kContribution || 0;
+        const monthlyHSA = payrollContributionsData.monthlyHSAContribution || 0;
+        const monthlyMatch = payrollContributionsData.monthlyEmployerMatch || 0;
+        const preTaxTotal = monthly401k + monthlyHSA;
+        
+        // Calculate cash savings from monthlySavings
+        const cashSavings = monthlySavings - preTaxTotal - monthlyMatch;
+        const totalSavings = cashSavings + preTaxTotal + monthlyMatch;
+        
+        savingsBreakdownData = {
+          cashSavingsMTD: Math.max(0, cashSavings),
+          payrollSavingsMTD: preTaxTotal,
+          employerMatchMTD: monthlyMatch,
+          totalSavingsMTD: totalSavings,
+        };
+        
+        console.log('[OnboardingChat] Fallback Savings Breakdown (from payrollContributionsData):', savingsBreakdownData);
       }
 
       // Call ChatGPT API with comprehensive data
