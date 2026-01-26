@@ -1,0 +1,7 @@
+school,name,title,persona,total_score,seniority_score,relevance_score,linkedin_url,email,phone
+UT Austin,John Smith,Director of Employer Relations,Employer Relations,2.25,3.0,1.5,https://linkedin.com/in/johnsmith,,
+UCSC,Jane Doe,Assistant Director Career Services,Career Services,2.25,3.0,1.5,https://linkedin.com/in/janedoe,,
+Stanford,Robert Brown,Director Career Services,Career Services,2.25,3.0,1.5,https://linkedin.com/in/robertbrown,,
+CMU,Emily Chen,Associate Director Employer Relations,Employer Relations,2.25,3.0,1.5,https://linkedin.com/in/emilychen,,
+UT Austin,Mike Johnson,Manager Experiential Learning,Experiential Learning,1.75,2.0,1.5,https://linkedin.com/in/mikejohnson,,
+UCSC,Sarah Williams,Senior Career Counselor,Unknown,0.5,0.5,0.5,https://linkedin.com/in/sarahwilliams,,

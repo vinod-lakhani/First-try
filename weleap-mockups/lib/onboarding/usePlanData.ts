@@ -25,7 +25,11 @@ export function usePlanData(): FinalPlanData | null {
   const debts = useOnboardingStore((state) => state.debts);
   const assets = useOnboardingStore((state) => state.assets);
   const goals = useOnboardingStore((state) => state.goals);
+  // Use a deep selector to ensure we detect changes to nested properties
   const riskConstraints = useOnboardingStore((state) => state.riskConstraints);
+  // Also watch targets and actuals3m directly to ensure changes are detected
+  const riskConstraintsTargets = useOnboardingStore((state) => state.riskConstraints?.targets);
+  const riskConstraintsActuals3m = useOnboardingStore((state) => state.riskConstraints?.actuals3m);
   const safetyStrategy = useOnboardingStore((state) => state.safetyStrategy);
   const payrollContributions = useOnboardingStore((state) => state.payrollContributions);
   const initialPaycheckPlan = useOnboardingStore((state) => state.initialPaycheckPlan);
@@ -51,6 +55,8 @@ export function usePlanData(): FinalPlanData | null {
     assets,
     goals,
     riskConstraints,
+    riskConstraintsTargets, // Watch targets directly to detect changes
+    riskConstraintsActuals3m, // Watch actuals3m directly to detect changes
     safetyStrategy,
     payrollContributions, // Watch payroll contributions so plan recalculates when 401k/HSA changes
     initialPaycheckPlan,

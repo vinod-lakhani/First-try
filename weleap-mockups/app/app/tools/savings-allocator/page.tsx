@@ -111,18 +111,39 @@ function SavingsAllocatorContent() {
   const matchNeedThisPeriod$ = baselineState.safetyStrategy?.match401kPerMonth$ || 0;
 
   // Calculate monthly needs and wants from plan categories for centralized calculation
+  // CRITICAL: This must use the latest planData which reflects updated riskConstraints
   const monthlyNeeds = useMemo(() => {
-    if (!baselinePlanData) return 0;
+    if (!baselinePlanData) {
+      console.log('[Savings Allocator] No baselinePlanData, monthlyNeeds = 0');
+      return 0;
+    }
     const needsCategories = baselinePlanData.paycheckCategories.filter(c => 
       c.key === 'essentials' || c.key === 'debt_minimums'
     );
-    return needsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
+    const needs = needsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
+    console.log('[Savings Allocator] Calculated monthlyNeeds:', {
+      needsCategoriesCount: needsCategories.length,
+      needsCategoriesAmounts: needsCategories.map(c => ({ key: c.key, amount: c.amount })),
+      paychecksPerMonth,
+      monthlyNeeds: needs,
+    });
+    return needs;
   }, [baselinePlanData, paychecksPerMonth]);
   
   const monthlyWants = useMemo(() => {
-    if (!baselinePlanData) return 0;
+    if (!baselinePlanData) {
+      console.log('[Savings Allocator] No baselinePlanData, monthlyWants = 0');
+      return 0;
+    }
     const wantsCategories = baselinePlanData.paycheckCategories.filter(c => c.key === 'fun_flexible');
-    return wantsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
+    const wants = wantsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
+    console.log('[Savings Allocator] Calculated monthlyWants:', {
+      wantsCategoriesCount: wantsCategories.length,
+      wantsCategoriesAmounts: wantsCategories.map(c => ({ key: c.key, amount: c.amount })),
+      paychecksPerMonth,
+      monthlyWants: wants,
+    });
+    return wants;
   }, [baselinePlanData, paychecksPerMonth]);
   
   // Use centralized savings calculation for consistency
@@ -205,6 +226,19 @@ function SavingsAllocatorContent() {
 
   // Calculate post-tax savings available (cash that can be allocated) - use centralized calculation
   const postTaxSavingsAvailable = savingsBreakdown.cashSavingsMTD;
+  
+  // Debug logging to trace the calculation
+  console.log('[Savings Allocator] Post-tax savings calculation:', {
+    monthlyNeeds,
+    monthlyWants,
+    monthlyIncome: baselineState.income ? (baselineState.income.netIncome$ || baselineState.income.grossIncome$ || 0) * paychecksPerMonth : 0,
+    baseSavingsMonthly: savingsBreakdown.baseSavingsMonthly,
+    preTaxSavingsTotal: savingsBreakdown.preTaxSavingsTotal,
+    netPreTaxImpact: savingsBreakdown.netPreTaxImpact,
+    cashSavingsMTD: savingsBreakdown.cashSavingsMTD,
+    postTaxSavingsAvailable,
+    riskConstraints: baselineState.riskConstraints,
+  });
 
 
   // Calculate match capture recommendation
