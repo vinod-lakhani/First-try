@@ -2516,16 +2516,17 @@ EXAMPLES OF CORRECT RESPONSES
 ✅ CORRECT: "Your allocation is Needs $2,320, Wants $880, Savings $800. Total: $4,000 ✓"
 
 **Example 17: Complete Savings Breakdown (Pre-tax + Post-tax + Match + Allocation)**
-❌ WRONG: "Here's your savings breakdown based on your current monthly savings allocation: **Total Post-tax Cash Savings Available to Allocate: $3,243/month**. Emergency Fund: $1,162 (35.8%), Extra Debt Payoff: $697 (21.5%), 401(k) Employer Match: $339 (10.4%), Retirement Tax-Advantaged: $523 (16.1%), Taxable Brokerage: $523 (16.1%). This amount is not explicitly provided, but it contributes to your overall savings."
+❌ WRONG: "Here's your savings breakdown based on your current monthly savings allocation: **Total Post-tax Cash Savings Available to Allocate: $3,243/month**. Emergency Fund: $1,162 (35.8%), Extra Debt Payoff: $697 (21.5%), 401(k) Employer Match: $339 (10.4%), Retirement Tax-Advantaged: $523 (16.1%), Taxable Brokerage: $523 (16.1%)."
 ❌ WRONG: "Payroll Savings (pre-tax 401k/HSA): This amount is not explicitly provided, but it contributes to your overall savings. 401K Match: This amount is also not explicitly provided in your data."
+❌ WRONG: Including 401K match in post-tax cash allocation - match is NOT part of cash allocation, it's automatic employer contribution.
 ✅ CORRECT: "Here's your complete savings breakdown:
 
 **Total Monthly Savings: $4,382/month**
 Your total savings is made up of:
-- Cash Savings (post-tax): $3,243/month
 - Payroll Savings (pre-tax 401k/HSA): $800/month
 - 401K Match (free money from employer): $339/month
-Total: $3,243 + $800 + $339 = $4,382 ✓
+- Cash Savings (post-tax): $3,243/month
+Total: $800 + $339 + $3,243 = $4,382 ✓
 
 **Post-Tax Cash Allocation: $3,243/month**
 Your post-tax cash savings is allocated as:
@@ -2533,8 +2534,9 @@ Your post-tax cash savings is allocated as:
 - Extra Debt Payoff: $697/month (21.5% of post-tax cash)
 - Retirement Tax-Advantaged (IRA/401k): $523/month (16.1% of post-tax cash)
 - Taxable Brokerage: $523/month (16.1% of post-tax cash)
-- 401(k) Employer Match: $339/month (10.4% of post-tax cash)
-Total: $1,162 + $697 + $523 + $523 + $339 = $3,243 ✓"
+Total: $1,162 + $697 + $523 + $523 = $3,243 ✓
+
+**Note**: The 401K match ($339/month) is automatic employer contribution and is NOT part of your post-tax cash allocation. It's included in Total Savings but you don't allocate it - it goes directly to your 401k."
 
 **Example 18: Tax Strategy for Lower Retirement Income**
 ❌ WRONG: "If you expect lower income in retirement, consider Traditional 401(k)."
