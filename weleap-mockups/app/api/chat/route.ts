@@ -1279,7 +1279,8 @@ If users ask about:
     - Retirement Tax-Advantaged (IRA/401k): $C/month (Z% of post-tax cash)
     - Taxable Brokerage: $D/month (W% of post-tax cash)
     - **Total Post-Tax Cash Available to Allocate = $A + $B + $C + $D = $TotalPostTax/month**
-    - Use the exact dollar amounts from userPlanData.savingsAllocation if available
+    - **CRITICAL**: 401K Employer Match is NOT included in post-tax cash allocation - it's automatic employer contribution, not cash you allocate
+    - Use the exact dollar amounts from userPlanData.savingsAllocation if available (EXCLUDING match401k)
   
   * **CRITICAL**: Your response must include BOTH parts:
     1. The total savings breakdown (Cash + Pre-tax + Match) - this shows the COMPLETE picture
@@ -2212,46 +2213,49 @@ The user is in the onboarding flow, which guides them through setting up their f
     // NOTE: This is different from "Savings Breakdown" above
     // - Savings Breakdown = Cash + Pre-tax + Match (what makes up total savings)
     // - Savings Allocation = How post-tax cash is distributed (EF + Debt + Retirement + Brokerage)
+    // CRITICAL: 401K Match is NOT part of post-tax cash allocation - it's automatic employer contribution
     if (userPlanData.savingsAllocation) {
       prompt += `**Savings Allocation (How Post-Tax Cash Savings is Distributed):**\n`;
-      const totalSavings = typeof userPlanData.savingsAllocation.total === 'number' ? userPlanData.savingsAllocation.total : 0;
-      prompt += `- Total post-tax cash savings allocated: $${Math.round(totalSavings).toLocaleString()}/month\n`;
+      
+      // Calculate total post-tax cash (EXCLUDING match401k - match is not cash allocation)
+      const efAmount = typeof userPlanData.savingsAllocation.emergencyFund?.amount === 'number' ? userPlanData.savingsAllocation.emergencyFund.amount : 0;
+      const debtAmount = typeof userPlanData.savingsAllocation.debtPayoff?.amount === 'number' ? userPlanData.savingsAllocation.debtPayoff.amount : 0;
+      const retAmount = typeof userPlanData.savingsAllocation.retirementTaxAdv?.amount === 'number' ? userPlanData.savingsAllocation.retirementTaxAdv.amount : 0;
+      const brokAmount = typeof userPlanData.savingsAllocation.brokerage?.amount === 'number' ? userPlanData.savingsAllocation.brokerage.amount : 0;
+      const totalPostTaxCash = efAmount + debtAmount + retAmount + brokAmount;
+      
+      prompt += `- Total post-tax cash savings allocated: $${Math.round(totalPostTaxCash).toLocaleString()}/month\n`;
       prompt += `- **CRITICAL**: This shows WHERE the post-tax cash savings goes (Emergency Fund, Debt, Retirement, Brokerage)\n`;
+      prompt += `- **CRITICAL**: 401K Employer Match is NOT included here - it's automatic employer contribution, not cash you allocate\n`;
       prompt += `- **CRITICAL**: When users ask for "savings breakdown", you MUST show BOTH:\n`;
-      prompt += `  1. Total Savings Breakdown (from section above): Cash + Pre-tax + Match = Total\n`;
-      prompt += `  2. Post-Tax Cash Allocation (this section): How post-tax cash is distributed\n`;
+      prompt += `  1. Total Savings Breakdown (from section above): Pre-tax + Match + Post-tax Cash = Total\n`;
+      prompt += `  2. Post-Tax Cash Allocation (this section): How post-tax cash is distributed (EXCLUDING match)\n`;
       prompt += `- Breakdown:\n`;
       
-      if (userPlanData.savingsAllocation.emergencyFund?.amount > 0) {
-        const efAmount = typeof userPlanData.savingsAllocation.emergencyFund.amount === 'number' ? userPlanData.savingsAllocation.emergencyFund.amount : 0;
-        const efPercent = typeof userPlanData.savingsAllocation.emergencyFund.percent === 'number' ? userPlanData.savingsAllocation.emergencyFund.percent : 0;
-        prompt += `  - Emergency Fund: $${Math.round(efAmount).toLocaleString()}/month (${efPercent.toFixed(1)}% of savings)\n`;
+      if (efAmount > 0) {
+        const efPercent = typeof userPlanData.savingsAllocation.emergencyFund?.percent === 'number' ? userPlanData.savingsAllocation.emergencyFund.percent : 0;
+        const efPercentOfCash = totalPostTaxCash > 0 ? (efAmount / totalPostTaxCash) * 100 : 0;
+        prompt += `  - Emergency Fund: $${Math.round(efAmount).toLocaleString()}/month (${efPercentOfCash.toFixed(1)}% of post-tax cash)\n`;
       }
-      if (userPlanData.savingsAllocation.debtPayoff?.amount > 0) {
-        const debtAmount = typeof userPlanData.savingsAllocation.debtPayoff.amount === 'number' ? userPlanData.savingsAllocation.debtPayoff.amount : 0;
-        const debtPercent = typeof userPlanData.savingsAllocation.debtPayoff.percent === 'number' ? userPlanData.savingsAllocation.debtPayoff.percent : 0;
-        prompt += `  - Extra Debt Payoff: $${Math.round(debtAmount).toLocaleString()}/month (${debtPercent.toFixed(1)}% of savings)\n`;
+      if (debtAmount > 0) {
+        const debtPercentOfCash = totalPostTaxCash > 0 ? (debtAmount / totalPostTaxCash) * 100 : 0;
+        prompt += `  - Extra Debt Payoff: $${Math.round(debtAmount).toLocaleString()}/month (${debtPercentOfCash.toFixed(1)}% of post-tax cash)\n`;
       }
-      if (userPlanData.savingsAllocation.match401k?.amount > 0) {
-        const matchAmount = typeof userPlanData.savingsAllocation.match401k.amount === 'number' ? userPlanData.savingsAllocation.match401k.amount : 0;
-        const matchPercent = typeof userPlanData.savingsAllocation.match401k.percent === 'number' ? userPlanData.savingsAllocation.match401k.percent : 0;
-        prompt += `  - 401(k) Employer Match: $${Math.round(matchAmount).toLocaleString()}/month (${matchPercent.toFixed(1)}% of savings)\n`;
+      // DO NOT show match401k here - it's not part of post-tax cash allocation
+      if (retAmount > 0) {
+        const retPercentOfCash = totalPostTaxCash > 0 ? (retAmount / totalPostTaxCash) * 100 : 0;
+        prompt += `  - Retirement Tax-Advantaged (IRA/401k): $${Math.round(retAmount).toLocaleString()}/month (${retPercentOfCash.toFixed(1)}% of post-tax cash)\n`;
       }
-      if (userPlanData.savingsAllocation.retirementTaxAdv?.amount > 0) {
-        const retAmount = typeof userPlanData.savingsAllocation.retirementTaxAdv.amount === 'number' ? userPlanData.savingsAllocation.retirementTaxAdv.amount : 0;
-        const retPercent = typeof userPlanData.savingsAllocation.retirementTaxAdv.percent === 'number' ? userPlanData.savingsAllocation.retirementTaxAdv.percent : 0;
-        prompt += `  - Retirement Tax-Advantaged (IRA/401k): $${Math.round(retAmount).toLocaleString()}/month (${retPercent.toFixed(1)}% of savings)\n`;
+      if (brokAmount > 0) {
+        const brokPercentOfCash = totalPostTaxCash > 0 ? (brokAmount / totalPostTaxCash) * 100 : 0;
+        prompt += `  - Taxable Brokerage: $${Math.round(brokAmount).toLocaleString()}/month (${brokPercentOfCash.toFixed(1)}% of post-tax cash)\n`;
       }
-      if (userPlanData.savingsAllocation.brokerage?.amount > 0) {
-        const brokAmount = typeof userPlanData.savingsAllocation.brokerage.amount === 'number' ? userPlanData.savingsAllocation.brokerage.amount : 0;
-        const brokPercent = typeof userPlanData.savingsAllocation.brokerage.percent === 'number' ? userPlanData.savingsAllocation.brokerage.percent : 0;
-        prompt += `  - Taxable Brokerage: $${Math.round(brokAmount).toLocaleString()}/month (${brokPercent.toFixed(1)}% of savings)\n`;
-      }
-      prompt += `- **CRITICAL**: When users ask "where does my savings go" or "how is my savings allocated", you MUST show this breakdown with exact dollar amounts\n`;
+      prompt += `- **VERIFICATION**: Emergency Fund $${Math.round(efAmount).toLocaleString()} + Debt Payoff $${Math.round(debtAmount).toLocaleString()} + Retirement $${Math.round(retAmount).toLocaleString()} + Brokerage $${Math.round(brokAmount).toLocaleString()} = Total Post-Tax Cash $${Math.round(totalPostTaxCash).toLocaleString()} ✓\n`;
+      prompt += `- **CRITICAL**: When users ask "where does my savings go" or "how is my savings allocated", you MUST show this breakdown with exact dollar amounts (EXCLUDING 401K match)\n`;
       prompt += `- **CRITICAL**: When users ask for "savings breakdown" or "walk me through my savings breakdown", you MUST show BOTH:\n`;
-      prompt += `  1. Total Savings Breakdown: Cash Savings + Payroll Savings (pre-tax) + 401K Match = Total Savings\n`;
-      prompt += `  2. Post-Tax Cash Allocation (this section): How the post-tax cash portion is distributed across goals\n`;
-      prompt += `  Format: Start with total savings composition, then show post-tax cash allocation\n`;
+      prompt += `  1. Total Savings Breakdown: Pre-tax + Match + Post-tax Cash = Total Savings\n`;
+      prompt += `  2. Post-Tax Cash Allocation (this section): How the post-tax cash portion is distributed across goals (Emergency Fund, Debt, Retirement, Brokerage) - DOES NOT include 401K match\n`;
+      prompt += `  Format: Start with total savings composition, then show post-tax cash allocation (without match)\n`;
       prompt += `\n`;
     }
   }

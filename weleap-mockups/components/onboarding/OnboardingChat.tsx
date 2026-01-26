@@ -237,12 +237,14 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
       }
 
       // Calculate savings allocation breakdown if available
+      // NOTE: 401K match is NOT part of post-tax cash allocation - it's automatic employer contribution
       let savingsAllocationData = undefined;
       if (store.safetyStrategy?.customSavingsAllocation) {
         const customAlloc = store.safetyStrategy.customSavingsAllocation;
+        // Total post-tax cash = EF + Debt + Retirement + Brokerage (EXCLUDING match - match is not cash allocation)
         const totalPostTax = customAlloc.ef$ + customAlloc.highAprDebt$ + customAlloc.retirementTaxAdv$ + customAlloc.brokerage$;
         savingsAllocationData = {
-          total: totalPostTax,
+          total: totalPostTax, // This is post-tax cash only, does NOT include match
           emergencyFund: {
             amount: customAlloc.ef$,
             percent: totalPostTax > 0 ? (customAlloc.ef$ / totalPostTax) * 100 : 0,
@@ -259,10 +261,8 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
             amount: customAlloc.brokerage$,
             percent: totalPostTax > 0 ? (customAlloc.brokerage$ / totalPostTax) * 100 : 0,
           },
-          match401k: payrollContributionsData?.monthlyEmployerMatch ? {
-            amount: payrollContributionsData.monthlyEmployerMatch,
-            percent: 0, // Match is separate from post-tax allocation
-          } : undefined,
+          // DO NOT include match401k here - match is not part of post-tax cash allocation
+          // Match is shown in the Total Savings Breakdown section, not in post-tax cash allocation
         };
       }
 
