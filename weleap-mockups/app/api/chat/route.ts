@@ -1724,13 +1724,19 @@ The user is in the onboarding flow, which guides them through setting up their f
     // Payroll Contributions and Employer Match (CRITICAL for savings-plan context)
     if (userPlanData.payrollContributions) {
       const pc = userPlanData.payrollContributions;
-      prompt += `**Payroll Contributions (Pre-Tax):**\n`;
+      prompt += `**Payroll Contributions (Pre-Tax) - CRITICAL DATA:**\n`;
+      
+      const monthly401k = typeof pc.monthly401kContribution === 'number' ? pc.monthly401kContribution : 0;
+      const monthlyHSA = typeof pc.monthlyHSAContribution === 'number' ? pc.monthlyHSAContribution : 0;
+      const monthlyMatch = typeof pc.monthlyEmployerMatch === 'number' ? pc.monthlyEmployerMatch : 0;
+      const preTaxTotal = monthly401k + monthlyHSA;
       
       if (pc.has401k) {
         prompt += `- Has 401(k) retirement plan: Yes\n`;
-        if (pc.currentlyContributing401k === 'yes' && pc.monthly401kContribution) {
-          const monthly401k = typeof pc.monthly401kContribution === 'number' ? pc.monthly401kContribution : 0;
-          prompt += `- Current 401(k) contribution: $${Math.round(monthly401k).toLocaleString()}/month\n`;
+        if (pc.currentlyContributing401k === 'yes' && monthly401k > 0) {
+          prompt += `- **Current 401(k) contribution: $${Math.round(monthly401k).toLocaleString()}/month**\n`;
+        } else if (pc.currentlyContributing401k === 'yes') {
+          prompt += `- Currently contributing to 401(k): Yes (but amount not calculated)\n`;
         }
         
         if (pc.hasEmployerMatch === 'yes') {
@@ -1740,9 +1746,10 @@ The user is in the onboarding flow, which guides them through setting up their f
             const matchCap = typeof pc.employerMatchCapPct === 'number' ? pc.employerMatchCapPct : 0;
             prompt += `- Match details: ${matchPct}% match up to ${matchCap}% of pay\n`;
           }
-          if (pc.monthlyEmployerMatch) {
-            const monthlyMatch = typeof pc.monthlyEmployerMatch === 'number' ? pc.monthlyEmployerMatch : 0;
-            prompt += `- Monthly employer match: $${Math.round(monthlyMatch).toLocaleString()}/month (FREE MONEY - this is automatically included in your total wealth moves)\n`;
+          if (monthlyMatch > 0) {
+            prompt += `- **Monthly employer match: $${Math.round(monthlyMatch).toLocaleString()}/month (FREE MONEY - this is automatically included in your total wealth moves)**\n`;
+          } else {
+            prompt += `- Monthly employer match: $0/month (match not calculated or not eligible)\n`;
           }
           prompt += `- **CRITICAL**: The employer match is "free money" and should ALWAYS be prioritized. If user asks about 401K match, explain that this is free money and they should contribute enough to get the full match.\n`;
         } else if (pc.hasEmployerMatch === 'no') {
@@ -1754,11 +1761,16 @@ The user is in the onboarding flow, which guides them through setting up their f
       
       if (pc.hasHSA) {
         prompt += `- Has HSA: Yes\n`;
-        if (pc.monthlyHSAContribution) {
-          const monthlyHSA = typeof pc.monthlyHSAContribution === 'number' ? pc.monthlyHSAContribution : 0;
-          prompt += `- Current HSA contribution: $${Math.round(monthlyHSA).toLocaleString()}/month\n`;
+        if (monthlyHSA > 0) {
+          prompt += `- **Current HSA contribution: $${Math.round(monthlyHSA).toLocaleString()}/month**\n`;
+        } else {
+          prompt += `- Current HSA contribution: $0/month (not contributing or amount not calculated)\n`;
         }
       }
+      
+      prompt += `- **Total Pre-Tax Contributions (401k + HSA): $${Math.round(preTaxTotal).toLocaleString()}/month**\n`;
+      prompt += `- **Total Employer Match: $${Math.round(monthlyMatch).toLocaleString()}/month**\n`;
+      prompt += `- **CRITICAL**: If the "TOTAL MONTHLY SAVINGS BREAKDOWN" section below shows $0 for pre-tax or match, but this section shows non-zero values, USE THE VALUES FROM THIS SECTION.\n`;
       prompt += `\n`;
     }
 
