@@ -30,6 +30,7 @@ const testCases: TestCase[] = [
     name: 'No 401k contribution - Base case',
     income: {
       netIncome$: 4000,
+      grossIncome$: 5000, // Estimated gross (netIncome * 1.25)
       payFrequency: 'biweekly',
     },
     payrollContributions: {
