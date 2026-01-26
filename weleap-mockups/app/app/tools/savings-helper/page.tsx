@@ -225,17 +225,42 @@ function SavingsHelperContent() {
   const [savingsExpanded, setSavingsExpanded] = useState<{ [key: string]: boolean }>({});
 
   // Use centralized savings calculation for consistency
+  // CRITICAL: For Current Plan, we should use planData categories (same as Monthly Pulse)
+  // to ensure consistency. Only Past 3 Months uses actuals3m percentages.
+  const currentPlanMonthlyNeeds = useMemo(() => {
+    if (!baselinePlanData) return 0;
+    const needsCategories = baselinePlanData.paycheckCategories.filter(c => 
+      c.key === 'essentials' || c.key === 'debt_minimums'
+    );
+    return needsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
+  }, [baselinePlanData, paychecksPerMonth]);
+  
+  const currentPlanMonthlyWants = useMemo(() => {
+    if (!baselinePlanData) return 0;
+    const wantsCategories = baselinePlanData.paycheckCategories.filter(c => c.key === 'fun_flexible');
+    return wantsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
+  }, [baselinePlanData, paychecksPerMonth]);
+
+  // Use centralized savings calculation for consistency
   // CRITICAL: For Past 3 Months Average, we should NOT include current payroll contributions
   // because those may have just started. Past 3 months should reflect what actually happened.
+  // For Current Plan, use planData categories to match Monthly Pulse
   const savingsBreakdown = useMemo(() => {
-    // Calculate monthly needs and wants from actuals
-    return calculateSavingsBreakdown(
+    // Use planData categories for Current Plan (matches Monthly Pulse)
+    const breakdown = calculateSavingsBreakdown(
       baselineState.income,
       baselineState.payrollContributions,
-      needsActualMonthly,
-      wantsActualMonthly
+      currentPlanMonthlyNeeds,
+      currentPlanMonthlyWants
     );
-  }, [baselineState.income, baselineState.payrollContributions, needsActualMonthly, wantsActualMonthly]);
+    console.log('[Savings Helper] Current Plan Savings Breakdown:', {
+      currentPlanMonthlyNeeds,
+      currentPlanMonthlyWants,
+      breakdown,
+      riskConstraints: baselineState.riskConstraints,
+    });
+    return breakdown;
+  }, [baselineState.income, baselineState.payrollContributions, currentPlanMonthlyNeeds, currentPlanMonthlyWants, baselineState.riskConstraints]);
 
   // Calculate savings breakdown for Past 3 Months Average WITHOUT payroll contributions
   // This reflects what actually happened in the past, not what's in the current plan

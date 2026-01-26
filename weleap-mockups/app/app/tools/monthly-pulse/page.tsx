@@ -180,24 +180,54 @@ export default function MonthlyPulsePage() {
   const payrollContributions = state.payrollContributions;
   
   // Calculate monthly needs and wants from plan categories
+  // CRITICAL: Use planData categories which reflect the current plan (updated from riskConstraints)
   const monthlyNeeds = useMemo(() => {
-    if (!planData) return 0;
+    if (!planData) {
+      console.log('[Monthly Pulse] No planData, monthlyNeeds = 0');
+      return 0;
+    }
     const needsCategories = planData.paycheckCategories.filter(c => 
       c.key === 'essentials' || c.key === 'debt_minimums'
     );
-    return needsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
-  }, [planData, paychecksPerMonth]);
+    const needs = needsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
+    console.log('[Monthly Pulse] Calculated monthlyNeeds:', {
+      needsCategoriesCount: needsCategories.length,
+      needsCategoriesAmounts: needsCategories.map(c => ({ key: c.key, amount: c.amount })),
+      paychecksPerMonth,
+      monthlyNeeds: needs,
+      riskConstraints: state.riskConstraints,
+    });
+    return needs;
+  }, [planData, paychecksPerMonth, state.riskConstraints]);
   
   const monthlyWants = useMemo(() => {
-    if (!planData) return 0;
+    if (!planData) {
+      console.log('[Monthly Pulse] No planData, monthlyWants = 0');
+      return 0;
+    }
     const wantsCategories = planData.paycheckCategories.filter(c => c.key === 'fun_flexible');
-    return wantsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
-  }, [planData, paychecksPerMonth]);
+    const wants = wantsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
+    console.log('[Monthly Pulse] Calculated monthlyWants:', {
+      wantsCategoriesCount: wantsCategories.length,
+      wantsCategoriesAmounts: wantsCategories.map(c => ({ key: c.key, amount: c.amount })),
+      paychecksPerMonth,
+      monthlyWants: wants,
+      riskConstraints: state.riskConstraints,
+    });
+    return wants;
+  }, [planData, paychecksPerMonth, state.riskConstraints]);
   
   // Use centralized calculation function
   const savingsBreakdown = useMemo(() => {
-    return calculateSavingsBreakdown(income, payrollContributions, monthlyNeeds, monthlyWants);
-  }, [income, payrollContributions, monthlyNeeds, monthlyWants]);
+    const breakdown = calculateSavingsBreakdown(income, payrollContributions, monthlyNeeds, monthlyWants);
+    console.log('[Monthly Pulse] Savings Breakdown:', {
+      monthlyNeeds,
+      monthlyWants,
+      monthlyIncome: planData ? planData.paycheckAmount * paychecksPerMonth : 0,
+      breakdown,
+    });
+    return breakdown;
+  }, [income, payrollContributions, monthlyNeeds, monthlyWants, planData, paychecksPerMonth]);
   
   const observedCashSavingsMTD = savingsBreakdown.cashSavingsMTD;
   const expectedPayrollSavingsMTD = savingsBreakdown.payrollSavingsMTD;
