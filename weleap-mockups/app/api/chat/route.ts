@@ -1654,7 +1654,7 @@ The user is in the onboarding flow, which guides them through setting up their f
         prompt += `\n`;
       }
       if (userPlanData.monthlySavings !== undefined && userPlanData.monthlySavings != null && typeof userPlanData.monthlySavings === 'number') {
-        prompt += `- Savings: $${Math.round(userPlanData.monthlySavings).toLocaleString()}`;
+        prompt += `- Base Savings (income - needs - wants): $${Math.round(userPlanData.monthlySavings).toLocaleString()}`;
         if (userPlanData.monthlyIncome && typeof userPlanData.monthlyIncome === 'number' && userPlanData.monthlyIncome > 0) {
           const savingsPct = ((userPlanData.monthlySavings / userPlanData.monthlyIncome) * 100);
           if (isFinite(savingsPct)) {
@@ -1662,6 +1662,8 @@ The user is in the onboarding flow, which guides them through setting up their f
           }
         }
         prompt += `\n`;
+        prompt += `  **NOTE**: This is the base savings budget (income - needs - wants), NOT the total savings.\n`;
+        prompt += `  **Total Savings = Pre-tax (401k/HSA) + Match + Post-tax Cash** (see "TOTAL MONTHLY SAVINGS BREAKDOWN" section below)\n`;
       }
       prompt += `\n`;
     }
