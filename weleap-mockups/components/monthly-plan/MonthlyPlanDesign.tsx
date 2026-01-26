@@ -8,12 +8,13 @@
 
 import { useState, useMemo } from 'react';
 import type { MouseEvent } from 'react';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Wallet, Home, Sparkles, PiggyBank } from 'lucide-react';
 import { OnboardingChat } from '@/components/onboarding/OnboardingChat';
 import { OnboardingProgress } from '@/components/onboarding/OnboardingProgress';
+import { useOnboardingStore } from '@/lib/onboarding/store';
 
 export type MonthlyPlanDesignProps = {
   // Current (actual) values for reference
@@ -41,9 +42,11 @@ const MonthlyPlanDesign: React.FC<MonthlyPlanDesignProps> = ({
   recommendedWants,
   onSave,
 }) => {
+  const store = useOnboardingStore();
   const [income, setIncome] = useState(recommendedIncome ?? currentIncome);
   const [needs, setNeeds] = useState(recommendedNeeds ?? currentNeeds);
   const [wants, setWants] = useState(recommendedWants ?? currentWants);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   // Derived values
   const expenses = needs + wants;
@@ -107,11 +110,56 @@ const MonthlyPlanDesign: React.FC<MonthlyPlanDesignProps> = ({
   const handleSave = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     e.stopPropagation();
+    // Show confirmation dialog instead of immediately saving
+    setShowConfirmDialog(true);
+  };
+
+  const handleConfirmSave = () => {
     try {
+      // Calculate percentages
+      const needsPct = income > 0 ? needs / income : 0;
+      const wantsPct = income > 0 ? wants / income : 0;
+      const savingsPct = income > 0 ? savings / income : 0;
+
+      // Update risk constraints (targets and actuals3m) so savings plan uses updated data
+      const savedDistribution = {
+        needsPct,
+        wantsPct,
+        savingsPct,
+      };
+
+      if (store.riskConstraints) {
+        // Update both targets and actuals3m to the same values
+        // Set bypassWantsFloor=true to preserve exact values without normalization
+        store.updateRiskConstraints({
+          targets: savedDistribution,
+          actuals3m: savedDistribution, // Set to match targets so engine returns as-is
+          bypassWantsFloor: true, // Preserve exact values
+        });
+      } else {
+        // If riskConstraints doesn't exist, create it with the saved distribution
+        store.setRiskConstraints({
+          targets: savedDistribution,
+          actuals3m: savedDistribution, // Set to match targets so engine returns as-is
+          shiftLimitPct: 0.04,
+          bypassWantsFloor: true, // Preserve exact values
+        });
+      }
+
+      // Clear the initial paycheck plan to force recalculation
+      store.setInitialPaycheckPlan(undefined as any);
+
+      // Now call the original onSave callback
       onSave?.({ income, needs, wants, savings });
+      setShowConfirmDialog(false);
     } catch (error) {
-      console.error('[MonthlyPlanDesign] Error in onSave:', error);
+      console.error('[MonthlyPlanDesign] Error in handleConfirmSave:', error);
+      setShowConfirmDialog(false);
     }
+  };
+
+  const handleCancelSave = () => {
+    setShowConfirmDialog(false);
   };
 
   // Calculate current reference positions for sliders (as percentages of slider max)
@@ -378,6 +426,79 @@ const MonthlyPlanDesign: React.FC<MonthlyPlanDesignProps> = ({
             Reset to Recommended
           </Button>
         </div>
+
+        {/* Confirmation Dialog */}
+        {showConfirmDialog && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <Card className="w-full max-w-md">
+              <CardHeader>
+                <CardTitle className="text-xl">Confirm Changes</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  Please review the changes before applying them to your plan:
+                </p>
+                
+                <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
+                  {/* Needs */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-600 dark:text-slate-400">Needs:</span>
+                    <div className="text-right">
+                      <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                        {formatCurrency(currentNeeds)} → {formatCurrency(needs)}
+                      </span>
+                      <span className="ml-2 text-xs text-slate-500">
+                        ({formatPercent((needs / income) * 100)})
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {/* Wants */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-600 dark:text-slate-400">Wants:</span>
+                    <div className="text-right">
+                      <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                        {formatCurrency(currentWants)} → {formatCurrency(wants)}
+                      </span>
+                      <span className="ml-2 text-xs text-slate-500">
+                        ({formatPercent((wants / income) * 100)})
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {/* Savings */}
+                  <div className="flex items-center justify-between border-t border-slate-300 pt-2 dark:border-slate-600">
+                    <span className="text-sm font-semibold text-slate-900 dark:text-white">Savings:</span>
+                    <div className="text-right">
+                      <span className={`text-sm font-semibold ${savings >= (currentIncome - currentNeeds - currentWants) ? 'text-green-600 dark:text-green-400' : 'text-slate-900 dark:text-white'}`}>
+                        {formatCurrency(currentIncome - currentNeeds - currentWants)} → {formatCurrency(savings)}
+                      </span>
+                      <span className="ml-2 text-xs text-slate-500">
+                        ({formatPercent((savings / income) * 100)})
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={handleCancelSave}
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleConfirmSave}
+                    className="flex-1"
+                  >
+                    Confirm & Save
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Floating Ribbit Chat Button */}
         <OnboardingChat context="monthly-plan-design" />
