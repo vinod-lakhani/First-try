@@ -961,6 +961,14 @@ function SavingsHelperContent() {
       savingsPct: savingsPct / 100,
     };
     
+    console.log('[Savings Helper] Saving distribution:', {
+      needsPct: needsPct / 100,
+      wantsPct: wantsPct / 100,
+      savingsPct: savingsPct / 100,
+      savedDistribution,
+      hadRiskConstraints: !!baselineState.riskConstraints,
+    });
+    
     if (baselineState.riskConstraints) {
       // Update both targets and actuals3m to the same values
       // Set bypassWantsFloor=true to preserve exact values without normalization
@@ -968,6 +976,11 @@ function SavingsHelperContent() {
         targets: savedDistribution,
         actuals3m: savedDistribution, // Set to match targets so engine returns as-is
         bypassWantsFloor: true, // Preserve exact values
+      });
+      console.log('[Savings Helper] Updated riskConstraints:', {
+        newTargets: savedDistribution,
+        newActuals3m: savedDistribution,
+        bypassWantsFloor: true,
       });
     } else {
       // If riskConstraints doesn't exist, create it with the saved distribution
@@ -977,10 +990,26 @@ function SavingsHelperContent() {
         shiftLimitPct: 0.04,
         bypassWantsFloor: true, // Preserve exact values
       });
+      console.log('[Savings Helper] Created new riskConstraints:', {
+        targets: savedDistribution,
+        actuals3m: savedDistribution,
+        shiftLimitPct: 0.04,
+        bypassWantsFloor: true,
+      });
     }
     
+    // Verify the update worked
+    const updatedState = useOnboardingStore.getState();
+    console.log('[Savings Helper] Verified updated state:', {
+      riskConstraints: updatedState.riskConstraints,
+      targets: updatedState.riskConstraints?.targets,
+      actuals3m: updatedState.riskConstraints?.actuals3m,
+    });
+    
     // Clear the initial paycheck plan to force recalculation
-    baselineState.setInitialPaycheckPlan(undefined as any);
+    baselineState.setInitialPaycheckPlan(undefined);
+    console.log('[Savings Helper] Cleared initialPaycheckPlan');
+    
     setShowConfirmDialog(false);
     router.push('/app/home');
   };

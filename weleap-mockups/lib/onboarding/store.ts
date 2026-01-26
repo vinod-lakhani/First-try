@@ -244,11 +244,22 @@ export const useOnboardingStore = create<OnboardingStore>()(
   // Risk constraints setters
   setRiskConstraints: (constraints) => set({ riskConstraints: constraints }),
   updateRiskConstraints: (updates) =>
-    set((state) => ({
-      riskConstraints: state.riskConstraints
+    set((state) => {
+      // Create a new object to ensure Zustand detects the change
+      const newRiskConstraints = state.riskConstraints
         ? { ...state.riskConstraints, ...updates }
-        : undefined,
-    })),
+        : updates as RiskConstraints;
+      
+      // Deep clone nested objects (targets, actuals3m) to ensure change detection
+      if (updates.targets) {
+        newRiskConstraints.targets = { ...updates.targets };
+      }
+      if (updates.actuals3m) {
+        newRiskConstraints.actuals3m = { ...updates.actuals3m };
+      }
+      
+      return { riskConstraints: newRiskConstraints };
+    }),
   
   // Paycheck plan setters
   setInitialPaycheckPlan: (plan) => set({ initialPaycheckPlan: plan }),
