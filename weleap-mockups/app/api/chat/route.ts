@@ -1631,9 +1631,9 @@ The user is in the onboarding flow, which guides them through setting up their f
       prompt += `- Monthly income: $${Math.round(monthlyIncome).toLocaleString()}\n\n`;
     }
 
-    // Expenses Breakdown
+    // Expenses Breakdown - Show both 3-month average and current month if available
     if (userPlanData.monthlyNeeds !== undefined || userPlanData.monthlyWants !== undefined) {
-      prompt += `**Monthly Spending:**\n`;
+      prompt += `**Monthly Spending (Current Plan):**\n`;
       if (userPlanData.monthlyNeeds !== undefined && userPlanData.monthlyNeeds != null && typeof userPlanData.monthlyNeeds === 'number') {
         prompt += `- Needs (essentials): $${Math.round(userPlanData.monthlyNeeds).toLocaleString()}`;
         if (userPlanData.monthlyIncome && typeof userPlanData.monthlyIncome === 'number' && userPlanData.monthlyIncome > 0) {
@@ -1843,8 +1843,14 @@ The user is in the onboarding flow, which guides them through setting up their f
       prompt += `  2. 401K Match (free money from employer): $${Math.round(finalEmployerMatchMTD).toLocaleString()}/month\n`;
       prompt += `  3. Cash Savings (post-tax): $${Math.round(finalCashSavingsMTD).toLocaleString()}/month\n`;
       prompt += `- **VERIFICATION**: Pre-tax $${Math.round(finalPayrollSavingsMTD).toLocaleString()} + Match $${Math.round(finalEmployerMatchMTD).toLocaleString()} + Post-tax Cash $${Math.round(finalCashSavingsMTD).toLocaleString()} = Total Savings $${Math.round(finalTotalSavingsMTD).toLocaleString()} ✓\n`;
-      prompt += `- **CRITICAL - MANDATORY RULE**: When users ask "what makes up my savings" or "break down my savings" or "walk me through my savings breakdown" or "what is my savings plan", you MUST:\n`;
-      prompt += `  1. Show this EXACT TOTAL savings breakdown: Total Savings = Pre-tax $${Math.round(finalPayrollSavingsMTD).toLocaleString()} + Match $${Math.round(finalEmployerMatchMTD).toLocaleString()} + Post-tax Cash $${Math.round(finalCashSavingsMTD).toLocaleString()} = $${Math.round(finalTotalSavingsMTD).toLocaleString()}\n`;
+      prompt += `- **CRITICAL - MANDATORY RULE**: When users ask "what makes up my savings" or "break down my savings" or "walk me through my savings breakdown" or "what is my savings plan" or "what is my savings", you MUST:\n`;
+      prompt += `  1. Show this EXACT TOTAL savings breakdown in this format:\n`;
+      prompt += `     **Total Monthly Savings: $${Math.round(finalTotalSavingsMTD).toLocaleString()}/month**\n`;
+      prompt += `     Your total savings is made up of:\n`;
+      prompt += `     - Payroll Savings (pre-tax 401k/HSA): $${Math.round(finalPayrollSavingsMTD).toLocaleString()}/month\n`;
+      prompt += `     - 401K Match (free money from employer): $${Math.round(finalEmployerMatchMTD).toLocaleString()}/month\n`;
+      prompt += `     - Cash Savings (post-tax): $${Math.round(finalCashSavingsMTD).toLocaleString()}/month\n`;
+      prompt += `     Total: $${Math.round(finalPayrollSavingsMTD).toLocaleString()} + $${Math.round(finalEmployerMatchMTD).toLocaleString()} + $${Math.round(finalCashSavingsMTD).toLocaleString()} = $${Math.round(finalTotalSavingsMTD).toLocaleString()} ✓\n`;
       prompt += `  2. NEVER say "not explicitly provided" or "not available" - these values ARE provided above and you MUST use them\n`;
       prompt += `  3. If pre-tax or match values are $0, still show them explicitly: "Pre-tax (401k/HSA): $0/month" and "401K Match: $0/month"\n`;
       prompt += `  4. Make it clear that Total Savings includes ALL THREE components: Pre-tax + Match + Post-tax Cash\n`;
@@ -2329,11 +2335,16 @@ When answering user questions:
 
 1. **Apply the Logic Rules Above**: Use the Income Allocation Logic, Savings Allocation Priority Stack, and Tax Decision Rules to answer questions accurately.
 
-2. **For Income Allocation Questions** (any question about Needs/Wants/Savings distribution):
-   - **MANDATORY**: Start from 3-month average actual spending (not target percentages, not single-month values)
+2. **For Income Allocation Questions** (any question about Needs/Wants/Savings distribution, "what is my income breakdown"):
+   - **MANDATORY**: Show BOTH 3-month average AND current month allocation
+   - **MANDATORY**: Start with 3-month average actual spending (not target percentages, not single-month values)
    - **MANDATORY**: You MUST include the phrase "3-month average" or "three-month average" in your response when discussing allocations
    - **MANDATORY**: Explicitly state "Based on your 3-month average actual spending" or "Using your 3-month average" at the beginning
-   - **MANDATORY**: When users ask "How should I divide my paycheck?" or "Can you show me my allocation?", you MUST use their actual dollar amounts from userPlanData, not generic examples. Show: "Needs: $X, Wants: $Y, Savings: $Z"
+   - **MANDATORY**: Then show current month allocation: "Your current month allocation is: Needs $X, Wants $Y, Savings $Z"
+   - **MANDATORY**: When users ask "How should I divide my paycheck?" or "Can you show me my allocation?" or "what is my income breakdown", you MUST:
+     * Show 3-month average: "Based on your 3-month average actual spending: Needs $A, Wants $B, Savings $C"
+     * Show current month: "Your current month allocation: Needs $X, Wants $Y, Savings $Z"
+     * Use their actual dollar amounts from userPlanData, not generic examples
    - Explain how allocations are calculated from 3-month averages (this smooths volatility)
    - **MANDATORY**: If suggesting wants reduction or explaining adjustments, explicitly state the shift limit: "The maximum shift from Wants to Savings is 4% of your income, which is $X" (the shift limit is exactly 4%, not a range)
    - Explain why Needs stay fixed short-term (essential expenses can't change immediately)
@@ -2453,7 +2464,11 @@ EXAMPLES OF CORRECT RESPONSES
 
 **Example 1: Showing Specific Dollar Amounts (Income Allocation)**
 ❌ WRONG: "A common method is the 50/30/20 rule: 50% for needs, 30% for wants, 20% for savings. If you share your income, I can help you create a tailored plan!"
-✅ CORRECT: "Based on your 3-month average actual spending, your next paycheck allocation is: Needs $2,320 (58%), Wants $880 (22%), Savings $800 (20%). Total: $4,000 ✓"
+❌ WRONG: "Based on your 3-month average actual spending, your income breakdown is: Needs $2,868, Wants $2,400, Savings $3,412. Total: $8,680 ✓" (missing current month)
+✅ CORRECT: "Based on your 3-month average actual spending, your income breakdown is:
+- **3-Month Average**: Needs $2,868 (33.0%), Wants $2,400 (27.6%), Savings $3,412 (39.3%)
+- **Current Month**: Needs $2,868 (33.0%), Wants $2,400 (27.6%), Savings $3,412 (39.3%)
+Total: $8,680 ✓"
 
 **Example 2: Explaining System Adjustments**
 ❌ WRONG: "If your savings is below target, you might want to review your budget and find areas to cut back."
