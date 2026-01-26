@@ -1262,13 +1262,15 @@ If users ask about:
 - Confirmation that their plan is saved
 
 **Guidance You Can Provide**:
-- **MANDATORY - Savings Breakdown Questions**: When users ask "what makes up my savings" or "break down my savings" or "what is my savings composed of" or "walk me through my savings breakdown", you MUST:
+- **MANDATORY - Savings Breakdown Questions**: When users ask "what makes up my savings" or "break down my savings" or "what is my savings composed of" or "walk me through my savings breakdown" or "what is my savings plan", you MUST:
   * **PART 1 - Total Savings Composition**: First show what makes up the TOTAL savings:
     - Cash Savings (post-tax): $X/month
     - Payroll Savings (pre-tax 401k/HSA): $Y/month  
     - 401K Match (free money from employer): $Z/month
     - **Total Savings = $X + $Y + $Z = $Total/month**
-    - Use the exact dollar amounts from the "Total Monthly Savings Breakdown" section
+    - **CRITICAL**: Use the EXACT dollar amounts from the "Total Monthly Savings Breakdown" section above - these values ARE provided and you MUST use them
+    - **CRITICAL**: NEVER say "not explicitly provided" or "not available" - the pre-tax and match values ARE in the data above
+    - **CRITICAL**: If pre-tax or match values are $0, still show them explicitly: "Payroll Savings (pre-tax 401k/HSA): $0/month" and "401K Match: $0/month"
   
   * **PART 2 - Post-Tax Cash Allocation**: Then show how the POST-TAX CASH SAVINGS is allocated:
     - Emergency Fund: $A/month (X% of post-tax cash)
@@ -1776,18 +1778,17 @@ The user is in the onboarding flow, which guides them through setting up their f
       
       prompt += `**Total Monthly Savings Breakdown:**\n`;
       prompt += `- Total savings: $${Math.round(totalSavingsMTD).toLocaleString()}/month\n`;
-      prompt += `- **Savings Breakdown (what makes up total savings):**\n`;
+      prompt += `- **Savings Breakdown (what makes up total savings) - USE THESE EXACT VALUES:**\n`;
       prompt += `  - Cash Savings (post-tax): $${Math.round(cashSavingsMTD).toLocaleString()}/month\n`;
-      if (preTaxTotal > 0) {
-        prompt += `  - Payroll Savings (pre-tax 401k/HSA): $${Math.round(preTaxTotal).toLocaleString()}/month\n`;
-      }
-      if (monthlyMatch > 0) {
-        prompt += `  - 401K Match (free money from employer): $${Math.round(monthlyMatch).toLocaleString()}/month\n`;
-      }
-      prompt += `- **CRITICAL**: When users ask "what makes up my savings" or "break down my savings" or "walk me through my savings breakdown", you MUST:\n`;
-      prompt += `  1. Show this TOTAL savings breakdown: Cash Savings $${Math.round(cashSavingsMTD).toLocaleString()} + Payroll Savings $${Math.round(preTaxTotal).toLocaleString()} + 401K Match $${Math.round(monthlyMatch).toLocaleString()} = Total Savings $${Math.round(totalSavingsMTD).toLocaleString()}\n`;
-      prompt += `  2. THEN show the post-tax cash allocation breakdown (if savingsAllocation data is available below)\n`;
-      prompt += `  3. Make it clear that the total includes BOTH pre-tax (401k/HSA) and post-tax (cash) components\n`;
+      prompt += `  - Payroll Savings (pre-tax 401k/HSA): $${Math.round(preTaxTotal).toLocaleString()}/month\n`;
+      prompt += `  - 401K Match (free money from employer): $${Math.round(monthlyMatch).toLocaleString()}/month\n`;
+      prompt += `  - **VERIFICATION**: $${Math.round(cashSavingsMTD).toLocaleString()} + $${Math.round(preTaxTotal).toLocaleString()} + $${Math.round(monthlyMatch).toLocaleString()} = $${Math.round(totalSavingsMTD).toLocaleString()} ✓\n`;
+      prompt += `- **CRITICAL - MANDATORY RULE**: When users ask "what makes up my savings" or "break down my savings" or "walk me through my savings breakdown" or "what is my savings plan", you MUST:\n`;
+      prompt += `  1. Show this EXACT TOTAL savings breakdown with the dollar amounts above: Cash Savings $${Math.round(cashSavingsMTD).toLocaleString()} + Payroll Savings $${Math.round(preTaxTotal).toLocaleString()} + 401K Match $${Math.round(monthlyMatch).toLocaleString()} = Total Savings $${Math.round(totalSavingsMTD).toLocaleString()}\n`;
+      prompt += `  2. NEVER say "not explicitly provided" or "not available" - these values ARE provided above and you MUST use them\n`;
+      prompt += `  3. If pre-tax or match values are $0, still show them: "Payroll Savings: $0/month" and "401K Match: $0/month"\n`;
+      prompt += `  4. THEN show the post-tax cash allocation breakdown (if savingsAllocation data is available below)\n`;
+      prompt += `  5. Make it clear that the total includes BOTH pre-tax (401k/HSA) and post-tax (cash) components\n`;
       prompt += `\n`;
     } else if (userPlanData.monthlySavings && typeof userPlanData.monthlySavings === 'number') {
       // Fallback: use monthlySavings if we don't have all the data for calculation
@@ -1802,20 +1803,17 @@ The user is in the onboarding flow, which guides them through setting up their f
         const preTaxTotal = monthly401k + monthlyHSA;
         const cashSavings = monthlySavings - preTaxTotal - monthlyMatch;
         
-        prompt += `- **Savings Breakdown (what makes up total savings):**\n`;
-        if (cashSavings > 0) {
-          prompt += `  - Cash Savings (post-tax): $${Math.round(cashSavings).toLocaleString()}/month\n`;
-        }
-        if (preTaxTotal > 0) {
-          prompt += `  - Payroll Savings (pre-tax 401k/HSA): $${Math.round(preTaxTotal).toLocaleString()}/month\n`;
-        }
-        if (monthlyMatch > 0) {
-          prompt += `  - 401K Match (free money from employer): $${Math.round(monthlyMatch).toLocaleString()}/month\n`;
-        }
-        prompt += `- **CRITICAL**: When users ask "what makes up my savings" or "break down my savings" or "walk me through my savings breakdown", you MUST:\n`;
-        prompt += `  1. Show this TOTAL savings breakdown: Cash Savings + Payroll Savings + 401K Match = Total Savings\n`;
-        prompt += `  2. THEN show the post-tax cash allocation breakdown (if savingsAllocation data is available below)\n`;
-        prompt += `  3. Make it clear that the total includes BOTH pre-tax (401k/HSA) and post-tax (cash) components\n`;
+        prompt += `- **Savings Breakdown (what makes up total savings) - USE THESE EXACT VALUES:**\n`;
+        prompt += `  - Cash Savings (post-tax): $${Math.round(cashSavings).toLocaleString()}/month\n`;
+        prompt += `  - Payroll Savings (pre-tax 401k/HSA): $${Math.round(preTaxTotal).toLocaleString()}/month\n`;
+        prompt += `  - 401K Match (free money from employer): $${Math.round(monthlyMatch).toLocaleString()}/month\n`;
+        prompt += `  - **VERIFICATION**: $${Math.round(cashSavings).toLocaleString()} + $${Math.round(preTaxTotal).toLocaleString()} + $${Math.round(monthlyMatch).toLocaleString()} = $${Math.round(monthlySavings).toLocaleString()} ✓\n`;
+        prompt += `- **CRITICAL - MANDATORY RULE**: When users ask "what makes up my savings" or "break down my savings" or "walk me through my savings breakdown" or "what is my savings plan", you MUST:\n`;
+        prompt += `  1. Show this EXACT TOTAL savings breakdown with the dollar amounts above: Cash Savings $${Math.round(cashSavings).toLocaleString()} + Payroll Savings $${Math.round(preTaxTotal).toLocaleString()} + 401K Match $${Math.round(monthlyMatch).toLocaleString()} = Total Savings $${Math.round(monthlySavings).toLocaleString()}\n`;
+        prompt += `  2. NEVER say "not explicitly provided" or "not available" - these values ARE provided above and you MUST use them\n`;
+        prompt += `  3. If pre-tax or match values are $0, still show them: "Payroll Savings: $0/month" and "401K Match: $0/month"\n`;
+        prompt += `  4. THEN show the post-tax cash allocation breakdown (if savingsAllocation data is available below)\n`;
+        prompt += `  5. Make it clear that the total includes BOTH pre-tax (401k/HSA) and post-tax (cash) components\n`;
       }
       prompt += `\n`;
     }
@@ -2410,7 +2408,8 @@ EXAMPLES OF CORRECT RESPONSES
 ✅ CORRECT: "Your allocation is Needs $2,320, Wants $880, Savings $800. Total: $4,000 ✓"
 
 **Example 17: Complete Savings Breakdown (Pre-tax + Post-tax + Match + Allocation)**
-❌ WRONG: "Here's your savings breakdown based on your current monthly savings allocation: **Total Post-tax Cash Savings Available to Allocate: $3,243/month**. Emergency Fund: $1,162 (35.8%), Extra Debt Payoff: $697 (21.5%), 401(k) Employer Match: $339 (10.4%), Retirement Tax-Advantaged: $523 (16.1%), Taxable Brokerage: $523 (16.1%)."
+❌ WRONG: "Here's your savings breakdown based on your current monthly savings allocation: **Total Post-tax Cash Savings Available to Allocate: $3,243/month**. Emergency Fund: $1,162 (35.8%), Extra Debt Payoff: $697 (21.5%), 401(k) Employer Match: $339 (10.4%), Retirement Tax-Advantaged: $523 (16.1%), Taxable Brokerage: $523 (16.1%). This amount is not explicitly provided, but it contributes to your overall savings."
+❌ WRONG: "Payroll Savings (pre-tax 401k/HSA): This amount is not explicitly provided, but it contributes to your overall savings. 401K Match: This amount is also not explicitly provided in your data."
 ✅ CORRECT: "Here's your complete savings breakdown:
 
 **Total Monthly Savings: $4,382/month**
