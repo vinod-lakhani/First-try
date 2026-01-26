@@ -429,6 +429,15 @@ function SavingsAllocatorContent() {
     setAmounts(prev => {
       const newValue = prev[key] + delta;
       const clamped = clampAmount(newValue, min, max);
+      console.log('[Savings Allocator] adjustAmount:', {
+        key,
+        delta,
+        prevValue: prev[key],
+        newValue,
+        clamped,
+        min,
+        max,
+      });
       return {
         ...prev,
         [key]: clamped,
@@ -794,25 +803,46 @@ function SavingsAllocatorContent() {
   }, [amounts, originalAmounts]);
 
   const handleConfirmApply = () => {
-    if (!customAllocation) return;
+    if (!customAllocation) {
+      console.error('[Savings Allocator] Cannot confirm: customAllocation is null');
+      return;
+    }
+    
+    console.log('[Savings Allocator] Confirming changes:', {
+      customAllocation,
+      amounts,
+      preTaxSavings: preTaxSavings.employerMatch.monthly,
+    });
     
     // Save custom savings allocation to safetyStrategy
     // This will override the engine's calculation in buildFinalPlanData
+    const customSavingsAllocation = {
+      ef$: customAllocation.ef$,
+      highAprDebt$: customAllocation.highAprDebt$,
+      match401k$: preTaxSavings.employerMatch.monthly, // Pre-tax match, not post-tax
+      retirementTaxAdv$: customAllocation.retirementTaxAdv$,
+      brokerage$: customAllocation.brokerage$,
+    };
+    
+    console.log('[Savings Allocator] Saving customSavingsAllocation:', customSavingsAllocation);
+    
     baselineState.updateSafetyStrategy({
-      customSavingsAllocation: {
-        ef$: customAllocation.ef$,
-        highAprDebt$: customAllocation.highAprDebt$,
-        match401k$: preTaxSavings.employerMatch.monthly, // Pre-tax match, not post-tax
-        retirementTaxAdv$: customAllocation.retirementTaxAdv$,
-        brokerage$: customAllocation.brokerage$,
-      },
+      customSavingsAllocation,
     });
     
     // Clear initialPaycheckPlan to force recalculation
     baselineState.setInitialPaycheckPlan(undefined as any);
     
+    console.log('[Savings Allocator] Saved customSavingsAllocation, verifying:', {
+      saved: baselineState.safetyStrategy?.customSavingsAllocation,
+    });
+    
     setShowConfirmDialog(false);
-    router.push('/app/income'); // Navigate to Income tab to see the changes
+    
+    // Use setTimeout to allow state to update before navigation
+    setTimeout(() => {
+      router.push('/app/income'); // Navigate to Income tab to see the changes
+    }, 100);
   };
 
   const handleApply = () => {
@@ -1287,8 +1317,20 @@ function SavingsAllocatorContent() {
                   <Button
                     variant="outline"
                     size="icon"
-                    onClick={() => adjustAmount('ef', 50, 0, Math.min(savingsBudget * 0.4, efGap$ > 0 ? efGap$ : savingsBudget))}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const max = Math.min(savingsBudget * 0.4, efGap$ > 0 ? efGap$ : savingsBudget);
+                      console.log('[Savings Allocator] Plus button clicked for emergency fund:', {
+                        currentAmount: amounts.ef,
+                        savingsBudget,
+                        efGap$,
+                        max,
+                      });
+                      adjustAmount('ef', 50, 0, max);
+                    }}
                     className="h-10 w-10 shrink-0"
+                    type="button"
                   >
                     <Plus className="h-4 w-4" />
                   </Button>
