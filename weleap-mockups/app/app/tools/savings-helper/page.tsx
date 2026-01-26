@@ -225,6 +225,8 @@ function SavingsHelperContent() {
   const [savingsExpanded, setSavingsExpanded] = useState<{ [key: string]: boolean }>({});
 
   // Use centralized savings calculation for consistency
+  // CRITICAL: For Past 3 Months Average, we should NOT include current payroll contributions
+  // because those may have just started. Past 3 months should reflect what actually happened.
   const savingsBreakdown = useMemo(() => {
     // Calculate monthly needs and wants from actuals
     return calculateSavingsBreakdown(
@@ -234,6 +236,19 @@ function SavingsHelperContent() {
       wantsActualMonthly
     );
   }, [baselineState.income, baselineState.payrollContributions, needsActualMonthly, wantsActualMonthly]);
+
+  // Calculate savings breakdown for Past 3 Months Average WITHOUT payroll contributions
+  // This reflects what actually happened in the past, not what's in the current plan
+  const savingsBreakdownPast3Months = useMemo(() => {
+    // For past 3 months, assume NO payroll contributions (they may have just started)
+    // Only calculate cash savings from actual expenses
+    return calculateSavingsBreakdown(
+      baselineState.income,
+      undefined, // No payroll contributions in the past
+      needsActualMonthly,
+      wantsActualMonthly
+    );
+  }, [baselineState.income, needsActualMonthly, wantsActualMonthly]);
 
   // Use centralized calculation for payroll + match
   const payrollMatchData = useMemo(() => {
@@ -717,19 +732,24 @@ function SavingsHelperContent() {
   }, [baselinePlanData, scenarioPlanData, incomeDistribution, monthlyIncome, baselineState.income?.payFrequency]);
 
   // Calculate total savings (Cash + Payroll + Match) for each state - MUST be before early returns
-  // All states use the same cash savings calculation (baseSavingsMonthly - netPreTaxImpact)
-  // The difference between states is in the distribution percentages, not the cash savings amount
+  // CRITICAL: Past 3 Months Average should NOT include current payroll contributions/match
+  // because those may have just started. It should only reflect what actually happened.
   const totalSavingsByState = useMemo(() => {
-    // Use the correct cash savings calculation for all states
-    const cashSavingsForAllStates = cashSavingsObservedMonthly;
+    // For Past 3 Months Average: Only cash savings (no payroll/match - those are new)
+    const cashSavingsPast3Months = savingsBreakdownPast3Months.cashSavingsMTD;
+    const totalSavingsPast3Months = cashSavingsPast3Months; // No payroll/match in the past
+
+    // For Current Plan and Recommended Plan: Include current payroll contributions/match
+    const cashSavingsForCurrentAndRecommended = cashSavingsObservedMonthly;
+    const totalSavingsCurrentAndRecommended = cashSavingsForCurrentAndRecommended + payrollMatchData.totalPayrollMatchMTD;
 
     // Calculate total savings (Cash + Payroll + Match) for each state
     return {
-      actuals3m: cashSavingsForAllStates + payrollMatchData.totalPayrollMatchMTD,
-      currentPlan: cashSavingsForAllStates + payrollMatchData.totalPayrollMatchMTD,
-      recommendedPlan: cashSavingsForAllStates + payrollMatchData.totalPayrollMatchMTD,
+      actuals3m: totalSavingsPast3Months, // Past 3 months: only cash savings (no payroll/match)
+      currentPlan: totalSavingsCurrentAndRecommended, // Current plan: includes payroll/match
+      recommendedPlan: totalSavingsCurrentAndRecommended, // Recommended: includes payroll/match
     };
-  }, [cashSavingsObservedMonthly, payrollMatchData]);
+  }, [cashSavingsObservedMonthly, payrollMatchData, savingsBreakdownPast3Months]);
 
   // All remaining hooks MUST be called before any early returns
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -897,14 +917,23 @@ function SavingsHelperContent() {
                       {cashSavingsObserved < 0 && <span className="text-xs text-slate-500 ml-1">(overspending)</span>}
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-600 dark:text-slate-400">Payroll savings (pre-tax):</span>
-                    <span className="font-medium">${payrollSavings.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} <span className="text-xs text-slate-500">estimated</span></span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-600 dark:text-slate-400">Employer match:</span>
-                    <span className="font-medium">+${match.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} <span className="text-xs text-slate-500">estimated</span></span>
-                  </div>
+                  {payrollSavings > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-600 dark:text-slate-400">Payroll savings (pre-tax):</span>
+                      <span className="font-medium">${payrollSavings.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} <span className="text-xs text-slate-500">estimated</span></span>
+                    </div>
+                  )}
+                  {match > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-600 dark:text-slate-400">Employer match:</span>
+                      <span className="font-medium">+${match.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} <span className="text-xs text-slate-500">estimated</span></span>
+                    </div>
+                  )}
+                  {label === 'Past 3 Months Average' && payrollSavings === 0 && match === 0 && (
+                    <div className="text-xs text-slate-500 italic">
+                      Note: Payroll contributions and match are not included in past 3 months average as they may have just started.
+                    </div>
+                  )}
                   <div className="flex justify-between border-t border-slate-300 pt-1 dark:border-slate-600">
                     <span className="font-semibold text-slate-900 dark:text-white">Total savings:</span>
                     <span className="font-semibold text-slate-900 dark:text-white">${totalSavingsAllIn.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
@@ -985,9 +1014,9 @@ function SavingsHelperContent() {
                 netIncomeMonthly,
                 totalSavingsByState.actuals3m,
                 savingsCalculations.totalSavingsTarget$,
-                cashSavingsObservedMonthly,
-                payrollMatchData.payrollSavingsMTD,
-                payrollMatchData.matchMTD
+                savingsBreakdownPast3Months.cashSavingsMTD, // Past 3 months cash savings (no payroll impact)
+                0, // Past 3 months: NO payroll savings (may have just started)
+                0  // Past 3 months: NO employer match (may have just started)
               )}
               {renderComparisonRow(
                 'Current Plan',
