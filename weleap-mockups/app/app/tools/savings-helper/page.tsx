@@ -780,6 +780,38 @@ function SavingsHelperContent() {
   // All remaining hooks MUST be called before any early returns
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   
+  // CRITICAL: Calculate cash savings from the slider-adjusted values using centralized function
+  // The sliders adjust needsPct/wantsPct, which affects monthlyNeeds/monthlyWants
+  // We need to calculate what the cash savings would be with these adjusted values
+  // This ensures the bottom section matches the top section calculation
+  // MUST be before early returns to follow Rules of Hooks
+  const cashSavingsFromSliders = useMemo(() => {
+    // Calculate needs/wants from slider percentages
+    const adjustedMonthlyNeeds = (needsPct / 100) * netIncomeMonthly;
+    const adjustedMonthlyWants = (wantsPct / 100) * netIncomeMonthly;
+    
+    // Use centralized function to calculate cash savings from adjusted needs/wants
+    const breakdown = calculateSavingsBreakdown(
+      baselineState.income,
+      baselineState.payrollContributions,
+      adjustedMonthlyNeeds,
+      adjustedMonthlyWants
+    );
+    
+    console.log('[Savings Helper] Calculating cashSavingsFromSliders:', {
+      needsPct,
+      wantsPct,
+      savingsPct,
+      adjustedMonthlyNeeds,
+      adjustedMonthlyWants,
+      netIncomeMonthly,
+      breakdown,
+      cashSavingsMTD: breakdown.cashSavingsMTD,
+    });
+    
+    return breakdown.cashSavingsMTD;
+  }, [baselineState.income, baselineState.payrollContributions, needsPct, wantsPct, netIncomeMonthly]);
+  
   // Calculate derived values (not hooks, but need to be before early returns)
   const originalNeedsPct = currentPlan.needsPct * 100;
   const originalWantsPct = currentPlan.wantsPct * 100;
@@ -815,37 +847,6 @@ function SavingsHelperContent() {
   }
 
   const { monthlyNeeds, monthlyWants, monthlySavings } = incomeDistribution;
-  
-  // CRITICAL: Calculate cash savings from the slider-adjusted values using centralized function
-  // The sliders adjust needsPct/wantsPct, which affects monthlyNeeds/monthlyWants
-  // We need to calculate what the cash savings would be with these adjusted values
-  // This ensures the bottom section matches the top section calculation
-  const cashSavingsFromSliders = useMemo(() => {
-    // Calculate needs/wants from slider percentages
-    const adjustedMonthlyNeeds = (needsPct / 100) * netIncomeMonthly;
-    const adjustedMonthlyWants = (wantsPct / 100) * netIncomeMonthly;
-    
-    // Use centralized function to calculate cash savings from adjusted needs/wants
-    const breakdown = calculateSavingsBreakdown(
-      baselineState.income,
-      baselineState.payrollContributions,
-      adjustedMonthlyNeeds,
-      adjustedMonthlyWants
-    );
-    
-    console.log('[Savings Helper] Calculating cashSavingsFromSliders:', {
-      needsPct,
-      wantsPct,
-      savingsPct,
-      adjustedMonthlyNeeds,
-      adjustedMonthlyWants,
-      netIncomeMonthly,
-      breakdown,
-      cashSavingsMTD: breakdown.cashSavingsMTD,
-    });
-    
-    return breakdown.cashSavingsMTD;
-  }, [baselineState.income, baselineState.payrollContributions, needsPct, wantsPct, netIncomeMonthly]);
 
   // Helper to render a comparison row with two visuals: Cash Budget (Net Income) + Total Savings (All-in)
   const renderComparisonRow = (
