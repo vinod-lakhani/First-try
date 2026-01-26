@@ -972,7 +972,7 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
   // This ensures that when needs/wants change, the allocation recalculates
   // Use a larger tolerance (5%) to account for rounding differences
   const budgetTolerance = monthlySavingsBudget * 0.05; // 5% tolerance
-  const budgetMatches = Math.abs(customAllocTotal - monthlySavingsBudget) < Math.max(1, budgetTolerance);
+  const budgetMatches = customAllocTotal > 0 && Math.abs(customAllocTotal - monthlySavingsBudget) < Math.max(1, budgetTolerance);
   
   console.log('[buildFinalPlanData] Checking custom savings allocation:', {
     hasCustomAlloc: !!customAlloc,
@@ -982,6 +982,8 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
     budgetTolerance,
     budgetMatches,
     willRecalculate: !customAlloc || !budgetMatches,
+    riskConstraints: riskConstraints?.targets,
+    riskConstraintsActuals3m: riskConstraints?.actuals3m,
   });
   
   if (customAlloc && budgetMatches) {
@@ -1018,6 +1020,7 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
         customAllocTotal,
         monthlySavingsBudget,
         difference: monthlySavingsBudget - customAllocTotal,
+        reason: customAllocTotal === 0 ? 'customAllocTotal is 0' : 'budget mismatch',
       });
     }
     savingsAlloc = allocateSavings({
@@ -1033,7 +1036,11 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
       iraRoomThisYear$: safetyStrategy?.iraRoomThisYear$ || 7000,
       k401RoomThisYear$: safetyStrategy?.k401RoomThisYear$ || 23000,
     });
-    console.log('[buildFinalPlanData] Calculated savings allocation from engine:', savingsAlloc);
+    console.log('[buildFinalPlanData] Calculated savings allocation from engine:', {
+      savingsAlloc,
+      monthlySavingsBudget,
+      incomeAllocSavings$: incomeAlloc.savings$,
+    });
   }
   
   // Convert savings allocation back to per-paycheck for paycheck categories (for backward compatibility)
