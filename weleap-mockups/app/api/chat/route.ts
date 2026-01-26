@@ -1263,14 +1263,15 @@ If users ask about:
 
 **Guidance You Can Provide**:
 - **MANDATORY - Savings Breakdown Questions**: When users ask "what makes up my savings" or "break down my savings" or "what is my savings composed of" or "walk me through my savings breakdown" or "what is my savings plan", you MUST:
-  * **PART 1 - Total Savings Composition**: First show what makes up the TOTAL savings:
-    - Cash Savings (post-tax): $X/month
-    - Payroll Savings (pre-tax 401k/HSA): $Y/month  
-    - 401K Match (free money from employer): $Z/month
-    - **Total Savings = $X + $Y + $Z = $Total/month**
-    - **CRITICAL**: Use the EXACT dollar amounts from the "Total Monthly Savings Breakdown" section above - these values ARE provided and you MUST use them
+  * **PART 1 - Total Savings Composition**: First show what makes up the TOTAL savings using the formula: **Total Savings = Pre-tax + Match + Post-tax Cash**
+    - **Payroll Savings (pre-tax 401k/HSA)**: $Y/month
+    - **401K Match (free money from employer)**: $Z/month
+    - **Cash Savings (post-tax)**: $X/month
+    - **Total Savings = Pre-tax $Y + Match $Z + Post-tax Cash $X = $Total/month**
+    - **CRITICAL**: Use the EXACT dollar amounts from the "TOTAL MONTHLY SAVINGS BREAKDOWN" section above - these values ARE provided and you MUST use them
     - **CRITICAL**: NEVER say "not explicitly provided" or "not available" - the pre-tax and match values ARE in the data above
     - **CRITICAL**: If pre-tax or match values are $0, still show them explicitly: "Payroll Savings (pre-tax 401k/HSA): $0/month" and "401K Match: $0/month"
+    - **CRITICAL**: Do NOT confuse Total Savings with Post-tax Cash. Total Savings includes ALL THREE components. Post-tax Cash is only ONE component.
   
   * **PART 2 - Post-Tax Cash Allocation**: Then show how the POST-TAX CASH SAVINGS is allocated:
     - Emergency Fund: $A/month (X% of post-tax cash)
@@ -1610,12 +1611,16 @@ The user is in the onboarding flow, which guides them through setting up their f
     prompt += `**AVAILABLE DATA SUMMARY:**\n`;
     prompt += `The following sections contain the user's complete financial data. Use these exact values when answering questions:\n`;
     if (userPlanData.monthlyIncome) prompt += `- Income data available\n`;
-    if (userPlanData.monthlyNeeds || userPlanData.monthlyWants) prompt += `- Spending data (Needs/Wants/Savings) available\n`;
-    if (userPlanData.payrollContributions) prompt += `- Payroll contributions and employer match data available\n`;
+    if (userPlanData.monthlyNeeds || userPlanData.monthlyWants) prompt += `- Spending data (Needs/Wants/Base Savings) available\n`;
+    if (userPlanData.payrollContributions) prompt += `- **CRITICAL**: Payroll contributions and employer match data available (401k, HSA, match amounts)\n`;
+    if (userPlanData.savingsBreakdown) prompt += `- **CRITICAL**: Total Savings Breakdown available (Pre-tax + Match + Post-tax Cash = Total)\n`;
     if (userPlanData.savingsAllocation) prompt += `- Savings allocation breakdown available (how post-tax cash is distributed)\n`;
     if (userPlanData.debtTotal) prompt += `- Debt information available\n`;
     if (userPlanData.netWorth) prompt += `- Net worth projections available\n`;
     if (userPlanData.emergencyFund) prompt += `- Emergency fund data available\n`;
+    prompt += `\n**CRITICAL SAVINGS FORMULA**: Total Savings = Pre-tax (401k/HSA) + Employer Match + Post-tax Cash\n`;
+    prompt += `- Base Savings (income - needs - wants) is NOT the total. It gets split into pre-tax and post-tax components.\n`;
+    prompt += `- Always check the "Total Monthly Savings Breakdown" section for the complete picture.\n`;
     prompt += `\n**IMPORTANT**: Always use the exact values from the sections below. Never say "I don't have access to your data" - all data is provided in this prompt.\n\n`;
     
     // Income
@@ -1756,6 +1761,7 @@ The user is in the onboarding flow, which guides them through setting up their f
     }
 
     // Savings Breakdown (Total Savings Composition - Cash + Pre-tax + Match)
+    // CRITICAL: Total Savings = Pre-tax (401k/HSA) + Match + Post-tax Cash
     // This is different from Savings Allocation (how post-tax cash is distributed)
     // Use pre-calculated savings breakdown if available (from centralized function), otherwise calculate
     if (userPlanData.savingsBreakdown) {
@@ -1775,19 +1781,21 @@ The user is in the onboarding flow, which guides them through setting up their f
         payrollContributions: userPlanData.payrollContributions,
       });
       
-      prompt += `**Total Monthly Savings Breakdown (Pre-Calculated - USE THESE EXACT VALUES):**\n`;
-      prompt += `- Total savings: $${Math.round(totalSavingsMTD).toLocaleString()}/month\n`;
-      prompt += `- **Savings Breakdown (what makes up total savings) - USE THESE EXACT VALUES:**\n`;
-      prompt += `  - Cash Savings (post-tax): $${Math.round(cashSavingsMTD).toLocaleString()}/month\n`;
-      prompt += `  - Payroll Savings (pre-tax 401k/HSA): $${Math.round(payrollSavingsMTD).toLocaleString()}/month\n`;
-      prompt += `  - 401K Match (free money from employer): $${Math.round(employerMatchMTD).toLocaleString()}/month\n`;
-      prompt += `  - **VERIFICATION**: $${Math.round(cashSavingsMTD).toLocaleString()} + $${Math.round(payrollSavingsMTD).toLocaleString()} + $${Math.round(employerMatchMTD).toLocaleString()} = $${Math.round(totalSavingsMTD).toLocaleString()} ✓\n`;
+      prompt += `**TOTAL MONTHLY SAVINGS BREAKDOWN (Pre-Calculated - USE THESE EXACT VALUES):**\n`;
+      prompt += `**CRITICAL FORMULA**: Total Savings = Pre-tax (401k/HSA) + Employer Match + Post-tax Cash\n`;
+      prompt += `- **Total Monthly Savings**: $${Math.round(totalSavingsMTD).toLocaleString()}/month\n`;
+      prompt += `- **Breakdown of Total Savings (what makes up the $${Math.round(totalSavingsMTD).toLocaleString()}):**\n`;
+      prompt += `  1. Payroll Savings (pre-tax 401k/HSA): $${Math.round(payrollSavingsMTD).toLocaleString()}/month\n`;
+      prompt += `  2. 401K Match (free money from employer): $${Math.round(employerMatchMTD).toLocaleString()}/month\n`;
+      prompt += `  3. Cash Savings (post-tax): $${Math.round(cashSavingsMTD).toLocaleString()}/month\n`;
+      prompt += `- **VERIFICATION**: Pre-tax $${Math.round(payrollSavingsMTD).toLocaleString()} + Match $${Math.round(employerMatchMTD).toLocaleString()} + Post-tax Cash $${Math.round(cashSavingsMTD).toLocaleString()} = Total Savings $${Math.round(totalSavingsMTD).toLocaleString()} ✓\n`;
       prompt += `- **CRITICAL - MANDATORY RULE**: When users ask "what makes up my savings" or "break down my savings" or "walk me through my savings breakdown" or "what is my savings plan", you MUST:\n`;
-      prompt += `  1. Show this EXACT TOTAL savings breakdown with the dollar amounts above: Cash Savings $${Math.round(cashSavingsMTD).toLocaleString()} + Payroll Savings $${Math.round(payrollSavingsMTD).toLocaleString()} + 401K Match $${Math.round(employerMatchMTD).toLocaleString()} = Total Savings $${Math.round(totalSavingsMTD).toLocaleString()}\n`;
+      prompt += `  1. Show this EXACT TOTAL savings breakdown: Total Savings = Pre-tax $${Math.round(payrollSavingsMTD).toLocaleString()} + Match $${Math.round(employerMatchMTD).toLocaleString()} + Post-tax Cash $${Math.round(cashSavingsMTD).toLocaleString()} = $${Math.round(totalSavingsMTD).toLocaleString()}\n`;
       prompt += `  2. NEVER say "not explicitly provided" or "not available" - these values ARE provided above and you MUST use them\n`;
-      prompt += `  3. If pre-tax or match values are $0, still show them: "Payroll Savings: $0/month" and "401K Match: $0/month"\n`;
-      prompt += `  4. THEN show the post-tax cash allocation breakdown (if savingsAllocation data is available below)\n`;
-      prompt += `  5. Make it clear that the total includes BOTH pre-tax (401k/HSA) and post-tax (cash) components\n`;
+      prompt += `  3. If pre-tax or match values are $0, still show them explicitly: "Pre-tax (401k/HSA): $0/month" and "401K Match: $0/month"\n`;
+      prompt += `  4. Make it clear that Total Savings includes ALL THREE components: Pre-tax + Match + Post-tax Cash\n`;
+      prompt += `  5. THEN show the post-tax cash allocation breakdown (if savingsAllocation data is available below) - this shows WHERE the post-tax cash portion goes\n`;
+      prompt += `  6. **CRITICAL**: Do NOT confuse Total Savings with Post-tax Cash. Total Savings = Pre-tax + Match + Post-tax Cash. Post-tax Cash is only ONE component of Total Savings.\n`;
       prompt += `\n`;
     } else if (userPlanData.monthlyIncome && userPlanData.monthlyNeeds !== undefined && userPlanData.monthlyWants !== undefined && userPlanData.payrollContributions) {
       // Fallback: Calculate using centralized formula logic if we have the necessary data
@@ -1849,11 +1857,23 @@ The user is in the onboarding flow, which guides them through setting up their f
       prompt += `\n`;
     }
 
+    // Base Savings (Income - Needs - Wants) - This is BEFORE accounting for pre-tax deductions
+    // CRITICAL: This is NOT the total savings. Total Savings = Pre-tax + Match + Post-tax Cash
+    if (userPlanData.monthlySavings && typeof userPlanData.monthlySavings === 'number') {
+      const baseSavings = typeof userPlanData.monthlySavings === 'number' ? userPlanData.monthlySavings : 0;
+      prompt += `**Base Savings (Income - Needs - Wants):**\n`;
+      prompt += `- Base savings budget: $${Math.round(baseSavings).toLocaleString()}/month\n`;
+      prompt += `- **IMPORTANT**: This is the base savings from income allocation (income - needs - wants).\n`;
+      prompt += `- **CRITICAL**: This is NOT the total savings. Total Savings = Pre-tax (401k/HSA) + Match + Post-tax Cash.\n`;
+      prompt += `- The base savings gets split into pre-tax contributions (reduces take-home) and post-tax cash (available to allocate).\n`;
+      prompt += `\n`;
+    }
+
     // Savings Rate
     if (userPlanData.savingsRate !== undefined && userPlanData.savingsRate != null && typeof userPlanData.savingsRate === 'number') {
       const savingsRatePct = userPlanData.savingsRate * 100;
       if (isFinite(savingsRatePct)) {
-        prompt += `- Savings rate: ${savingsRatePct.toFixed(1)}% of income\n`;
+        prompt += `- Base savings rate: ${savingsRatePct.toFixed(1)}% of income (this is income - needs - wants, before pre-tax deductions)\n`;
       }
       prompt += `\n`;
     }
