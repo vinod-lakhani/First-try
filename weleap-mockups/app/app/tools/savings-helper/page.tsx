@@ -817,16 +817,35 @@ function SavingsHelperContent() {
   const { monthlyNeeds, monthlyWants, monthlySavings } = incomeDistribution;
   
   // CRITICAL: Calculate cash savings from the slider-adjusted values using centralized function
-  // This ensures the bottom section matches the top section
+  // The sliders adjust needsPct/wantsPct, which affects monthlyNeeds/monthlyWants
+  // We need to calculate what the cash savings would be with these adjusted values
+  // This ensures the bottom section matches the top section calculation
   const cashSavingsFromSliders = useMemo(() => {
-    // Calculate cash savings from the adjusted needs/wants (from sliders)
-    return calculateSavingsBreakdown(
+    // Calculate needs/wants from slider percentages
+    const adjustedMonthlyNeeds = (needsPct / 100) * netIncomeMonthly;
+    const adjustedMonthlyWants = (wantsPct / 100) * netIncomeMonthly;
+    
+    // Use centralized function to calculate cash savings from adjusted needs/wants
+    const breakdown = calculateSavingsBreakdown(
       baselineState.income,
       baselineState.payrollContributions,
-      monthlyNeeds, // From sliders
-      monthlyWants  // From sliders
-    ).cashSavingsMTD;
-  }, [baselineState.income, baselineState.payrollContributions, monthlyNeeds, monthlyWants]);
+      adjustedMonthlyNeeds,
+      adjustedMonthlyWants
+    );
+    
+    console.log('[Savings Helper] Calculating cashSavingsFromSliders:', {
+      needsPct,
+      wantsPct,
+      savingsPct,
+      adjustedMonthlyNeeds,
+      adjustedMonthlyWants,
+      netIncomeMonthly,
+      breakdown,
+      cashSavingsMTD: breakdown.cashSavingsMTD,
+    });
+    
+    return breakdown.cashSavingsMTD;
+  }, [baselineState.income, baselineState.payrollContributions, needsPct, wantsPct, netIncomeMonthly]);
 
   // Helper to render a comparison row with two visuals: Cash Budget (Net Income) + Total Savings (All-in)
   const renderComparisonRow = (
