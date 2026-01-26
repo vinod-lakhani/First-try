@@ -16,7 +16,7 @@ import { simulateScenario, type ScenarioInput, type MonthlyPlan as SimMonthlyPla
 import type { OnboardingState } from '@/lib/onboarding/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { X, ArrowRight, AlertTriangle, HelpCircle, Edit, CheckCircle2, Plus, Minus } from 'lucide-react';
+import { X, ArrowRight, AlertTriangle, HelpCircle, Edit, CheckCircle2, Plus, Minus, ChevronDown, ChevronUp } from 'lucide-react';
 import { NetWorthChart } from '@/components/charts/NetWorthChart';
 import { calculateSavingsBreakdown } from '@/lib/utils/savingsCalculations';
 
@@ -493,6 +493,7 @@ function SavingsAllocatorContent() {
   };
 
   const [showImpactPreview, setShowImpactPreview] = useState(false);
+  const [showImpactDetails, setShowImpactDetails] = useState(false);
   const [impactPreviewData, setImpactPreviewData] = useState<{
     deltaPreTax: number;
     deltaMatch: number;
@@ -1188,27 +1189,15 @@ function SavingsAllocatorContent() {
                   
                   <div className="mb-3 space-y-1.5 text-sm">
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-700 dark:text-slate-300">Current HSA:</span>
+                      <span className="text-slate-700 dark:text-slate-300">Recommended change:</span>
                       <span className="font-medium text-slate-900 dark:text-white">
-                        ${Math.round(hsaRecommendation.currentHSAMonthly$).toLocaleString('en-US')}/mo
+                        ${Math.round(hsaRecommendation.currentHSAMonthly$).toLocaleString('en-US')}/mo → ${Math.round(hsaRecommendation.recommendedHsaMonthly$).toLocaleString('en-US')}/mo
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-700 dark:text-slate-300">Recommended:</span>
+                      <span className="text-slate-700 dark:text-slate-300">Delta pre-tax:</span>
                       <span className="font-medium text-slate-900 dark:text-white">
-                        ${Math.round(hsaRecommendation.recommendedHsaMonthly$).toLocaleString('en-US')}/mo
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-700 dark:text-slate-300">Estimated tax savings:</span>
-                      <span className="font-medium text-green-600 dark:text-green-400">
-                        +${Math.round(hsaRecommendation.hsaTaxSavings$).toLocaleString('en-US')}/mo
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-700 dark:text-slate-300">Take-home impact:</span>
-                      <span className="font-medium text-red-600 dark:text-red-400">
-                        ${Math.round(hsaRecommendation.hsaPostTaxAvailableDelta$).toLocaleString('en-US')}/mo
+                        +${Math.round(hsaRecommendation.deltaHSAMonthly$).toLocaleString('en-US')}/mo
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
@@ -1217,11 +1206,6 @@ function SavingsAllocatorContent() {
                         +${Math.round(hsaRecommendation.hsaWealthMoveDelta$).toLocaleString('en-US')}/mo
                       </span>
                     </div>
-                    {hsaRecommendation.remainingHsaRoomMonthly$ < hsaRecommendation.recommendedHsaMonthly$ && (
-                      <div className="text-xs text-amber-700 dark:text-amber-400 italic">
-                        Note: Recommended amount capped at remaining room (${Math.round(hsaRecommendation.remainingHsaRoomMonthly$).toLocaleString('en-US')}/mo)
-                      </div>
-                    )}
                   </div>
 
                   <div className="flex gap-2">
@@ -1263,6 +1247,7 @@ function SavingsAllocatorContent() {
                       size="sm"
                       onClick={() => {
                         setShowImpactPreview(false);
+                        setShowImpactDetails(false);
                         // Force recalculation by clearing the plan data
                         baselineState.setInitialPaycheckPlan(undefined as any);
                       }}
@@ -1273,7 +1258,7 @@ function SavingsAllocatorContent() {
                   </div>
                   
                   <div className="space-y-3 text-sm mt-3">
-                    {/* Breakdown lines */}
+                    {/* Main breakdown lines */}
                     <div className="space-y-2.5">
                       <div>
                         <div className="flex items-center justify-between">
@@ -1312,46 +1297,60 @@ function SavingsAllocatorContent() {
                           Your take-home drops less because you pay less tax.
                         </p>
                       </div>
-                      
-                      <div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-slate-700 dark:text-slate-300">Take-home change:</span>
-                          <span className="font-medium text-red-600 dark:text-red-400">
-                            {impactPreviewData.deltaPostTax >= 0 ? '+' : ''}${Math.round(impactPreviewData.deltaPostTax).toLocaleString('en-US')}/mo
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                          This is the cash you'll have less of in your bank account.
-                        </p>
-                      </div>
                     </div>
                     
-                    {/* Two totals */}
-                    <div className="space-y-2.5 pt-2 border-t border-blue-200 dark:border-blue-800">
-                      <div>
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium text-slate-700 dark:text-slate-300">Total invested (401k + match):</span>
-                          <span className="font-bold text-green-600 dark:text-green-400">
-                            +${Math.round(impactPreviewData.deltaPreTax + impactPreviewData.deltaMatch).toLocaleString('en-US')}/mo
-                          </span>
+                    {/* Expandable section */}
+                    <button
+                      onClick={() => setShowImpactDetails(!showImpactDetails)}
+                      className="w-full flex items-center justify-between text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
+                    >
+                      <span>View details</span>
+                      {showImpactDetails ? (
+                        <ChevronUp className="h-4 w-4" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4" />
+                      )}
+                    </button>
+                    
+                    {showImpactDetails && (
+                      <div className="space-y-2.5 pt-2 border-t border-blue-200 dark:border-blue-800">
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-700 dark:text-slate-300">Take-home change:</span>
+                            <span className="font-medium text-red-600 dark:text-red-400">
+                              {impactPreviewData.deltaPostTax >= 0 ? '+' : ''}${Math.round(impactPreviewData.deltaPostTax).toLocaleString('en-US')}/mo
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            This is the cash you'll have less of in your bank account.
+                          </p>
                         </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                          This is what grows your net worth over time.
-                        </p>
-                      </div>
-                      
-                      <div>
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium text-slate-700 dark:text-slate-300">Net cash impact (take-home):</span>
-                          <span className="font-bold text-red-600 dark:text-red-400">
-                            {impactPreviewData.deltaPostTax >= 0 ? '+' : ''}${Math.round(impactPreviewData.deltaPostTax).toLocaleString('en-US')}/mo
-                          </span>
+                        
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-slate-700 dark:text-slate-300">Total invested (401k + match):</span>
+                            <span className="font-bold text-green-600 dark:text-green-400">
+                              +${Math.round(impactPreviewData.deltaPreTax + impactPreviewData.deltaMatch).toLocaleString('en-US')}/mo
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            This is what grows your net worth over time.
+                          </p>
                         </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                          This is the tradeoff in your monthly spending money.
-                        </p>
+                        
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-slate-700 dark:text-slate-300">Net cash impact (take-home):</span>
+                            <span className="font-bold text-red-600 dark:text-red-400">
+                              {impactPreviewData.deltaPostTax >= 0 ? '+' : ''}${Math.round(impactPreviewData.deltaPostTax).toLocaleString('en-US')}/mo
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            This is the tradeoff in your monthly spending money.
+                          </p>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 </div>
               )}
