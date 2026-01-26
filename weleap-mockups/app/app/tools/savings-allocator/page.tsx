@@ -1381,9 +1381,19 @@ function SavingsAllocatorContent() {
                   <Button
                     variant="outline"
                     size="icon"
-                    onClick={() => adjustAmount('debt', 50, 0, savingsBudget * 0.4)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      console.log('[Savings Allocator] Plus button clicked for debt:', {
+                        currentAmount: amounts.debt,
+                        savingsBudget,
+                        max: savingsBudget * 0.4,
+                      });
+                      adjustAmount('debt', 50, 0, savingsBudget * 0.4);
+                    }}
                     className="h-10 w-10 shrink-0"
                     disabled={totalDebtBalance$ === 0}
+                    type="button"
                   >
                     <Plus className="h-4 w-4" />
                   </Button>
@@ -1535,8 +1545,16 @@ function SavingsAllocatorContent() {
                   <Button
                     variant="outline"
                     size="icon"
-                    onClick={() => adjustAmount('retirementExtra', 50, 0)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      console.log('[Savings Allocator] Plus button clicked for retirement:', {
+                        currentAmount: amounts.retirementExtra,
+                      });
+                      adjustAmount('retirementExtra', 50, 0);
+                    }}
                     className="h-10 w-10 shrink-0"
+                    type="button"
                   >
                     <Plus className="h-4 w-4" />
                   </Button>
@@ -1578,8 +1596,16 @@ function SavingsAllocatorContent() {
                   <Button
                     variant="outline"
                     size="icon"
-                    onClick={() => adjustAmount('brokerage', 50, 0)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      console.log('[Savings Allocator] Plus button clicked for brokerage:', {
+                        currentAmount: amounts.brokerage,
+                      });
+                      adjustAmount('brokerage', 50, 0);
+                    }}
                     className="h-10 w-10 shrink-0"
+                    type="button"
                   >
                     <Plus className="h-4 w-4" />
                   </Button>
