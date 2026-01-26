@@ -446,10 +446,22 @@ function SavingsAllocatorContent() {
         brokerage: baselineSavingsData.brokerage$,
       };
 
+      console.log('[Savings Allocator] Initializing amounts from baselineSavingsData:', {
+        initial,
+        baselineSavingsData,
+        postTaxSavingsAvailable,
+        riskConstraints: baselineState.riskConstraints,
+      });
+
       setAmounts(initial);
       setOriginalAmounts(initial);
+    } else {
+      console.log('[Savings Allocator] No baselineSavingsData or monthlySavings is 0, not initializing amounts', {
+        hasBaselineSavingsData: !!baselineSavingsData,
+        monthlySavings: baselineSavingsData?.monthlySavings,
+      });
     }
-  }, [baselineSavingsData]);
+  }, [baselineSavingsData, postTaxSavingsAvailable, baselineState.riskConstraints]);
 
   // Use post-tax savings available as the budget for allocation
   const savingsBudget = useMemo(() => {
