@@ -122,10 +122,14 @@ const MonthlyPlanDesign: React.FC<MonthlyPlanDesignProps> = ({
 
   const handleConfirmSave = () => {
     try {
+      console.log('[MonthlyPlanDesign] handleConfirmSave called');
+      
       // Calculate percentages
       const needsPct = income > 0 ? needs / income : 0;
       const wantsPct = income > 0 ? wants / income : 0;
       const savingsPct = income > 0 ? savings / income : 0;
+
+      console.log('[MonthlyPlanDesign] Calculated percentages:', { needsPct, wantsPct, savingsPct });
 
       // Update risk constraints (targets and actuals3m) so savings plan uses updated data
       const savedDistribution = {
@@ -133,6 +137,8 @@ const MonthlyPlanDesign: React.FC<MonthlyPlanDesignProps> = ({
         wantsPct,
         savingsPct,
       };
+
+      console.log('[MonthlyPlanDesign] Updating risk constraints with:', savedDistribution);
 
       if (store.riskConstraints) {
         // Update both targets and actuals3m to the same values
@@ -142,6 +148,7 @@ const MonthlyPlanDesign: React.FC<MonthlyPlanDesignProps> = ({
           actuals3m: savedDistribution, // Set to match targets so engine returns as-is
           bypassWantsFloor: true, // Preserve exact values
         });
+        console.log('[MonthlyPlanDesign] Updated existing risk constraints');
       } else {
         // If riskConstraints doesn't exist, create it with the saved distribution
         store.setRiskConstraints({
@@ -150,17 +157,40 @@ const MonthlyPlanDesign: React.FC<MonthlyPlanDesignProps> = ({
           shiftLimitPct: 0.04,
           bypassWantsFloor: true, // Preserve exact values
         });
+        console.log('[MonthlyPlanDesign] Created new risk constraints');
       }
 
-      // Clear the initial paycheck plan to force recalculation
-      store.setInitialPaycheckPlan(undefined as any);
-
-      // Now call the original onSave callback
-      onSave?.({ income, needs, wants, savings });
+      // Close dialog first before navigation
       setShowConfirmDialog(false);
+
+      // Now call the original onSave callback (this will set paycheck plan and navigate)
+      console.log('[MonthlyPlanDesign] Calling onSave callback with:', { income, needs, wants, savings });
+      if (onSave) {
+        // Use setTimeout to ensure dialog closes before navigation
+        setTimeout(() => {
+          try {
+            onSave({ income, needs, wants, savings });
+          } catch (error) {
+            console.error('[MonthlyPlanDesign] Error in onSave callback:', error);
+            throw error;
+          }
+        }, 100);
+      }
+      
+      console.log('[MonthlyPlanDesign] handleConfirmSave completed successfully');
     } catch (error) {
       console.error('[MonthlyPlanDesign] Error in handleConfirmSave:', error);
+      console.error('[MonthlyPlanDesign] Error details:', {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : 'No stack trace',
+        income,
+        needs,
+        wants,
+        savings,
+      });
       setShowConfirmDialog(false);
+      // Show error to user
+      alert(`Error saving plan: ${error instanceof Error ? error.message : String(error)}. Please try again.`);
     }
   };
 
