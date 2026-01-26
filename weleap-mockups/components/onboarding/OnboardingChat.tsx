@@ -275,12 +275,44 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
           monthlyNeeds,
           monthlyWants
         );
+        
+        // Debug logging
+        console.log('[OnboardingChat] Savings Breakdown Calculation:', {
+          income: store.income,
+          payrollContributions: store.payrollContributions,
+          monthlyNeeds,
+          monthlyWants,
+          calculated: savingsCalc,
+        });
+        
         savingsBreakdownData = {
           cashSavingsMTD: savingsCalc.cashSavingsMTD,
           payrollSavingsMTD: savingsCalc.payrollSavingsMTD,
           employerMatchMTD: savingsCalc.employerMatchMTD,
           totalSavingsMTD: savingsCalc.totalSavingsMTD,
         };
+      } else {
+        // If we don't have payroll contributions in store, but we calculated payrollContributionsData,
+        // we can still provide the breakdown using the calculated values
+        if (payrollContributionsData) {
+          const monthly401k = payrollContributionsData.monthly401kContribution || 0;
+          const monthlyHSA = payrollContributionsData.monthlyHSAContribution || 0;
+          const monthlyMatch = payrollContributionsData.monthlyEmployerMatch || 0;
+          const preTaxTotal = monthly401k + monthlyHSA;
+          
+          // Calculate cash savings from monthlySavings
+          const cashSavings = monthlySavings - preTaxTotal - monthlyMatch;
+          const totalSavings = cashSavings + preTaxTotal + monthlyMatch;
+          
+          savingsBreakdownData = {
+            cashSavingsMTD: Math.max(0, cashSavings),
+            payrollSavingsMTD: preTaxTotal,
+            employerMatchMTD: monthlyMatch,
+            totalSavingsMTD: totalSavings,
+          };
+          
+          console.log('[OnboardingChat] Fallback Savings Breakdown (from payrollContributionsData):', savingsBreakdownData);
+        }
       }
 
       // Call ChatGPT API with comprehensive data

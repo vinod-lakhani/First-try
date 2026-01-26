@@ -1766,6 +1766,15 @@ The user is in the onboarding flow, which guides them through setting up their f
       const employerMatchMTD = typeof sb.employerMatchMTD === 'number' ? sb.employerMatchMTD : 0;
       const totalSavingsMTD = typeof sb.totalSavingsMTD === 'number' ? sb.totalSavingsMTD : 0;
       
+      // Debug logging
+      console.log('[Chat API] Using pre-calculated savings breakdown:', {
+        cashSavingsMTD,
+        payrollSavingsMTD,
+        employerMatchMTD,
+        totalSavingsMTD,
+        payrollContributions: userPlanData.payrollContributions,
+      });
+      
       prompt += `**Total Monthly Savings Breakdown (Pre-Calculated - USE THESE EXACT VALUES):**\n`;
       prompt += `- Total savings: $${Math.round(totalSavingsMTD).toLocaleString()}/month\n`;
       prompt += `- **Savings Breakdown (what makes up total savings) - USE THESE EXACT VALUES:**\n`;
