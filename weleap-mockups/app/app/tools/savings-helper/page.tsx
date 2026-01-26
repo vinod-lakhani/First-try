@@ -441,8 +441,9 @@ function SavingsHelperContent() {
       const actualShift = recommended.savingsPct - currentPlan.savingsPct;
       
       // Always enforce shift limit - cap if exceeded
+      // But only log as warning, not error, since this is expected behavior when user has high savings
       if (actualShift > shiftLimitPct + 0.001) {
-        console.error('[Savings Helper] ERROR: Recommended plan violates shift limit! Capping...', {
+        console.warn('[Savings Helper] Recommended plan exceeds shift limit, capping to respect limit:', {
           currentPlan: {
             needs: currentPlan.needsPct * 100,
             wants: currentPlan.wantsPct * 100,
@@ -814,6 +815,18 @@ function SavingsHelperContent() {
   }
 
   const { monthlyNeeds, monthlyWants, monthlySavings } = incomeDistribution;
+  
+  // CRITICAL: Calculate cash savings from the slider-adjusted values using centralized function
+  // This ensures the bottom section matches the top section
+  const cashSavingsFromSliders = useMemo(() => {
+    // Calculate cash savings from the adjusted needs/wants (from sliders)
+    return calculateSavingsBreakdown(
+      baselineState.income,
+      baselineState.payrollContributions,
+      monthlyNeeds, // From sliders
+      monthlyWants  // From sliders
+    ).cashSavingsMTD;
+  }, [baselineState.income, baselineState.payrollContributions, monthlyNeeds, monthlyWants]);
 
   // Helper to render a comparison row with two visuals: Cash Budget (Net Income) + Total Savings (All-in)
   const renderComparisonRow = (
@@ -1251,10 +1264,10 @@ function SavingsHelperContent() {
                 <h3 className="mb-4 font-semibold text-slate-900 dark:text-white">Cash Savings (Post-tax)</h3>
                 <div className="rounded-lg border border-slate-300 bg-white px-4 py-3 dark:border-slate-600 dark:bg-slate-800">
                   <div className="text-right text-lg font-semibold">
-                    ${monthlySavings.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} /month
+                    ${cashSavingsFromSliders.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} /month
                   </div>
                   <div className="mt-1 text-right text-sm text-slate-600 dark:text-slate-400">
-                    {savingsPct.toFixed(1)}% of net income
+                    {netIncomeMonthly > 0 ? ((cashSavingsFromSliders / netIncomeMonthly) * 100).toFixed(1) : '0.0'}% of net income
                   </div>
                 </div>
               </div>
