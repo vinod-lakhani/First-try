@@ -509,11 +509,13 @@ function SavingsAllocatorContent() {
     const budget = postTaxSavingsAvailable || baselineSavingsData.monthlySavings;
     const warnings: string[] = [];
 
-    // Apply caps
-    const efCap = Math.min(budget * 0.4, efGap$ > 0 ? efGap$ : budget);
-    const ef$ = Math.max(0, Math.min(amounts.ef, efCap));
-    const efHitCap = amounts.ef > efCap;
+    // Emergency fund: Use user's amount (no hard cap, but 40% is recommended target)
+    // Only cap at efGap$ if user wants to exceed the gap (which doesn't make sense)
+    const efTarget = budget * 0.4; // 40% target (recommendation, not a cap)
+    const ef$ = Math.max(0, Math.min(amounts.ef, efGap$ > 0 ? efGap$ : Infinity));
+    const efExceedsTarget = amounts.ef > efTarget;
 
+    // Debt: Keep 40% cap for debt paydown
     const debtCap = budget * 0.4;
     const highAprDebt$ = Math.max(0, Math.min(amounts.debt, debtCap));
     const debtHitCap = amounts.debt > debtCap;
@@ -1288,7 +1290,7 @@ function SavingsAllocatorContent() {
                   )}
                   {budgetStatus.hasCapsHit && (
                     <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">
-                      ⚠️ Some allocations hit maximum caps (EF: 40% of budget, Debt: 40% of budget). The actual allocation may be lower than your slider settings indicate.
+                      ⚠️ Debt paydown allocation hit maximum cap (40% of budget). The actual allocation may be lower than your slider settings indicate.
                     </p>
                   )}
                 </div>
@@ -1303,12 +1305,15 @@ function SavingsAllocatorContent() {
               <div className="mb-6">
                 <div className="mb-2 flex items-center justify-between">
                   <h3 className="font-medium text-slate-900 dark:text-white">Emergency Fund</h3>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    Target: {((savingsBudget * 0.4) / savingsBudget * 100).toFixed(0)}% of budget
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
                     size="icon"
-                    onClick={() => adjustAmount('ef', -50, 0, Math.min(savingsBudget * 0.4, efGap$ > 0 ? efGap$ : savingsBudget))}
+                    onClick={() => adjustAmount('ef', -50, 0, efGap$ > 0 ? efGap$ : Infinity)}
                     className="h-10 w-10 shrink-0"
                   >
                     <Minus className="h-4 w-4" />
@@ -1319,11 +1324,12 @@ function SavingsAllocatorContent() {
                       value={Math.round(amounts.ef)}
                       onChange={(e) => {
                         const value = parseFloat(e.target.value) || 0;
-                        updateAmount('ef', value, 0, Math.min(savingsBudget * 0.4, efGap$ > 0 ? efGap$ : savingsBudget));
+                        // Only cap at efGap$ if there's a gap (user shouldn't exceed gap)
+                        updateAmount('ef', value, 0, efGap$ > 0 ? efGap$ : Infinity);
                       }}
                       className="w-full text-right text-lg font-semibold bg-transparent border-none outline-none"
                       min={0}
-                      max={Math.min(savingsBudget * 0.4, efGap$ > 0 ? efGap$ : savingsBudget)}
+                      max={efGap$ > 0 ? efGap$ : undefined}
                     />
                     <div className="text-right text-xs text-slate-500 dark:text-slate-400 mt-1">
                       /month
@@ -1335,11 +1341,12 @@ function SavingsAllocatorContent() {
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      const max = Math.min(savingsBudget * 0.4, efGap$ > 0 ? efGap$ : savingsBudget);
+                      const max = efGap$ > 0 ? efGap$ : Infinity;
                       console.log('[Savings Allocator] Plus button clicked for emergency fund:', {
                         currentAmount: amounts.ef,
                         savingsBudget,
                         efGap$,
+                        target40Percent: savingsBudget * 0.4,
                         max,
                       });
                       adjustAmount('ef', 50, 0, max);
@@ -1350,9 +1357,22 @@ function SavingsAllocatorContent() {
                     <Plus className="h-4 w-4" />
                   </Button>
                 </div>
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  {efGap$ > 0 ? `Gap: $${efGap$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : 'Emergency fund target met'}
-                </p>
+                <div className="mt-1 space-y-1">
+                  {efGap$ > 0 ? (
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Gap to target: ${efGap$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-green-600 dark:text-green-400">
+                      ✓ Emergency fund target met
+                    </p>
+                  )}
+                  {amounts.ef > savingsBudget * 0.4 && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      ℹ️ Exceeds 40% target (${(savingsBudget * 0.4).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}). You can allocate more if needed.
+                    </p>
+                  )}
+                </div>
               </div>
 
               {/* High-APR Debt */}
