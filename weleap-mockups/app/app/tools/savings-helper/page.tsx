@@ -1037,11 +1037,18 @@ function SavingsHelperContent() {
     
     // CRITICAL: Also clear custom savings allocation if it exists
     // This ensures savings sub-categories recalculate with new budget
+    // We need to explicitly set it to undefined to clear it
     if (baselineState.safetyStrategy?.customSavingsAllocation) {
-      console.log('[Savings Helper] Clearing custom savings allocation to force recalculation');
-      baselineState.updateSafetyStrategy({
-        customSavingsAllocation: undefined,
+      console.log('[Savings Helper] Clearing custom savings allocation to force recalculation', {
+        currentCustomAlloc: baselineState.safetyStrategy.customSavingsAllocation,
       });
+      // Get current safety strategy and remove customSavingsAllocation
+      const currentStrategy = baselineState.safetyStrategy;
+      baselineState.updateSafetyStrategy({
+        ...currentStrategy,
+        customSavingsAllocation: undefined as any, // Explicitly clear it
+      });
+      console.log('[Savings Helper] Cleared custom savings allocation');
     }
     
     setShowConfirmDialog(false);

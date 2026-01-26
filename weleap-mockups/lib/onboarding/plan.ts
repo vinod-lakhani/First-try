@@ -961,8 +961,7 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
 
   // Use custom savings allocation if provided, otherwise calculate from engine
   // CRITICAL: If custom allocation exists but savings budget changed, we should recalculate
-  // to ensure sub-categories reflect the new budget. For now, always recalculate from engine
-  // to ensure consistency when needs/wants change.
+  // to ensure sub-categories reflect the new budget.
   let savingsAlloc;
   const customAlloc = safetyStrategy?.customSavingsAllocation;
   const customAllocTotal = customAlloc 
@@ -971,7 +970,19 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
   
   // Only use custom allocation if it matches the current savings budget (within tolerance)
   // This ensures that when needs/wants change, the allocation recalculates
-  const budgetMatches = Math.abs(customAllocTotal - monthlySavingsBudget) < 1;
+  // Use a larger tolerance (5%) to account for rounding differences
+  const budgetTolerance = monthlySavingsBudget * 0.05; // 5% tolerance
+  const budgetMatches = Math.abs(customAllocTotal - monthlySavingsBudget) < Math.max(1, budgetTolerance);
+  
+  console.log('[buildFinalPlanData] Checking custom savings allocation:', {
+    hasCustomAlloc: !!customAlloc,
+    customAllocTotal,
+    monthlySavingsBudget,
+    difference: Math.abs(customAllocTotal - monthlySavingsBudget),
+    budgetTolerance,
+    budgetMatches,
+    willRecalculate: !customAlloc || !budgetMatches,
+  });
   
   if (customAlloc && budgetMatches) {
     // Use custom allocation (already in monthly amounts) - budget hasn't changed
