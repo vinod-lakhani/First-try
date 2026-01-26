@@ -247,11 +247,11 @@ function SavingsAllocatorContent() {
         monthly: hsaMonthly,
       },
       employerMatch: {
-        monthly: savingsBreakdown.employerMatchMTD,
+        monthly: savingsBreakdown?.employerMatchMTD || 0,
       },
-      total: savingsBreakdown.preTaxSavingsTotal,
+      total: savingsBreakdown?.preTaxSavingsTotal || 0,
     };
-  }, [baselineState.income, baselineState.payrollContributions, savingsBreakdown.employerMatchMTD, savingsBreakdown.preTaxSavingsTotal]);
+  }, [baselineState.income, baselineState.payrollContributions, savingsBreakdown?.employerMatchMTD, savingsBreakdown?.preTaxSavingsTotal]);
 
   // Calculate post-tax savings available (cash that can be allocated) - use centralized calculation
   const postTaxSavingsAvailable = savingsBreakdown.cashSavingsMTD;
@@ -808,6 +808,16 @@ function SavingsAllocatorContent() {
       return;
     }
     
+    // Safety check for preTaxSavings
+    if (!preTaxSavings || !preTaxSavings.employerMatch) {
+      console.error('[Savings Allocator] Cannot confirm: preTaxSavings is not available', {
+        preTaxSavings,
+        hasPreTaxSavings: !!preTaxSavings,
+        hasEmployerMatch: !!preTaxSavings?.employerMatch,
+      });
+      return;
+    }
+    
     console.log('[Savings Allocator] Confirming changes:', {
       customAllocation,
       amounts,
@@ -819,30 +829,35 @@ function SavingsAllocatorContent() {
     const customSavingsAllocation = {
       ef$: customAllocation.ef$,
       highAprDebt$: customAllocation.highAprDebt$,
-      match401k$: preTaxSavings.employerMatch.monthly, // Pre-tax match, not post-tax
+      match401k$: preTaxSavings.employerMatch.monthly || 0, // Pre-tax match, not post-tax
       retirementTaxAdv$: customAllocation.retirementTaxAdv$,
       brokerage$: customAllocation.brokerage$,
     };
     
     console.log('[Savings Allocator] Saving customSavingsAllocation:', customSavingsAllocation);
     
-    baselineState.updateSafetyStrategy({
-      customSavingsAllocation,
-    });
-    
-    // Clear initialPaycheckPlan to force recalculation
-    baselineState.setInitialPaycheckPlan(undefined as any);
-    
-    console.log('[Savings Allocator] Saved customSavingsAllocation, verifying:', {
-      saved: baselineState.safetyStrategy?.customSavingsAllocation,
-    });
-    
-    setShowConfirmDialog(false);
-    
-    // Use setTimeout to allow state to update before navigation
-    setTimeout(() => {
-      router.push('/app/income'); // Navigate to Income tab to see the changes
-    }, 100);
+    try {
+      baselineState.updateSafetyStrategy({
+        customSavingsAllocation,
+      });
+      
+      // Clear initialPaycheckPlan to force recalculation
+      baselineState.setInitialPaycheckPlan(undefined as any);
+      
+      console.log('[Savings Allocator] Saved customSavingsAllocation, verifying:', {
+        saved: baselineState.safetyStrategy?.customSavingsAllocation,
+      });
+      
+      setShowConfirmDialog(false);
+      
+      // Use setTimeout to allow state to update before navigation
+      setTimeout(() => {
+        router.push('/app/income'); // Navigate to Income tab to see the changes
+      }, 100);
+    } catch (error) {
+      console.error('[Savings Allocator] Error saving customSavingsAllocation:', error);
+      alert('Failed to save changes. Please try again.');
+    }
   };
 
   const handleApply = () => {
