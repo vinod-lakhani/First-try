@@ -41,6 +41,10 @@ function SavingsAllocatorContent() {
   const baselinePlanDataFromHook = usePlanData();
   const baselinePlanData = baselinePlanDataFromHook;
   
+  // Calculate paychecks per month - MUST be before any hooks that use it
+  const paychecksPerMonth = getPaychecksPerMonth(baselineState.income?.payFrequency || 'biweekly');
+  const monthlyIncome = (baselineState.income?.netIncome$ || baselineState.income?.grossIncome$ || 0) * paychecksPerMonth;
+  
   // Debug: Log when planData changes
   useEffect(() => {
     console.log('[Savings Allocator] baselinePlanData changed:', {
@@ -54,9 +58,6 @@ function SavingsAllocatorContent() {
       })),
     });
   }, [baselinePlanData, baselineState.riskConstraints, paychecksPerMonth]);
-
-  const paychecksPerMonth = getPaychecksPerMonth(baselineState.income?.payFrequency || 'biweekly');
-  const monthlyIncome = (baselineState.income?.netIncome$ || baselineState.income?.grossIncome$ || 0) * paychecksPerMonth;
 
   // Get baseline savings budget and allocation details
   // CRITICAL: This must recalculate when planData changes (which happens when riskConstraints change)
