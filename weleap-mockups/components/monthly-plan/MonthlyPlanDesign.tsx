@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { MouseEvent } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -47,6 +47,11 @@ const MonthlyPlanDesign: React.FC<MonthlyPlanDesignProps> = ({
   const [needs, setNeeds] = useState(recommendedNeeds ?? currentNeeds);
   const [wants, setWants] = useState(recommendedWants ?? currentWants);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+
+  // Debug: Log when dialog state changes
+  useEffect(() => {
+    console.log('[MonthlyPlanDesign] showConfirmDialog state:', showConfirmDialog);
+  }, [showConfirmDialog]);
 
   // Derived values
   const expenses = needs + wants;
@@ -111,6 +116,7 @@ const MonthlyPlanDesign: React.FC<MonthlyPlanDesignProps> = ({
     e.preventDefault();
     e.stopPropagation();
     // Show confirmation dialog instead of immediately saving
+    console.log('[MonthlyPlanDesign] handleSave called, showing confirmation dialog');
     setShowConfirmDialog(true);
   };
 
@@ -414,23 +420,31 @@ const MonthlyPlanDesign: React.FC<MonthlyPlanDesignProps> = ({
             onClick={handleSave} 
             size="lg" 
             className="w-full"
+            disabled={showConfirmDialog}
           >
-            Allocate my savings
+            {showConfirmDialog ? 'Reviewing Changes...' : 'Allocate my savings'}
           </Button>
-          <Button
-            variant="ghost"
-            size="lg"
-            className="w-full"
-            onClick={handleReset}
-          >
-            Reset to Recommended
-          </Button>
+          {!showConfirmDialog && (
+            <Button
+              variant="ghost"
+              size="lg"
+              className="w-full"
+              onClick={handleReset}
+            >
+              Reset to Recommended
+            </Button>
+          )}
         </div>
 
         {/* Confirmation Dialog */}
         {showConfirmDialog && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <Card className="w-full max-w-md">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onClick={(e) => {
+            // Close dialog if clicking on backdrop
+            if (e.target === e.currentTarget) {
+              handleCancelSave();
+            }
+          }}>
+            <Card className="w-full max-w-md z-[101]" onClick={(e) => e.stopPropagation()}>
               <CardHeader>
                 <CardTitle className="text-xl">Confirm Changes</CardTitle>
               </CardHeader>
