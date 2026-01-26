@@ -960,33 +960,40 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
   });
 
   // Use custom savings allocation if provided, otherwise calculate from engine
-  // CRITICAL: If custom allocation exists but savings budget changed, we should recalculate
-  // to ensure sub-categories reflect the new budget.
+  // CRITICAL: Always use custom allocation if it exists - user explicitly set these values
+  // The budget matching was too strict and causing custom allocations to be ignored
   let savingsAlloc;
   const customAlloc = safetyStrategy?.customSavingsAllocation;
   const customAllocTotal = customAlloc 
     ? (customAlloc.ef$ + customAlloc.highAprDebt$ + customAlloc.match401k$ + customAlloc.retirementTaxAdv$ + customAlloc.brokerage$)
     : 0;
   
-  // Only use custom allocation if it matches the current savings budget (within tolerance)
-  // This ensures that when needs/wants change, the allocation recalculates
-  // Use a larger tolerance (5%) to account for rounding differences
-  const budgetTolerance = monthlySavingsBudget * 0.05; // 5% tolerance
-  const budgetMatches = customAllocTotal > 0 && Math.abs(customAllocTotal - monthlySavingsBudget) < Math.max(1, budgetTolerance);
+  // Calculate post-tax portion of custom allocation (exclude pre-tax match401k$)
+  // This is what should match the monthlySavingsBudget (which is post-tax)
+  const customAllocPostTax = customAlloc 
+    ? (customAlloc.ef$ + customAlloc.highAprDebt$ + customAlloc.retirementTaxAdv$ + customAlloc.brokerage$)
+    : 0;
+  
+  // Use a larger tolerance (10%) to account for rounding differences and pre-tax/post-tax differences
+  // The match401k$ is pre-tax, so it shouldn't be compared to the post-tax budget
+  const budgetTolerance = monthlySavingsBudget * 0.10; // 10% tolerance
+  const budgetMatches = customAllocPostTax > 0 && Math.abs(customAllocPostTax - monthlySavingsBudget) < Math.max(1, budgetTolerance);
   
   console.log('[buildFinalPlanData] Checking custom savings allocation:', {
     hasCustomAlloc: !!customAlloc,
     customAllocTotal,
+    customAllocPostTax,
     monthlySavingsBudget,
-    difference: Math.abs(customAllocTotal - monthlySavingsBudget),
+    difference: Math.abs(customAllocPostTax - monthlySavingsBudget),
     budgetTolerance,
     budgetMatches,
-    willRecalculate: !customAlloc || !budgetMatches,
+    willUseCustom: !!customAlloc,
     riskConstraints: riskConstraints?.targets,
     riskConstraintsActuals3m: riskConstraints?.actuals3m,
   });
   
-  if (customAlloc && budgetMatches) {
+  // ALWAYS use custom allocation if it exists - user explicitly set these values in savings allocator
+  if (customAlloc) {
     // Use custom allocation (already in monthly amounts) - budget hasn't changed
     // Calculate routing info from the allocation percentages
     const totalRetirement = customAlloc.match401k$ + customAlloc.retirementTaxAdv$;
@@ -1012,17 +1019,15 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
       },
       notes: ['Using custom savings allocation from user adjustments'],
     };
-    console.log('[buildFinalPlanData] Using custom savings allocation (budget matches):', savingsAlloc);
+    console.log('[buildFinalPlanData] Using custom savings allocation (user-set values):', {
+      savingsAlloc,
+      customAlloc,
+      budgetMatches,
+      note: budgetMatches ? 'Budget matches' : 'Using custom allocation despite budget difference',
+    });
   } else {
-    // Calculate from engine - either no custom allocation or budget changed
-    if (customAlloc && !budgetMatches) {
-      console.log('[buildFinalPlanData] Custom allocation exists but budget changed, recalculating:', {
-        customAllocTotal,
-        monthlySavingsBudget,
-        difference: monthlySavingsBudget - customAllocTotal,
-        reason: customAllocTotal === 0 ? 'customAllocTotal is 0' : 'budget mismatch',
-      });
-    }
+    // Calculate from engine - no custom allocation exists
+    console.log('[buildFinalPlanData] No custom allocation, calculating from engine');
     savingsAlloc = allocateSavings({
       savingsBudget$: monthlySavingsBudget,
       efTarget$,
