@@ -59,8 +59,12 @@ function SavingsAllocatorContent() {
   const monthlyIncome = (baselineState.income?.netIncome$ || baselineState.income?.grossIncome$ || 0) * paychecksPerMonth;
 
   // Get baseline savings budget and allocation details
+  // CRITICAL: This must recalculate when planData changes (which happens when riskConstraints change)
   const baselineSavingsData = useMemo(() => {
-    if (!baselinePlanData) return null;
+    if (!baselinePlanData) {
+      console.log('[Savings Allocator] No baselinePlanData, baselineSavingsData = null');
+      return null;
+    }
 
     const savingsCategories = baselinePlanData.paycheckCategories.filter(c => 
       c.key === 'emergency' || c.key === 'long_term_investing' || c.key === 'debt_extra'
@@ -90,7 +94,7 @@ function SavingsAllocatorContent() {
       brokerage$ = (brokerageSub?.amount || 0) * paychecksPerMonth;
     }
 
-    return {
+    const result = {
       monthlySavings,
       ef$: (emergencyCategory?.amount || 0) * paychecksPerMonth,
       debt$: (debtExtraCategory?.amount || 0) * paychecksPerMonth,
@@ -98,7 +102,17 @@ function SavingsAllocatorContent() {
       retirementTaxAdv$,
       brokerage$,
     };
-  }, [baselinePlanData, paychecksPerMonth]);
+    
+    console.log('[Savings Allocator] Calculated baselineSavingsData:', {
+      result,
+      emergencyCategoryAmount: emergencyCategory?.amount,
+      debtExtraCategoryAmount: debtExtraCategory?.amount,
+      longTermCategorySubCategories: longTermCategory?.subCategories,
+      riskConstraints: baselineState.riskConstraints,
+    });
+    
+    return result;
+  }, [baselinePlanData, paychecksPerMonth, baselineState.riskConstraints]);
 
   // Get EF and debt data for caps
   const efTargetMonths = baselineState.safetyStrategy?.efTargetMonths || 3;
