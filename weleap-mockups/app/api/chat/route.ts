@@ -1978,7 +1978,7 @@ The user is in the onboarding flow, which guides them through setting up their f
       prompt += `- The Recommended Plan (Bar 3) starts from Current Plan (Bar 2), NOT from Past 3 Months Average (Bar 1)\n\n`;
     }
     
-    // Actual Spending (3-month averages if available) - only show if not already shown above
+    // Actual Spending (3-month averages if available) - show alongside current plan
     if (context !== 'savings-helper' && userPlanData.actualSpending) {
       const actuals = userPlanData.actualSpending;
       prompt += `**Actual Spending (3-month average):**\n`;
@@ -2003,6 +2003,7 @@ The user is in the onboarding flow, which guides them through setting up their f
         }
         prompt += `\n`;
       }
+      prompt += `- **CRITICAL**: When users ask "what is my income breakdown", show BOTH this 3-month average AND the current month allocation from "Monthly Spending" section above\n`;
       prompt += `\n`;
     }
 
