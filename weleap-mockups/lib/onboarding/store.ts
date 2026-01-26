@@ -246,16 +246,35 @@ export const useOnboardingStore = create<OnboardingStore>()(
   updateRiskConstraints: (updates) =>
     set((state) => {
       // Create a new object to ensure Zustand detects the change
-      const newRiskConstraints = state.riskConstraints
-        ? { ...state.riskConstraints, ...updates }
-        : updates as RiskConstraints;
+      const existing = state.riskConstraints;
+      const newRiskConstraints: RiskConstraints = existing
+        ? { ...existing }
+        : {
+            shiftLimitPct: 0.04,
+            targets: { needsPct: 0.5, wantsPct: 0.3, savingsPct: 0.2 },
+          };
+      
+      // Apply updates, ensuring nested objects are deep cloned
+      Object.assign(newRiskConstraints, updates);
       
       // Deep clone nested objects (targets, actuals3m) to ensure change detection
       if (updates.targets) {
         newRiskConstraints.targets = { ...updates.targets };
+      } else if (existing?.targets) {
+        newRiskConstraints.targets = { ...existing.targets };
       }
+      
       if (updates.actuals3m) {
         newRiskConstraints.actuals3m = { ...updates.actuals3m };
+      } else if (existing?.actuals3m) {
+        newRiskConstraints.actuals3m = { ...existing.actuals3m };
+      }
+      
+      // Deep clone assumptions if they exist
+      if (updates.assumptions) {
+        newRiskConstraints.assumptions = { ...(existing?.assumptions || {}), ...updates.assumptions };
+      } else if (existing?.assumptions) {
+        newRiskConstraints.assumptions = { ...existing.assumptions };
       }
       
       return { riskConstraints: newRiskConstraints };
