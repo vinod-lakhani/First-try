@@ -1035,6 +1035,15 @@ function SavingsHelperContent() {
     baselineState.setInitialPaycheckPlan(undefined);
     console.log('[Savings Helper] Cleared initialPaycheckPlan');
     
+    // CRITICAL: Also clear custom savings allocation if it exists
+    // This ensures savings sub-categories recalculate with new budget
+    if (baselineState.safetyStrategy?.customSavingsAllocation) {
+      console.log('[Savings Helper] Clearing custom savings allocation to force recalculation');
+      baselineState.updateSafetyStrategy({
+        customSavingsAllocation: undefined,
+      });
+    }
+    
     setShowConfirmDialog(false);
     router.push('/app/home');
   };

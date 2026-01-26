@@ -40,6 +40,20 @@ function SavingsAllocatorContent() {
   // Use centralized hook for baseline plan data
   const baselinePlanDataFromHook = usePlanData();
   const baselinePlanData = baselinePlanDataFromHook;
+  
+  // Debug: Log when planData changes
+  useEffect(() => {
+    console.log('[Savings Allocator] baselinePlanData changed:', {
+      hasPlanData: !!baselinePlanData,
+      categoriesCount: baselinePlanData?.paycheckCategories.length,
+      riskConstraints: baselineState.riskConstraints,
+      categories: baselinePlanData?.paycheckCategories.map(c => ({
+        key: c.key,
+        amount: c.amount,
+        monthly: c.amount * paychecksPerMonth,
+      })),
+    });
+  }, [baselinePlanData, baselineState.riskConstraints, paychecksPerMonth]);
 
   const paychecksPerMonth = getPaychecksPerMonth(baselineState.income?.payFrequency || 'biweekly');
   const monthlyIncome = (baselineState.income?.netIncome$ || baselineState.income?.grossIncome$ || 0) * paychecksPerMonth;
@@ -238,6 +252,12 @@ function SavingsAllocatorContent() {
     cashSavingsMTD: savingsBreakdown.cashSavingsMTD,
     postTaxSavingsAvailable,
     riskConstraints: baselineState.riskConstraints,
+    planDataCategories: baselinePlanData?.paycheckCategories.map(c => ({
+      key: c.key,
+      label: c.label,
+      amount: c.amount,
+      monthly: c.amount * paychecksPerMonth,
+    })),
   });
 
 
@@ -419,10 +439,20 @@ function SavingsAllocatorContent() {
 
   // Use post-tax savings available as the budget for allocation
   const savingsBudget = useMemo(() => {
-    if (!baselineSavingsData) return 0;
+    if (!baselineSavingsData) {
+      console.log('[Savings Allocator] No baselineSavingsData, savingsBudget = 0');
+      return 0;
+    }
     // Use post-tax available for post-tax allocation
-    return postTaxSavingsAvailable || baselineSavingsData.monthlySavings;
-  }, [baselineSavingsData, postTaxSavingsAvailable]);
+    const budget = postTaxSavingsAvailable || baselineSavingsData.monthlySavings;
+    console.log('[Savings Allocator] Calculated savingsBudget:', {
+      postTaxSavingsAvailable,
+      baselineSavingsDataMonthlySavings: baselineSavingsData.monthlySavings,
+      savingsBudget: budget,
+      riskConstraints: baselineState.riskConstraints,
+    });
+    return budget;
+  }, [baselineSavingsData, postTaxSavingsAvailable, baselineState.riskConstraints]);
 
   // Calculate desired total from amounts
   const desiredTotalFromAmounts = useMemo(() => {
