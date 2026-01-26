@@ -33,6 +33,16 @@ export interface SavingsInputs {
   iraRoomThisYear$?: number;
   /** Remaining 401(k) contribution room this year (beyond match) */
   k401RoomThisYear$?: number;
+  /** Whether user is eligible for HSA (has HDHP) */
+  hsaEligible?: boolean;
+  /** HSA coverage type: self, family, or unknown */
+  hsaCoverageType?: "self" | "family" | "unknown";
+  /** Current HSA contribution per month (if contributing) */
+  currentHSAMonthly$?: number;
+  /** Remaining HSA contribution room this year (annual cap - current contributions) */
+  hsaRoomThisYear$?: number;
+  /** Whether user is tax-efficiency focused or has high medical spend (for HSA recommendation) */
+  prioritizeHSA?: boolean;
 }
 
 export interface SavingsAllocation {
@@ -42,6 +52,8 @@ export interface SavingsAllocation {
   highAprDebt$: number;
   /** Dollars allocated to 401(k) for employer match */
   match401k$: number;
+  /** Dollars allocated to HSA (if eligible) */
+  hsa$: number;
   /** Dollars allocated to tax-advantaged retirement accounts */
   retirementTaxAdv$: number;
   /** Dollars allocated to taxable brokerage */
@@ -110,15 +122,16 @@ function chooseAccountType(
 }
 
 /**
- * Allocates savings budget across emergency fund, debt, match, retirement, and brokerage.
+ * Allocates savings budget across emergency fund, debt, match, HSA, retirement, and brokerage.
  * 
- * Priority order:
- * 1. Emergency Fund (up to 40% of budget or EF gap)
- * 2. High-APR Debt (up to 40% of remaining or debt balance)
- * 3. 401(k) Match (allocate to capture full match)
- * 4. Choose account type (Roth vs Traditional401k)
- * 5. Split remaining between retirement and brokerage
- * 6. Route retirement dollars to IRA first, then 401(k), spill to brokerage
+ * Priority order (Savings Stack):
+ * 1. 401(k) Match (capture employer match)
+ * 2. HSA (if eligible, fund HSA)
+ * 3. Emergency Fund (up to 40% of budget or EF gap)
+ * 4. High-APR Debt (up to 40% of remaining or debt balance)
+ * 5. Choose account type (Roth vs Traditional401k)
+ * 6. Split remaining between retirement and brokerage
+ * 7. Route retirement dollars to IRA first, then 401(k), spill to brokerage
  */
 export function allocateSavings(s: SavingsInputs): SavingsAllocation {
   const {
@@ -133,12 +146,54 @@ export function allocateSavings(s: SavingsInputs): SavingsAllocation {
     retirementFocus = 'Medium',
     iraRoomThisYear$ = 7000,
     k401RoomThisYear$ = 23000,
+    hsaEligible = false,
+    hsaCoverageType = "unknown",
+    currentHSAMonthly$ = 0,
+    hsaRoomThisYear$ = 0,
+    prioritizeHSA = false,
   } = s;
   
   const notes: string[] = [];
   let remaining$ = round2(savingsBudget$);
   
-  // Step 1: Emergency Fund
+  // Step 1: 401(k) Match (capture employer match first)
+  const matchAlloc$ = round2(Math.min(matchNeedThisPeriod$, remaining$));
+  remaining$ = round2(remaining$ - matchAlloc$);
+  
+  if (matchAlloc$ > 0) {
+    notes.push(`Allocated $${matchAlloc$.toFixed(2)} to 401(k) for employer match`);
+  }
+  if (matchNeedThisPeriod$ > 0 && matchAlloc$ < matchNeedThisPeriod$) {
+    notes.push(`Warning: Could not fully capture match (need $${matchNeedThisPeriod$.toFixed(2)})`);
+  }
+  
+  // Step 2: HSA (if eligible)
+  let hsaAlloc$ = 0;
+  if (hsaEligible && hsaRoomThisYear$ > 0) {
+    // Calculate recommended HSA amount
+    // MVP: Baseline $50-200/month, or more if prioritizeHSA
+    const baselineHSA$ = prioritizeHSA ? 200 : 100; // $100/month baseline, $200 if prioritizing
+    const monthsRemainingInYear = 12; // Simplified - could calculate actual months remaining
+    const remainingHsaRoomMonthly$ = hsaRoomThisYear$ / monthsRemainingInYear;
+    
+    // Clamp recommendation to remaining room
+    const recommendedHsaMonthly$ = round2(Math.min(baselineHSA$, remainingHsaRoomMonthly$));
+    
+    // Allocate from remaining budget
+    hsaAlloc$ = round2(Math.min(recommendedHsaMonthly$, remaining$));
+    remaining$ = round2(remaining$ - hsaAlloc$);
+    
+    if (hsaAlloc$ > 0) {
+      notes.push(`Allocated $${hsaAlloc$.toFixed(2)} to HSA (${hsaCoverageType} coverage)`);
+    }
+    if (remainingHsaRoomMonthly$ <= 0) {
+      notes.push(`HSA maxed for this year - routing additional dollars to next stack item`);
+    }
+  } else if (hsaEligible && hsaRoomThisYear$ <= 0) {
+    notes.push(`HSA maxed for this year`);
+  }
+  
+  // Step 3: Emergency Fund
   const efGap$ = round2(Math.max(0, efTarget$ - efBalance$));
   const efCap$ = round2(savingsBudget$ * 0.40);
   const efAlloc$ = round2(Math.min(efGap$, efCap$, remaining$));
@@ -151,7 +206,7 @@ export function allocateSavings(s: SavingsInputs): SavingsAllocation {
     notes.push(`EF gap partially filled (${efAlloc$.toFixed(2)}/${efGap$.toFixed(2)})`);
   }
   
-  // Step 2: High-APR Debt
+  // Step 4: High-APR Debt
   const totalDebtBalance$ = round2(
     highAprDebts.reduce((sum, debt) => sum + debt.balance$, 0)
   );
@@ -164,17 +219,6 @@ export function allocateSavings(s: SavingsInputs): SavingsAllocation {
   }
   if (totalDebtBalance$ > 0 && debtAlloc$ < totalDebtBalance$) {
     notes.push(`High-APR debt partially paid (${debtAlloc$.toFixed(2)}/${totalDebtBalance$.toFixed(2)})`);
-  }
-  
-  // Step 3: 401(k) Match
-  const matchAlloc$ = round2(Math.min(matchNeedThisPeriod$, remaining$));
-  remaining$ = round2(remaining$ - matchAlloc$);
-  
-  if (matchAlloc$ > 0) {
-    notes.push(`Allocated $${matchAlloc$.toFixed(2)} to 401(k) for employer match`);
-  }
-  if (matchNeedThisPeriod$ > 0 && matchAlloc$ < matchNeedThisPeriod$) {
-    notes.push(`Warning: Could not fully capture match (need $${matchNeedThisPeriod$.toFixed(2)})`);
   }
   
   // Step 4: Choose account type
@@ -235,7 +279,7 @@ export function allocateSavings(s: SavingsInputs): SavingsAllocation {
   
   // Reconcile rounding
   const currentTotal = round2(
-    efAlloc$ + debtAlloc$ + matchAlloc$ + retirementTaxAdv$ + totalBrokerage$
+    efAlloc$ + debtAlloc$ + matchAlloc$ + hsaAlloc$ + retirementTaxAdv$ + totalBrokerage$
   );
   const roundingDiff = round2(savingsBudget$ - currentTotal);
   
@@ -245,7 +289,7 @@ export function allocateSavings(s: SavingsInputs): SavingsAllocation {
     
     // Final validation
     const finalTotal = round2(
-      efAlloc$ + debtAlloc$ + matchAlloc$ + retirementTaxAdv$ + finalBrokerage$
+      efAlloc$ + debtAlloc$ + matchAlloc$ + hsaAlloc$ + retirementTaxAdv$ + finalBrokerage$
     );
     
     if (Math.abs(finalTotal - savingsBudget$) > 0.01) {
@@ -258,6 +302,7 @@ export function allocateSavings(s: SavingsInputs): SavingsAllocation {
       ef$: round2(efAlloc$),
       highAprDebt$: round2(debtAlloc$),
       match401k$: round2(matchAlloc$),
+      hsa$: round2(hsaAlloc$),
       retirementTaxAdv$: round2(retirementTaxAdv$),
       brokerage$: round2(finalBrokerage$),
       routing: {
@@ -273,6 +318,7 @@ export function allocateSavings(s: SavingsInputs): SavingsAllocation {
     ef$: round2(efAlloc$),
     highAprDebt$: round2(debtAlloc$),
     match401k$: round2(matchAlloc$),
+    hsa$: round2(hsaAlloc$),
     retirementTaxAdv$: round2(retirementTaxAdv$),
     brokerage$: round2(totalBrokerage$),
     routing: {

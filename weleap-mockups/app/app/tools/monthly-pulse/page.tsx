@@ -232,6 +232,7 @@ export default function MonthlyPulsePage() {
   const observedCashSavingsMTD = savingsBreakdown.cashSavingsMTD;
   const expectedPayrollSavingsMTD = savingsBreakdown.payrollSavingsMTD;
   const expectedMatchMTD = savingsBreakdown.employerMatchMTD;
+  const expectedEmployerHSAMTD = savingsBreakdown.employerHSAMTD;
   const totalSavingsMTD = savingsBreakdown.totalSavingsMTD;
 
   // Calculate targets
@@ -549,13 +550,26 @@ export default function MonthlyPulsePage() {
                       </div>
                     )}
 
-                    {/* Employer Match */}
+                    {/* Employer 401K Match */}
                     {expectedMatchMTD > 0 && (
                       <div className="text-xs">
                         <div className="flex justify-between">
-                          <span className="text-slate-600 dark:text-slate-400">Employer match:</span>
+                          <span className="text-slate-600 dark:text-slate-400">Employer 401K match:</span>
                           <span className="font-medium text-green-600 dark:text-green-400">
                             +{formatCurrency(expectedMatchMTD)}
+                          </span>
+                        </div>
+                        <div className="text-slate-500 dark:text-slate-400 italic">estimated</div>
+                      </div>
+                    )}
+
+                    {/* Employer HSA */}
+                    {expectedEmployerHSAMTD > 0 && (
+                      <div className="text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-slate-600 dark:text-slate-400">Employer HSA:</span>
+                          <span className="font-medium text-green-600 dark:text-green-400">
+                            +{formatCurrency(expectedEmployerHSAMTD)}
                           </span>
                         </div>
                         <div className="text-slate-500 dark:text-slate-400 italic">estimated</div>
@@ -565,7 +579,7 @@ export default function MonthlyPulsePage() {
                     {/* Total Savings */}
                     <div className="text-xs pt-2 border-t border-slate-200 dark:border-slate-700">
                       <div className="flex justify-between font-semibold">
-                        <span className="text-slate-700 dark:text-slate-300">Total Savings (Cash + Payroll + Match):</span>
+                        <span className="text-slate-700 dark:text-slate-300">Total Savings (Cash + Payroll + Employer 401K Match + Employee HSA + Employer HSA):</span>
                         <span className="text-slate-900 dark:text-white">
                           {formatCurrency(totalSavingsMTD)}
                         </span>

@@ -116,6 +116,9 @@ export default function SavingsPlanPage() {
     employerMatch: {
       monthly: savingsBreakdown.employerMatchMTD,
     },
+    employerHSA: {
+      monthly: savingsBreakdown.employerHSAMTD,
+    },
     total: savingsBreakdown.preTaxSavingsTotal,
   };
   
@@ -192,6 +195,82 @@ export default function SavingsPlanPage() {
     return false;
   }, [matchRecommendation, payrollContributions, income, preTaxSavings]);
 
+  // Calculate HSA recommendation
+  // Show recommendation if:
+  // 1. User is HSA eligible (has HDHP), OR
+  // 2. User has employer HSA contribution (indicates eligibility)
+  const hsaRecommendation = useMemo(() => {
+    if (!payrollContributions || !income) return null;
+    
+    // Check eligibility: explicit hsaEligible flag OR has employer HSA contribution (indicates eligibility)
+    const isEligible = payrollContributions.hsaEligible === true || 
+                       (payrollContributions.employerHSAContribution === "yes" && (payrollContributions.employerHSAAmount$ || 0) > 0);
+    
+    if (!isEligible) return null;
+    
+    const paychecksPerMonth = getPaychecksPerMonth(income.payFrequency || 'biweekly');
+    const grossIncomePerPaycheck = income.grossIncome$ || income.netIncome$ || 0;
+    const grossIncomeMonthly = grossIncomePerPaycheck * paychecksPerMonth;
+    
+    // HSA annual limits (2025)
+    const hsaCoverageType = payrollContributions.hsaCoverageType || "unknown";
+    const hsaAnnualLimits = {
+      self: 4300,
+      family: 8550,
+      unknown: 4300,
+    };
+    const hsaAnnualLimit$ = hsaAnnualLimits[hsaCoverageType];
+    
+    // Calculate current HSA contribution
+    let currentHSAMonthly$ = 0;
+    if (payrollContributions.currentlyContributingHSA === "yes") {
+      if (payrollContributions.contributionTypeHSA === "percent_gross" && payrollContributions.contributionValueHSA) {
+        currentHSAMonthly$ = (grossIncomeMonthly * payrollContributions.contributionValueHSA) / 100;
+      } else if (payrollContributions.contributionTypeHSA === "amount" && payrollContributions.contributionValueHSA) {
+        if (payrollContributions.contributionFrequencyHSA === "per_paycheck") {
+          currentHSAMonthly$ = payrollContributions.contributionValueHSA * paychecksPerMonth;
+        } else if (payrollContributions.contributionFrequencyHSA === "per_month") {
+          currentHSAMonthly$ = payrollContributions.contributionValueHSA;
+        }
+      }
+    }
+    
+    const currentHSAAnnual$ = currentHSAMonthly$ * 12;
+    const hsaRoomThisYear$ = Math.max(0, hsaAnnualLimit$ - currentHSAAnnual$);
+    const monthsRemainingInYear = 12; // Simplified
+    const remainingHsaRoomMonthly$ = hsaRoomThisYear$ / monthsRemainingInYear;
+    
+    // MVP recommendation: Baseline $50-200/month, or more if prioritizeHSA
+    const prioritizeHSA = safetyStrategy?.retirementFocus === "High" || safetyStrategy?.retirementFocus === "Medium";
+    const baselineHSA$ = prioritizeHSA ? 200 : 100;
+    const recommendedHsaMonthly$ = Math.min(baselineHSA$, remainingHsaRoomMonthly$);
+    
+    // Only recommend if there's room and recommended amount > current
+    // If user is not contributing (currentHSAMonthly$ === 0) and there's room, show recommendation
+    if (remainingHsaRoomMonthly$ <= 0 || recommendedHsaMonthly$ <= currentHSAMonthly$) {
+      return null;
+    }
+    
+    const deltaHSAMonthly$ = recommendedHsaMonthly$ - currentHSAMonthly$;
+    const hsaTaxSavings$ = deltaHSAMonthly$ * ESTIMATED_MARGINAL_TAX_RATE;
+    const hsaPostTaxAvailableDelta$ = -deltaHSAMonthly$ + hsaTaxSavings$;
+    const employerHSAMonthly$ = payrollContributions.employerHSAAmount$ || 0;
+    const hsaWealthMoveDelta$ = deltaHSAMonthly$ + employerHSAMonthly$;
+    
+    return {
+      currentHSAMonthly$,
+      recommendedHsaMonthly$,
+      deltaHSAMonthly$,
+      hsaTaxSavings$,
+      hsaPostTaxAvailableDelta$,
+      hsaWealthMoveDelta$,
+      remainingHsaRoomMonthly$,
+      hsaRoomThisYear$,
+      hsaAnnualLimit$,
+      hsaCoverageType,
+    };
+  }, [payrollContributions, income, safetyStrategy?.retirementFocus]);
+
   // Handle "Capture my match" button
   const handleCaptureMatch = () => {
     if (!matchRecommendation || !payrollContributions) return;
@@ -228,6 +307,32 @@ export default function SavingsPlanPage() {
     setShowImpactPreview(true);
   };
 
+  // Handle "Fund HSA" button
+  const handleFundHSA = () => {
+    if (!hsaRecommendation || !payrollContributions) return;
+
+    // Update payroll contributions to set HSA contribution
+    updatePayrollContributions({
+      currentlyContributingHSA: "yes",
+      contributionTypeHSA: "amount",
+      contributionValueHSA: hsaRecommendation.recommendedHsaMonthly$,
+      contributionFrequencyHSA: "per_month",
+    });
+
+    // Clear initialPaycheckPlan to force recalculation
+    setInitialPaycheckPlan(undefined as any);
+
+    // Show impact preview
+    setImpactPreviewData({
+      deltaPreTax: hsaRecommendation.deltaHSAMonthly$,
+      deltaMatch: 0,
+      taxSavings: hsaRecommendation.hsaTaxSavings$,
+      deltaPostTax: hsaRecommendation.hsaPostTaxAvailableDelta$,
+      deltaTotalWealth: hsaRecommendation.hsaWealthMoveDelta$,
+    });
+    setShowImpactPreview(true);
+  };
+
   // Calculate post-tax savings available (cash that can be allocated) - use centralized calculation
   const postTaxSavingsAvailable = savingsBreakdown.cashSavingsMTD;
   
@@ -246,9 +351,9 @@ export default function SavingsPlanPage() {
   const totalWealthMoves = useMemo(() => {
     if (!savingsAlloc) return 0;
     
-    // Total wealth moves = pre-tax + post-tax + employer match + extra debt paydown
+    // Total wealth moves = Pre-tax Payroll Savings + Employer 401K Match + Employee HSA + Employer HSA + Post-tax
     const postTaxTotal = savingsAlloc.ef$ + savingsAlloc.highAprDebt$ + savingsAlloc.retirementTaxAdv$ + savingsAlloc.brokerage$;
-    return preTaxSavings.total + postTaxTotal + preTaxSavings.employerMatch.monthly;
+    return preTaxSavings.total + postTaxTotal + preTaxSavings.employerMatch.monthly + preTaxSavings.employerHSA.monthly;
   }, [savingsAlloc, preTaxSavings]);
 
   // Calculate EF target and current balance
@@ -292,6 +397,42 @@ export default function SavingsPlanPage() {
     if (postTaxSavingsAvailable > 0 && income) {
       setIsGenerating(true);
       try {
+        // Calculate HSA eligibility and room
+        const hsaEligible = payrollContributions?.hsaEligible === true;
+        const hsaCoverageType = payrollContributions?.hsaCoverageType || "unknown";
+        
+        // HSA annual limits (2025)
+        const hsaAnnualLimits = {
+          self: 4300,
+          family: 8550,
+          unknown: 4300, // Default to self if unknown
+        };
+        const hsaAnnualLimit$ = hsaAnnualLimits[hsaCoverageType];
+        
+        // Calculate current HSA contribution (annual)
+        let currentHSAMonthly$ = 0;
+        if (payrollContributions?.hasHSA && payrollContributions?.currentlyContributingHSA === "yes") {
+          const paychecksPerMonthForHSA = getPaychecksPerMonth(income.payFrequency || 'biweekly');
+          const grossIncomePerPaycheck = income.grossIncome$ || income.netIncome$ || 0;
+          const grossIncomeMonthly = grossIncomePerPaycheck * paychecksPerMonthForHSA;
+          
+          if (payrollContributions.contributionTypeHSA === "percent_gross" && payrollContributions.contributionValueHSA) {
+            currentHSAMonthly$ = (grossIncomeMonthly * payrollContributions.contributionValueHSA) / 100;
+          } else if (payrollContributions.contributionTypeHSA === "amount" && payrollContributions.contributionValueHSA) {
+            if (payrollContributions.contributionFrequencyHSA === "per_paycheck") {
+              currentHSAMonthly$ = payrollContributions.contributionValueHSA * paychecksPerMonthForHSA;
+            } else if (payrollContributions.contributionFrequencyHSA === "per_month") {
+              currentHSAMonthly$ = payrollContributions.contributionValueHSA;
+            }
+          }
+        }
+        
+        const currentHSAAnnual$ = currentHSAMonthly$ * 12;
+        const hsaRoomThisYear$ = Math.max(0, hsaAnnualLimit$ - currentHSAAnnual$);
+        
+        // Determine if user should prioritize HSA
+        const prioritizeHSA = safetyStrategy?.retirementFocus === "High" || safetyStrategy?.retirementFocus === "Medium";
+
         const inputs: SavingsInputs = {
           savingsBudget$: postTaxSavingsAvailable,
           efTarget$,
@@ -299,6 +440,11 @@ export default function SavingsPlanPage() {
           highAprDebts,
           matchNeedThisPeriod$: 0, // Match is already in pre-tax, not post-tax
           incomeSingle$: income.incomeSingle$ || income.annualSalary$ || income.netIncome$ * 26,
+          hsaEligible,
+          hsaCoverageType,
+          currentHSAMonthly$,
+          hsaRoomThisYear$,
+          prioritizeHSA,
         };
 
         const allocation = allocateSavings(inputs);
@@ -545,7 +691,7 @@ export default function SavingsPlanPage() {
 
         <CardContent className="space-y-6 overflow-x-hidden">
           {/* Pre-Tax Savings (Payroll) Panel */}
-          {(preTaxSavings.traditional401k.monthly > 0 || preTaxSavings.hsa.monthly > 0 || preTaxSavings.employerMatch.monthly > 0 || payrollContributions?.has401k) && (
+          {(preTaxSavings.traditional401k.monthly > 0 || preTaxSavings.hsa.monthly > 0 || preTaxSavings.employerMatch.monthly > 0 || preTaxSavings.employerHSA.monthly > 0 || payrollContributions?.has401k) && (
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -615,9 +761,18 @@ export default function SavingsPlanPage() {
                 
                 {preTaxSavings.employerMatch.monthly > 0 && (
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-slate-700 dark:text-slate-300">Employer match:</span>
+                    <span className="text-slate-700 dark:text-slate-300">Employer 401K match:</span>
                     <span className="font-medium text-green-600 dark:text-green-400">
                       ~+${Math.round(preTaxSavings.employerMatch.monthly).toLocaleString('en-US')}/mo (estimated)
+                    </span>
+                  </div>
+                )}
+                
+                {preTaxSavings.employerHSA.monthly > 0 && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-700 dark:text-slate-300">Employer HSA:</span>
+                    <span className="font-medium text-green-600 dark:text-green-400">
+                      ~+${Math.round(preTaxSavings.employerHSA.monthly).toLocaleString('en-US')}/mo (estimated)
                     </span>
                   </div>
                 )}
@@ -670,6 +825,75 @@ export default function SavingsPlanPage() {
                       onClick={() => router.push('/onboarding/payroll-contributions')}
                     >
                       Edit payroll savings
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* HSA Recommendation (Step 2 in Savings Stack) */}
+              {hsaRecommendation && (
+                <div className="mt-4 rounded-lg border-2 border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+                  <div className="mb-3">
+                    <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-1">
+                      Fund your HSA (Step 2 in Savings Stack)
+                    </h4>
+                    <p className="text-xs text-blue-700 dark:text-blue-400">
+                      {hsaRecommendation.hsaCoverageType === "family" ? "Family coverage" : hsaRecommendation.hsaCoverageType === "self" ? "Self-only coverage" : "Coverage type unknown"} - ${hsaRecommendation.hsaAnnualLimit$.toLocaleString('en-US')}/year limit
+                    </p>
+                  </div>
+                  
+                  <div className="mb-3 space-y-1.5 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-700 dark:text-slate-300">Current HSA:</span>
+                      <span className="font-medium text-slate-900 dark:text-white">
+                        ${Math.round(hsaRecommendation.currentHSAMonthly$).toLocaleString('en-US')}/mo
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-700 dark:text-slate-300">Recommended:</span>
+                      <span className="font-medium text-slate-900 dark:text-white">
+                        ${Math.round(hsaRecommendation.recommendedHsaMonthly$).toLocaleString('en-US')}/mo
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-700 dark:text-slate-300">Estimated tax savings:</span>
+                      <span className="font-medium text-green-600 dark:text-green-400">
+                        +${Math.round(hsaRecommendation.hsaTaxSavings$).toLocaleString('en-US')}/mo
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-700 dark:text-slate-300">Take-home impact:</span>
+                      <span className="font-medium text-red-600 dark:text-red-400">
+                        ${Math.round(hsaRecommendation.hsaPostTaxAvailableDelta$).toLocaleString('en-US')}/mo
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-700 dark:text-slate-300">Wealth move (HSA + Employer HSA):</span>
+                      <span className="font-medium text-green-600 dark:text-green-400">
+                        +${Math.round(hsaRecommendation.hsaWealthMoveDelta$).toLocaleString('en-US')}/mo
+                      </span>
+                    </div>
+                    {hsaRecommendation.remainingHsaRoomMonthly$ < hsaRecommendation.recommendedHsaMonthly$ && (
+                      <div className="text-xs text-amber-700 dark:text-amber-400 italic">
+                        Note: Recommended amount capped at remaining room (${Math.round(hsaRecommendation.remainingHsaRoomMonthly$).toLocaleString('en-US')}/mo)
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={handleFundHSA}
+                      size="sm"
+                      className="flex-1"
+                    >
+                      Fund my HSA
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => router.push('/onboarding/payroll-contributions')}
+                    >
+                      Edit
                     </Button>
                   </div>
                 </div>
@@ -807,7 +1031,7 @@ export default function SavingsPlanPage() {
             </div>
 
             {/* Secondary metrics */}
-            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+            <div className="grid grid-cols-4 gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
               <div className="text-center">
                 <div className="text-xs text-slate-600 dark:text-slate-400">Pre‑tax payroll savings</div>
                 <div className="text-sm font-semibold text-slate-900 dark:text-white">
@@ -816,12 +1040,21 @@ export default function SavingsPlanPage() {
                 <div className="text-xs text-slate-500 dark:text-slate-400">(estimated)</div>
               </div>
               <div className="text-center">
-                <div className="text-xs text-slate-600 dark:text-slate-400">Employer match</div>
+                <div className="text-xs text-slate-600 dark:text-slate-400">Employer 401K match</div>
                 <div className="text-sm font-semibold text-green-600 dark:text-green-400">
                   +${Math.round(preTaxSavings.employerMatch.monthly).toLocaleString('en-US')}/mo
                 </div>
                 <div className="text-xs text-slate-500 dark:text-slate-400">(estimated)</div>
               </div>
+              {preTaxSavings.employerHSA.monthly > 0 && (
+                <div className="text-center">
+                  <div className="text-xs text-slate-600 dark:text-slate-400">Employer HSA</div>
+                  <div className="text-sm font-semibold text-green-600 dark:text-green-400">
+                    +${Math.round(preTaxSavings.employerHSA.monthly).toLocaleString('en-US')}/mo
+                  </div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">(estimated)</div>
+                </div>
+              )}
               <div className="text-center">
                 <div className="text-xs text-slate-600 dark:text-slate-400">Total wealth moves</div>
                 <div className="text-sm font-semibold text-slate-900 dark:text-white">

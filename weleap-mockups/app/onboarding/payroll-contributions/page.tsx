@@ -39,11 +39,14 @@ function PayrollContributionsPageContent() {
   const [contributionFrequency401k, setContributionFrequency401k] = useState<"per_paycheck" | "per_month" | null>(payrollContributions?.contributionFrequency401k ?? null);
 
   const [hasHSA, setHasHSA] = useState<boolean | undefined>(payrollContributions?.hasHSA);
+  // Auto-set hsaEligible to true and hsaCoverageType to "self" when hasHSA is true
+  // We don't need state for these since they're auto-determined
   const [currentlyContributingHSA, setCurrentlyContributingHSA] = useState<"yes" | "no" | undefined>(payrollContributions?.currentlyContributingHSA);
   const [contributionTypeHSA, setContributionTypeHSA] = useState<"percent_gross" | "amount" | null>(payrollContributions?.contributionTypeHSA ?? null);
   const [contributionValueHSA, setContributionValueHSA] = useState<number | null>(payrollContributions?.contributionValueHSA ?? null);
   const [contributionFrequencyHSA, setContributionFrequencyHSA] = useState<"per_paycheck" | "per_month" | null>(payrollContributions?.contributionFrequencyHSA ?? null);
   const [employerHSAContribution, setEmployerHSAContribution] = useState<"yes" | "no" | "not_sure" | undefined>(payrollContributions?.employerHSAContribution);
+  const [employerHSAAmount$, setEmployerHSAAmount$] = useState<number | null>(payrollContributions?.employerHSAAmount$ ?? null);
   const [hsaIntent, setHsaIntent] = useState<"medical" | "investing" | "decide" | undefined>(payrollContributions?.hsaIntent ?? "decide");
 
   const [emergencyFundMonths, setEmergencyFundMonths] = useState<3 | 4 | 5 | 6>(payrollContributions?.emergencyFundMonths ?? 6);
@@ -219,13 +222,17 @@ function PayrollContributionsPageContent() {
       contributionFrequency401k: has401k && currentlyContributing401k === "yes" && contributionType401k === "amount" ? contributionFrequency401k : null,
       
       hasHSA,
-      currentlyContributingHSA: hasHSA ? currentlyContributingHSA : undefined,
+      // Auto-set: if hasHSA is true, assume eligible and default to self coverage
+      hsaEligible: hasHSA === true ? true : undefined,
+      hsaCoverageType: hasHSA === true ? "self" : undefined,
+      currentlyContributingHSA: hasHSA === true ? currentlyContributingHSA : undefined,
       // Explicitly clear HSA contribution values when not contributing
-      contributionTypeHSA: hasHSA && currentlyContributingHSA === "yes" ? contributionTypeHSA : null,
-      contributionValueHSA: hasHSA && currentlyContributingHSA === "yes" ? contributionValueHSA : null,
-      contributionFrequencyHSA: hasHSA && currentlyContributingHSA === "yes" && contributionTypeHSA === "amount" ? contributionFrequencyHSA : null,
-      employerHSAContribution: hasHSA ? employerHSAContribution : undefined,
-      hsaIntent: hasHSA ? hsaIntent : undefined,
+      contributionTypeHSA: hasHSA === true && currentlyContributingHSA === "yes" ? contributionTypeHSA : null,
+      contributionValueHSA: hasHSA === true && currentlyContributingHSA === "yes" ? contributionValueHSA : null,
+      contributionFrequencyHSA: hasHSA === true && currentlyContributingHSA === "yes" && contributionTypeHSA === "amount" ? contributionFrequencyHSA : null,
+      employerHSAContribution: hasHSA === true ? employerHSAContribution : undefined,
+      employerHSAAmount$: hasHSA === true && employerHSAContribution === "yes" ? employerHSAAmount$ : null,
+      hsaIntent: hasHSA === true ? hsaIntent : undefined,
       
       emergencyFundMonths,
       retirementPreference,
@@ -244,9 +251,15 @@ function PayrollContributionsPageContent() {
       efTargetMonths: emergencyFundMonths === 6 ? 6 : emergencyFundMonths,
     });
 
-    // Navigate to savings plan
-    setCurrentStep('savings-plan');
-    router.push('/onboarding/savings-plan');
+    // Navigate based on return path or default to onboarding flow
+    if (returnTo) {
+      // User came from a tool page (e.g., savings-allocator), return them there
+      router.push(returnTo);
+    } else {
+      // User is in onboarding flow, continue to next step
+      setCurrentStep('savings-plan');
+      router.push('/onboarding/savings-plan');
+    }
   };
 
   const RadioOption = ({ 
@@ -574,7 +587,11 @@ function PayrollContributionsPageContent() {
                   <RadioOption
                     value="yes"
                     selected={hasHSA === true}
-                    onChange={() => setHasHSA(true)}
+                    onChange={() => {
+                      setHasHSA(true);
+                      // Auto-expand HSA section when user selects "Yes"
+                      setExpandedHSA(true);
+                    }}
                     label="Yes"
                   />
                   <RadioOption
@@ -711,17 +728,44 @@ function PayrollContributionsPageContent() {
                       <RadioOption
                         value="no"
                         selected={employerHSAContribution === "no"}
-                        onChange={() => setEmployerHSAContribution("no")}
+                        onChange={() => {
+                          setEmployerHSAContribution("no");
+                          setEmployerHSAAmount$(null);
+                        }}
                         label="No"
                       />
                       <RadioOption
                         value="not_sure"
                         selected={employerHSAContribution === "not_sure"}
-                        onChange={() => setEmployerHSAContribution("not_sure")}
+                        onChange={() => {
+                          setEmployerHSAContribution("not_sure");
+                          setEmployerHSAAmount$(null);
+                        }}
                         label="Not sure"
                       />
                     </div>
                   </div>
+
+                  {employerHSAContribution === "yes" && (
+                    <div className="space-y-3 p-3 bg-white dark:bg-slate-700 rounded-lg">
+                      <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                        How much does your employer contribute per month?
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <label className="text-sm text-slate-700 dark:text-slate-300">
+                          $ per month:
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={employerHSAAmount$ ?? ''}
+                          onChange={(e) => setEmployerHSAAmount$(e.target.value ? parseFloat(e.target.value) : null)}
+                          className="w-32 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                          placeholder="0"
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   <div>
                     <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">

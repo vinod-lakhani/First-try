@@ -289,6 +289,7 @@ export default function IncomePage() {
   const observedCashSavingsMTD = savingsCalc.cashSavingsMTD;
   const expectedPayrollSavingsMTD = savingsCalc.payrollSavingsMTD;
   const expectedMatchMTD = savingsCalc.employerMatchMTD;
+  const expectedEmployerHSAMTD = savingsCalc.employerHSAMTD;
   const totalSavingsMTD = savingsCalc.totalSavingsMTD;
   
   // Debug: Log calculation to verify consistency
@@ -353,7 +354,12 @@ export default function IncomePage() {
                 amount: expectedMatchMTD,
                 percent: grossIncome ? (expectedMatchMTD / grossIncome) * 100 : (expectedMatchMTD / monthlyTakeHomePay) * 100,
               },
-            ]}
+              {
+                label: 'Employer HSA',
+                amount: expectedEmployerHSAMTD,
+                percent: grossIncome ? (expectedEmployerHSAMTD / grossIncome) * 100 : (expectedEmployerHSAMTD / monthlyTakeHomePay) * 100,
+              },
+            ].filter(item => item.amount > 0.01)}
           />
           <div className="mt-4 flex justify-center">
             <Button 
@@ -574,13 +580,26 @@ export default function IncomePage() {
                   </div>
                 )}
 
-                {/* Employer Match */}
+                {/* Employer 401K Match */}
                 {expectedMatchMTD > 0 && (
                   <div className="text-xs">
                     <div className="flex justify-between">
-                      <span className="text-slate-600 dark:text-slate-400">Employer match:</span>
+                      <span className="text-slate-600 dark:text-slate-400">Employer 401K match:</span>
                       <span className="font-medium text-green-600 dark:text-green-400">
                         +${expectedMatchMTD.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      </span>
+                    </div>
+                    <div className="text-slate-500 dark:text-slate-400 italic">estimated</div>
+                  </div>
+                )}
+
+                {/* Employer HSA */}
+                {expectedEmployerHSAMTD > 0 && (
+                  <div className="text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-slate-600 dark:text-slate-400">Employer HSA:</span>
+                      <span className="font-medium text-green-600 dark:text-green-400">
+                        +${expectedEmployerHSAMTD.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                       </span>
                     </div>
                     <div className="text-slate-500 dark:text-slate-400 italic">estimated</div>
@@ -590,7 +609,7 @@ export default function IncomePage() {
                 {/* Total Savings */}
                 <div className="text-xs pt-2 border-t border-slate-200 dark:border-slate-700">
                   <div className="flex justify-between font-semibold">
-                    <span className="text-slate-700 dark:text-slate-300">Total Savings (Cash + Payroll + Match):</span>
+                    <span className="text-slate-700 dark:text-slate-300">Total Savings (Cash + Payroll + Employer 401K Match + Employee HSA + Employer HSA):</span>
                     <span className="text-slate-900 dark:text-white">
                       ${totalSavingsMTD.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                     </span>

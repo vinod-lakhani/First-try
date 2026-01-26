@@ -719,7 +719,7 @@ export interface FinalPlanData {
  * Builds comprehensive final plan data from onboarding state using all three engines.
  */
 export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
-  const { income, riskConstraints, fixedExpenses, debts, assets, goals, safetyStrategy, initialPaycheckPlan } = state;
+  const { income, riskConstraints, fixedExpenses, debts, assets, goals, safetyStrategy, initialPaycheckPlan, payrollContributions } = state;
 
   // Validate required data
   // Prefer netIncome$ (take home pay), but fall back to grossIncome$ if needed
@@ -1028,6 +1028,45 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
   } else {
     // Calculate from engine - no custom allocation exists
     console.log('[buildFinalPlanData] No custom allocation, calculating from engine');
+    // Calculate HSA room and current contribution
+    const hsaEligible = payrollContributions?.hsaEligible === true;
+    const hsaCoverageType = payrollContributions?.hsaCoverageType || "unknown";
+    
+    // HSA annual limits (2025)
+    const hsaAnnualLimits = {
+      self: 4300,
+      family: 8550,
+      unknown: 4300, // Default to self if unknown
+    };
+    const hsaAnnualLimit$ = hsaAnnualLimits[hsaCoverageType];
+    
+    // Calculate current HSA contribution (annual)
+    let currentHSAAnnual$ = 0;
+    let currentHSAMonthly$ = 0;
+    if (payrollContributions?.hasHSA && payrollContributions?.currentlyContributingHSA === "yes") {
+      const paychecksPerMonthForHSA = getPaychecksPerMonth(income.payFrequency || 'biweekly');
+      const grossIncomePerPaycheck = income.grossIncome$ || income.netIncome$ || 0;
+      const grossIncomeMonthly = grossIncomePerPaycheck * paychecksPerMonthForHSA;
+      
+      if (payrollContributions.contributionTypeHSA === "percent_gross" && payrollContributions.contributionValueHSA) {
+        currentHSAMonthly$ = (grossIncomeMonthly * payrollContributions.contributionValueHSA) / 100;
+      } else if (payrollContributions.contributionTypeHSA === "amount" && payrollContributions.contributionValueHSA) {
+        if (payrollContributions.contributionFrequencyHSA === "per_paycheck") {
+          currentHSAMonthly$ = payrollContributions.contributionValueHSA * paychecksPerMonthForHSA;
+        } else if (payrollContributions.contributionFrequencyHSA === "per_month") {
+          currentHSAMonthly$ = payrollContributions.contributionValueHSA;
+        }
+      }
+      currentHSAAnnual$ = currentHSAMonthly$ * 12;
+    }
+    
+    // Calculate remaining HSA room
+    const hsaRoomThisYear$ = Math.max(0, hsaAnnualLimit$ - currentHSAAnnual$);
+    
+    // Determine if user should prioritize HSA (tax-efficiency focused or high medical spend)
+    // For MVP, we'll use retirementFocus as a proxy for tax-efficiency focus
+    const prioritizeHSA = safetyStrategy?.retirementFocus === "High" || safetyStrategy?.retirementFocus === "Medium";
+    
     savingsAlloc = allocateSavings({
       savingsBudget$: monthlySavingsBudget,
       efTarget$,
@@ -1040,6 +1079,11 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
       retirementFocus: safetyStrategy?.retirementFocus || 'Medium',
       iraRoomThisYear$: safetyStrategy?.iraRoomThisYear$ || 7000,
       k401RoomThisYear$: safetyStrategy?.k401RoomThisYear$ || 23000,
+      hsaEligible,
+      hsaCoverageType,
+      currentHSAMonthly$,
+      hsaRoomThisYear$,
+      prioritizeHSA,
     });
     console.log('[buildFinalPlanData] Calculated savings allocation from engine:', {
       savingsAlloc,
@@ -1054,6 +1098,7 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
     ef$: savingsAlloc.ef$ / paychecksPerMonth,
     highAprDebt$: savingsAlloc.highAprDebt$ / paychecksPerMonth,
     match401k$: savingsAlloc.match401k$ / paychecksPerMonth,
+    hsa$: (savingsAlloc.hsa$ || 0) / paychecksPerMonth,
     retirementTaxAdv$: savingsAlloc.retirementTaxAdv$ / paychecksPerMonth,
     brokerage$: savingsAlloc.brokerage$ / paychecksPerMonth,
   };
@@ -1104,9 +1149,9 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
       id: 'long_term_investing',
       key: 'long_term_investing' as const,
       label: 'Long-Term Investing',
-      amount: savingsAllocPerPaycheck.match401k$ + savingsAllocPerPaycheck.retirementTaxAdv$ + savingsAllocPerPaycheck.brokerage$,
-      percent: ((savingsAllocPerPaycheck.match401k$ + savingsAllocPerPaycheck.retirementTaxAdv$ + savingsAllocPerPaycheck.brokerage$) / incomePeriod$) * 100,
-      why: 'Grows your wealth for retirement and long-term goals (includes 401K match)',
+      amount: savingsAllocPerPaycheck.match401k$ + savingsAllocPerPaycheck.hsa$ + savingsAllocPerPaycheck.retirementTaxAdv$ + savingsAllocPerPaycheck.brokerage$,
+      percent: ((savingsAllocPerPaycheck.match401k$ + savingsAllocPerPaycheck.hsa$ + savingsAllocPerPaycheck.retirementTaxAdv$ + savingsAllocPerPaycheck.brokerage$) / incomePeriod$) * 100,
+      why: 'Grows your wealth for retirement and long-term goals (includes 401K match and HSA)',
       subCategories: [
         {
           id: '401k_match',
@@ -1116,6 +1161,14 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
           percent: (savingsAllocPerPaycheck.match401k$ / incomePeriod$) * 100,
           why: 'Employer contribution to your retirement, essentially free money',
         },
+        ...(savingsAllocPerPaycheck.hsa$ > 0.01 ? [{
+          id: 'hsa',
+          key: 'hsa' as const,
+          label: 'HSA',
+          amount: savingsAllocPerPaycheck.hsa$,
+          percent: (savingsAllocPerPaycheck.hsa$ / incomePeriod$) * 100,
+          why: 'Health Savings Account - triple tax advantage (pre-tax, tax-free growth, tax-free withdrawals for medical)',
+        }] : []),
         {
           id: 'retirement_tax_advantaged',
           key: 'retirement_tax_advantaged' as const,

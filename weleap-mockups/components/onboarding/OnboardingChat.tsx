@@ -222,6 +222,11 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
           }
         }
         
+        // Calculate employer HSA contribution
+        const monthlyEmployerHSA = pc.employerHSAContribution === 'yes' && pc.employerHSAAmount$ 
+          ? pc.employerHSAAmount$ 
+          : 0;
+        
         payrollContributionsData = {
           has401k: pc.has401k,
           hasEmployerMatch: pc.hasEmployerMatch,
@@ -233,6 +238,7 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
           monthlyEmployerMatch: monthlyMatch,
           hasHSA: pc.hasHSA,
           monthlyHSAContribution: monthlyHSA,
+          monthlyEmployerHSA: monthlyEmployerHSA,
         };
       }
 
@@ -294,18 +300,21 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
           const monthly401k = payrollContributionsData.monthly401kContribution || 0;
           const monthlyHSA = payrollContributionsData.monthlyHSAContribution || 0;
           const monthlyMatch = payrollContributionsData.monthlyEmployerMatch || 0;
+          const monthlyEmployerHSA = payrollContributionsData.monthlyEmployerHSA || 0;
           const preTaxTotal = monthly401k + monthlyHSA;
           
           // If centralized function returned $0 for pre-tax but we have calculated values, use calculated values
           if (savingsCalc.payrollSavingsMTD === 0 && preTaxTotal > 0) {
             console.log('[OnboardingChat] Centralized function returned $0 pre-tax, using calculated payrollContributionsData values');
             const cashSavings = monthlySavings - preTaxTotal - monthlyMatch;
-            const totalSavings = cashSavings + preTaxTotal + monthlyMatch;
+            // Total = Cash + Pre-tax Payroll Savings + Employer 401K Match + Employee HSA + Employer HSA
+            const totalSavings = cashSavings + preTaxTotal + monthlyMatch + monthlyEmployerHSA;
             
             savingsBreakdownData = {
               cashSavingsMTD: Math.max(0, cashSavings),
               payrollSavingsMTD: preTaxTotal,
               employerMatchMTD: monthlyMatch,
+              employerHSAMTD: monthlyEmployerHSA,
               totalSavingsMTD: totalSavings,
             };
           } else {
@@ -314,6 +323,7 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
               cashSavingsMTD: savingsCalc.cashSavingsMTD,
               payrollSavingsMTD: savingsCalc.payrollSavingsMTD,
               employerMatchMTD: savingsCalc.employerMatchMTD,
+              employerHSAMTD: savingsCalc.employerHSAMTD,
               totalSavingsMTD: savingsCalc.totalSavingsMTD,
             };
           }
@@ -323,6 +333,7 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
             cashSavingsMTD: savingsCalc.cashSavingsMTD,
             payrollSavingsMTD: savingsCalc.payrollSavingsMTD,
             employerMatchMTD: savingsCalc.employerMatchMTD,
+            employerHSAMTD: savingsCalc.employerHSAMTD,
             totalSavingsMTD: savingsCalc.totalSavingsMTD,
           };
         }
@@ -331,16 +342,19 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
         const monthly401k = payrollContributionsData.monthly401kContribution || 0;
         const monthlyHSA = payrollContributionsData.monthlyHSAContribution || 0;
         const monthlyMatch = payrollContributionsData.monthlyEmployerMatch || 0;
+        const monthlyEmployerHSA = payrollContributionsData.monthlyEmployerHSA || 0;
         const preTaxTotal = monthly401k + monthlyHSA;
         
         // Calculate cash savings from monthlySavings
         const cashSavings = monthlySavings - preTaxTotal - monthlyMatch;
-        const totalSavings = cashSavings + preTaxTotal + monthlyMatch;
+        // Total = Cash + Pre-tax Payroll Savings + Employer 401K Match + Employee HSA + Employer HSA
+        const totalSavings = cashSavings + preTaxTotal + monthlyMatch + monthlyEmployerHSA;
         
         savingsBreakdownData = {
           cashSavingsMTD: Math.max(0, cashSavings),
           payrollSavingsMTD: preTaxTotal,
           employerMatchMTD: monthlyMatch,
+          employerHSAMTD: monthlyEmployerHSA,
           totalSavingsMTD: totalSavings,
         };
         

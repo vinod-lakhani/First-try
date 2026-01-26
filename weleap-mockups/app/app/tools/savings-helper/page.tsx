@@ -281,7 +281,8 @@ function SavingsHelperContent() {
     return {
       payrollSavingsMTD: savingsCalc.payrollSavingsMTD,
       matchMTD: savingsCalc.employerMatchMTD,
-      totalPayrollMatchMTD: savingsCalc.payrollSavingsMTD + savingsCalc.employerMatchMTD,
+      employerHSAMTD: savingsCalc.employerHSAMTD,
+      totalPayrollMatchMTD: savingsCalc.payrollSavingsMTD + savingsCalc.employerMatchMTD + savingsCalc.employerHSAMTD,
       expected401kMTD: savingsCalc.preTaxSavingsTotal, // Approximate - could be split if needed
       expectedHSAMTD: 0, // Could be enhanced to split 401k vs HSA if needed
     };
@@ -312,8 +313,8 @@ function SavingsHelperContent() {
     // Cash savings target = max(floor, TotalSavingsTarget$ - PayrollPlusMatch$)
     const cashSavingsTarget$ = Math.max(cashSavingsFloor, totalSavingsTarget$ - payrollPlusMatch$);
     
-    // Total savings all-in = CashSavingsObserved$ + PreTaxSavings$ + employerMatchMonthly
-    const totalSavingsAllIn$ = cashSavingsObservedMonthly + preTaxSavings$ + payrollMatchData.matchMTD;
+    // Total savings all-in = CashSavingsObserved$ + PreTaxSavings$ + Employer 401K Match + Employer HSA
+    const totalSavingsAllIn$ = cashSavingsObservedMonthly + preTaxSavings$ + payrollMatchData.matchMTD + payrollMatchData.employerHSAMTD;
     
     return {
       needsTarget$,
@@ -857,7 +858,8 @@ function SavingsHelperContent() {
     totalSavingsTarget: number,
     cashSavingsObserved: number,
     payrollSavings: number,
-    match: number
+    match: number,
+    employerHSA: number = 0
   ) => {
     const needsAmount = netIncome * distribution.needsPct;
     const wantsAmount = netIncome * distribution.wantsPct;
@@ -983,13 +985,19 @@ function SavingsHelperContent() {
                   )}
                   {match > 0 && (
                     <div className="flex justify-between">
-                      <span className="text-slate-600 dark:text-slate-400">Employer match:</span>
+                      <span className="text-slate-600 dark:text-slate-400">Employer 401K match:</span>
                       <span className="font-medium">+${match.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} <span className="text-xs text-slate-500">estimated</span></span>
+                    </div>
+                  )}
+                  {label !== 'Past 3 Months Average' && payrollMatchData.employerHSAMTD > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-600 dark:text-slate-400">Employer HSA:</span>
+                      <span className="font-medium">+${payrollMatchData.employerHSAMTD.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} <span className="text-xs text-slate-500">estimated</span></span>
                     </div>
                   )}
                   {label === 'Past 3 Months Average' && payrollSavings === 0 && match === 0 && (
                     <div className="text-xs text-slate-500 italic">
-                      Note: Payroll contributions and match are not included in past 3 months average as they may have just started.
+                      Note: Payroll contributions, match, and employer HSA are not included in past 3 months average as they may have just started.
                     </div>
                   )}
                   <div className="flex justify-between border-t border-slate-300 pt-1 dark:border-slate-600">
@@ -1119,7 +1127,8 @@ function SavingsHelperContent() {
                 savingsCalculations.totalSavingsTarget$,
                 savingsBreakdownPast3Months.cashSavingsMTD, // Past 3 months cash savings (no payroll impact)
                 0, // Past 3 months: NO payroll savings (may have just started)
-                0  // Past 3 months: NO employer match (may have just started)
+                0, // Past 3 months: NO employer match (may have just started)
+                0  // Past 3 months: NO employer HSA (may have just started)
               )}
               {renderComparisonRow(
                 'Current Plan',
@@ -1129,7 +1138,8 @@ function SavingsHelperContent() {
                 savingsCalculations.totalSavingsTarget$,
                 cashSavingsObservedMonthly,
                 payrollMatchData.payrollSavingsMTD,
-                payrollMatchData.matchMTD
+                payrollMatchData.matchMTD,
+                payrollMatchData.employerHSAMTD
               )}
               {renderComparisonRow(
                 'Recommended Plan',
@@ -1139,7 +1149,8 @@ function SavingsHelperContent() {
                 savingsCalculations.totalSavingsTarget$,
                 cashSavingsObservedMonthly,
                 payrollMatchData.payrollSavingsMTD,
-                payrollMatchData.matchMTD
+                payrollMatchData.matchMTD,
+                payrollMatchData.employerHSAMTD
               )}
             </CardContent>
           </Card>
@@ -1265,9 +1276,15 @@ function SavingsHelperContent() {
                       <span className="font-semibold">${savingsCalculations.preTaxSavings$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/mo <span className="text-xs text-slate-500">estimated</span></span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-slate-600 dark:text-slate-400">Match:</span>
+                      <span className="text-slate-600 dark:text-slate-400">Employer 401K Match:</span>
                       <span className="font-semibold">+${payrollMatchData.matchMTD.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/mo <span className="text-xs text-slate-500">estimated</span></span>
                     </div>
+                    {payrollMatchData.employerHSAMTD > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-600 dark:text-slate-400">Employer HSA:</span>
+                        <span className="font-semibold">+${payrollMatchData.employerHSAMTD.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/mo <span className="text-xs text-slate-500">estimated</span></span>
+                      </div>
+                    )}
                     <div className="flex justify-between border-t border-slate-300 pt-2 text-base dark:border-slate-600">
                       <span className="font-semibold text-slate-900 dark:text-white">Total savings (all-in):</span>
                       <span className="font-semibold text-slate-900 dark:text-white">${savingsCalculations.totalSavingsTarget$.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/mo</span>

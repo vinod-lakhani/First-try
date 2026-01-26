@@ -1135,7 +1135,7 @@ If users ask about:
   - Shows three metrics in a grid:
     1. "Pre-tax payroll savings" - 401(k) + HSA contributions (estimated monthly)
     2. "Employer match" - Free money from 401(k) match (if available, shown in green)
-    3. "Total wealth moves" - Sum of all savings (pre-tax + post-tax + match)
+    3. "Total wealth moves" - Sum of all savings (pre-tax Payroll Savings + Employer 401K Match + Employee HSA + Employer HSA + post-tax)
 - **Main Section (Post-Tax Allocation)**:
   - Multiple savings categories displayed as cards or sections:
     1. Emergency Fund (with target months selector and interactive controls)
@@ -1176,7 +1176,7 @@ If users ask about:
 **Calculation Details**:
 - Post-tax savings available = Base savings - (Pre-tax contributions - Tax savings)
 - Base savings = Income - Needs - Wants (original allocation)
-- Total wealth moves = Cash savings + Pre-tax savings + Employer match
+- Total wealth moves = Cash savings + Pre-tax Payroll Savings + Employer 401K Match + Employee HSA + Employer HSA
 - All calculations use centralized formula for consistency
 
 **What Users Can Expect**:
@@ -1267,7 +1267,7 @@ If users ask about:
     - **Payroll Savings (pre-tax 401k/HSA)**: $Y/month
     - **401K Match (free money from employer)**: $Z/month
     - **Cash Savings (post-tax)**: $X/month
-    - **Total Savings = Pre-tax $Y + Match $Z + Post-tax Cash $X = $Total/month**
+    - **Total Savings = Pre-tax Payroll Savings $Y + Employer 401K Match $Z + Employee HSA $A + Employer HSA $B + Post-tax Cash $X = $Total/month**
     - **CRITICAL**: Use the EXACT dollar amounts from the "TOTAL MONTHLY SAVINGS BREAKDOWN" section above - these values ARE provided and you MUST use them
     - **CRITICAL**: NEVER say "not explicitly provided" or "not available" - the pre-tax and match values ARE in the data above
     - **CRITICAL**: If pre-tax or match values are $0, still show them explicitly: "Payroll Savings (pre-tax 401k/HSA): $0/month" and "401K Match: $0/month"
@@ -1283,7 +1283,7 @@ If users ask about:
     - Use the exact dollar amounts from userPlanData.savingsAllocation if available (EXCLUDING match401k)
   
   * **CRITICAL**: Your response must include BOTH parts:
-    1. The total savings breakdown (Cash + Pre-tax + Match) - this shows the COMPLETE picture
+    1. The total savings breakdown (Cash + Pre-tax Payroll Savings + Employer 401K Match + Employee HSA + Employer HSA) - this shows the COMPLETE picture
     2. The post-tax cash allocation (how post-tax cash is distributed) - this shows WHERE the post-tax money goes
   * **Format**: Start with "Here's your complete savings breakdown:" then show both parts clearly separated
   
@@ -1428,7 +1428,7 @@ If users ask about:
 **Calculation Details**:
 - Post-tax savings available = Base savings - (Pre-tax contributions - Tax savings)
 - Base savings = Income - Needs - Wants (original allocation)
-- Total wealth moves = Cash savings + Pre-tax savings + Employer match (uses total post-tax available, not just allocated amounts)
+- Total wealth moves = Cash savings + Pre-tax Payroll Savings + Employer 401K Match + Employee HSA + Employer HSA (uses total post-tax available, not just allocated amounts)
 - All calculations use centralized formula for consistency across pages
 
 **What Users Can Expect**:
@@ -1552,7 +1552,7 @@ If users ask about:
 - Provide context about their financial situation
 - **MANDATORY**: When users ask about savings breakdown or composition, use the exact data from userPlanData (savings breakdown and savings allocation sections)
 - **MANDATORY**: Always distinguish between:
-  * **Savings Breakdown** (what makes up total savings: Cash + Pre-tax + Match)
+  * **Savings Breakdown** (what makes up total savings: Cash + Pre-tax Payroll Savings + Employer 401K Match + Employee HSA + Employer HSA)
   * **Savings Allocation** (where post-tax cash goes: EF + Debt + Retirement + Brokerage)
 
 **Note**: Monthly expense data is provided below. Individual transaction details are available in the app but summarized here as monthly expense categories.`,

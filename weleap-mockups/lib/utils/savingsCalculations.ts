@@ -23,16 +23,20 @@ export interface PreTaxSavings {
   employerMatch: {
     monthly: number;
   };
+  employerHSA: {
+    monthly: number;
+  };
   total: number;
 }
 
 export interface SavingsBreakdown {
   cashSavingsMTD: number; // Post-tax cash savings (observed)
-  payrollSavingsMTD: number; // Pre-tax payroll savings (estimated)
-  employerMatchMTD: number; // Employer match (estimated)
-  totalSavingsMTD: number; // Total = Cash + Payroll + Match
+  payrollSavingsMTD: number; // Pre-tax payroll savings (estimated) - 401k + Employee HSA
+  employerMatchMTD: number; // Employer 401K match (estimated)
+  employerHSAMTD: number; // Employer HSA contribution (estimated)
+  totalSavingsMTD: number; // Total = Cash + Payroll + Employer 401K Match + Employee HSA + Employer HSA
   baseSavingsMonthly: number; // Original savings from income allocation (income - needs - wants)
-  preTaxSavingsTotal: number; // Total pre-tax contributions (401k + HSA)
+  preTaxSavingsTotal: number; // Total pre-tax contributions (401k + Employee HSA)
   taxSavingsMonthly: number; // Tax savings from pre-tax contributions
   netPreTaxImpact: number; // Net impact on take-home (pre-tax - tax savings)
 }
@@ -49,6 +53,7 @@ export function calculatePreTaxSavings(
       traditional401k: { percent: null, monthly: 0 },
       hsa: { monthly: 0 },
       employerMatch: { monthly: 0 },
+      employerHSA: { monthly: 0 },
       total: 0,
     };
   }
@@ -103,6 +108,13 @@ export function calculatePreTaxSavings(
     }
   }
 
+  // Calculate employer HSA contribution
+  let employerHSAMonthly = 0;
+  
+  if (payrollContributions.hasHSA && payrollContributions.employerHSAContribution === "yes") {
+    employerHSAMonthly = payrollContributions.employerHSAAmount$ || 0;
+  }
+
   const totalPreTax = traditional401kMonthly + hsaMonthly;
 
   return {
@@ -115,6 +127,9 @@ export function calculatePreTaxSavings(
     },
     employerMatch: {
       monthly: employerMatchMonthly,
+    },
+    employerHSA: {
+      monthly: employerHSAMonthly,
     },
     total: totalPreTax,
   };
@@ -174,14 +189,18 @@ export function calculateSavingsBreakdown(
   // Calculate employer match
   const employerMatchMTD = preTaxSavings.employerMatch.monthly;
   
+  // Calculate employer HSA contribution
+  const employerHSAMTD = preTaxSavings.employerHSA.monthly;
+  
   // Calculate total savings (all-in)
-  // Total = Cash + Payroll + Match
-  const totalSavingsMTD = cashSavingsMTD + payrollSavingsMTD + employerMatchMTD;
+  // Total = Cash + Payroll + Employer 401K Match + Employee HSA + Employer HSA
+  const totalSavingsMTD = cashSavingsMTD + payrollSavingsMTD + employerMatchMTD + employerHSAMTD;
   
   return {
     cashSavingsMTD,
     payrollSavingsMTD,
     employerMatchMTD,
+    employerHSAMTD,
     totalSavingsMTD,
     baseSavingsMonthly,
     preTaxSavingsTotal,

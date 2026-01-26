@@ -85,6 +85,7 @@ export default function PlanFinalPage() {
         observedCashSavingsMTD: 0,
         expectedPayrollSavingsMTD: 0,
         expectedMatchMTD: 0,
+        expectedEmployerHSAMTD: 0,
         totalSavingsMTD: 0,
         savingsBreakdown: [],
       };
@@ -108,6 +109,7 @@ export default function PlanFinalPage() {
     const observedCashSavingsMTD = savingsCalc.cashSavingsMTD;
     const expectedPayrollSavingsMTD = savingsCalc.payrollSavingsMTD;
     const expectedMatchMTD = savingsCalc.employerMatchMTD;
+    const expectedEmployerHSAMTD = savingsCalc.employerHSAMTD;
     const totalSavingsMTD = savingsCalc.totalSavingsMTD;
     
     // Debug logging to track calculation
@@ -134,12 +136,18 @@ export default function PlanFinalPage() {
         amount: expectedMatchMTD,
         percent: grossIncome > 0 ? (expectedMatchMTD / grossIncome) * 100 : 0,
       },
+      {
+        label: 'Employer HSA',
+        amount: expectedEmployerHSAMTD,
+        percent: grossIncome > 0 ? (expectedEmployerHSAMTD / grossIncome) * 100 : 0,
+      },
     ].filter(item => item.amount > 0.01); // Only show if amount is meaningful
 
     return {
       observedCashSavingsMTD,
       expectedPayrollSavingsMTD,
       expectedMatchMTD,
+      expectedEmployerHSAMTD,
       totalSavingsMTD,
       savingsBreakdown,
     };

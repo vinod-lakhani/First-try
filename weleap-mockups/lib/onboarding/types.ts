@@ -121,6 +121,10 @@ export interface PayrollContributions {
   // HSA
   /** Whether user has an HSA */
   hasHSA?: boolean;
+  /** Whether user is eligible for HSA (has HDHP) */
+  hsaEligible?: boolean;
+  /** HSA coverage type: self, family, or unknown */
+  hsaCoverageType?: "self" | "family" | "unknown";
   /** Whether currently contributing to HSA */
   currentlyContributingHSA?: "yes" | "no";
   /** HSA contribution type: percent of gross or dollar amount */
@@ -131,6 +135,8 @@ export interface PayrollContributions {
   contributionFrequencyHSA?: "per_paycheck" | "per_month" | null;
   /** Whether employer contributes to HSA */
   employerHSAContribution?: "yes" | "no" | "not_sure";
+  /** Employer HSA contribution amount per month (if employer contributes) */
+  employerHSAAmount$?: number | null;
   /** How Sidekick should treat HSA */
   hsaIntent?: "medical" | "investing" | "decide";
   

@@ -53,6 +53,7 @@ export function HomeScreen({ data }: HomeScreenProps) {
   const observedCashSavingsMTD = savingsBreakdown.cashSavingsMTD;
   const expectedPayrollSavingsMTD = savingsBreakdown.payrollSavingsMTD;
   const expectedMatchMTD = savingsBreakdown.employerMatchMTD;
+  const expectedEmployerHSAMTD = savingsBreakdown.employerHSAMTD;
   const totalSavingsMTD = savingsBreakdown.totalSavingsMTD;
   
   // Debug: Log calculation to verify consistency
@@ -62,7 +63,8 @@ export function HomeScreen({ data }: HomeScreenProps) {
   const targetCashSavingsMTD = summary.plannedSavings$; // For now, use planned savings as target for cash
   const targetPayrollSavingsMTD = expectedPayrollSavingsMTD; // Target equals expected
   const targetMatchMTD = expectedMatchMTD; // Target equals expected match
-  const targetTotalSavingsMTD = targetCashSavingsMTD + targetPayrollSavingsMTD + targetMatchMTD;
+  const targetEmployerHSAMTD = expectedEmployerHSAMTD; // Target equals expected employer HSA
+  const targetTotalSavingsMTD = targetCashSavingsMTD + targetPayrollSavingsMTD + targetMatchMTD + targetEmployerHSAMTD;
 
   // Determine pulse headline - compare Total Savings vs Total Savings Target
   const deltaVsPlan = totalSavingsMTD - targetTotalSavingsMTD;
@@ -206,9 +208,21 @@ export function HomeScreen({ data }: HomeScreenProps) {
                       {expectedMatchMTD > 0 && (
                         <div className="text-xs">
                           <div className="flex justify-between">
-                            <span className="text-slate-600 dark:text-slate-400">Employer match:</span>
+                            <span className="text-slate-600 dark:text-slate-400">Employer 401K match:</span>
                             <span className="font-medium text-green-600 dark:text-green-400">
                               +{formatCurrency(expectedMatchMTD)}
+                            </span>
+                          </div>
+                          <div className="text-slate-500 dark:text-slate-400 italic">estimated</div>
+                        </div>
+                      )}
+
+                      {expectedEmployerHSAMTD > 0 && (
+                        <div className="text-xs">
+                          <div className="flex justify-between">
+                            <span className="text-slate-600 dark:text-slate-400">Employer HSA:</span>
+                            <span className="font-medium text-green-600 dark:text-green-400">
+                              +{formatCurrency(expectedEmployerHSAMTD)}
                             </span>
                           </div>
                           <div className="text-slate-500 dark:text-slate-400 italic">estimated</div>
@@ -218,7 +232,7 @@ export function HomeScreen({ data }: HomeScreenProps) {
                       {/* Total Savings */}
                       <div className="text-xs pt-2 border-t border-slate-200 dark:border-slate-700">
                         <div className="flex justify-between font-semibold">
-                          <span className="text-slate-700 dark:text-slate-300">Total Savings (Cash + Payroll + Match):</span>
+                          <span className="text-slate-700 dark:text-slate-300">Total Savings (Cash + Payroll + Employer 401K Match + Employee HSA + Employer HSA):</span>
                           <span className="text-slate-900 dark:text-white">
                             {formatCurrency(totalSavingsMTD)}
                           </span>
