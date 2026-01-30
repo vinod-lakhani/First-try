@@ -367,6 +367,11 @@ export default function MVPSimulatorPage() {
       };
       const series = simulateScenario(scenarioInput);
 
+      // Prepend opening snapshot so chart shows user's starting assets (e.g. 30K EF) at "Today"
+      const openingAssets = openingCash + brokerageFromAssets + retirementFromAssets;
+      const openingLiabilities = state.debts.reduce((s, d) => s + d.balance$, 0);
+      const openingNetWorth = openingAssets - openingLiabilities;
+
       setResult({
         initialPlan: {
           needs$: initialPlan.needs$,
@@ -381,10 +386,10 @@ export default function MVPSimulatorPage() {
           notes: paycheckPlan.notes,
         },
         netWorth: {
-          labels: series.labels,
-          netWorth: series.netWorth,
-          assets: series.assets,
-          liabilities: series.liabilities,
+          labels: ['Start', ...series.labels],
+          netWorth: [openingNetWorth, ...series.netWorth],
+          assets: [openingAssets, ...series.assets],
+          liabilities: [openingLiabilities, ...series.liabilities],
           kpis: {
             efReachedMonth: series.kpis.efReachedMonth,
             debtFreeMonth: series.kpis.debtFreeMonth,
@@ -499,15 +504,15 @@ export default function MVPSimulatorPage() {
     const totalHighAprBalance = highAprDebts.reduce((s, d) => s + d.balance$, 0);
     const debtAllocMo = (bd?.debt$ ?? 0) * paychecksPerMonth;
 
-    // Net worth graph data (same series as the chart) for chat
+    // Net worth graph data (index 0 = Start/today; indices 1+ = end of month 0, 1, ...)
     const nw = result.netWorth?.netWorth ?? [];
     const netWorthAtStart = nw[0] ?? 0;
-    const netWorthAt1Y = nw[11] ?? netWorthAtStart;
+    const netWorthAt1Y = nw[12] ?? netWorthAtStart; // end of month 11
     const kpis = result.netWorth.kpis ?? {};
-    const netWorthAt5Y = kpis.netWorthAtYears?.[5] ?? (nw[59] ?? 0);
-    const netWorthAt10Y = kpis.netWorthAtYears?.[10] ?? (nw[119] ?? 0);
-    const netWorthAt20Y = kpis.netWorthAtYears?.[20] ?? (nw[239] ?? 0);
-    const netWorthAt40Y = kpis.netWorthAtYears?.[40] ?? (nw[479] ?? nw[nw.length - 1] ?? 0);
+    const netWorthAt5Y = kpis.netWorthAtYears?.[5] ?? (nw[60] ?? 0);
+    const netWorthAt10Y = kpis.netWorthAtYears?.[10] ?? (nw[120] ?? 0);
+    const netWorthAt20Y = kpis.netWorthAtYears?.[20] ?? (nw[240] ?? 0);
+    const netWorthAt40Y = kpis.netWorthAtYears?.[40] ?? (nw[480] ?? nw[nw.length - 1] ?? 0);
 
     const cashFromAssets = form.assets.filter((a) => a.type === 'cash').reduce((s, a) => s + a.value$, 0) || 0;
     const efBalanceForNW = form.efBalance$ ?? 0;

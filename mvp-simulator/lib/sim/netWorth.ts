@@ -282,8 +282,8 @@ export function simulateScenario(input: ScenarioInput): ScenarioSeries {
       hsa = round2(hsa * (1 + nominalReturn));
     }
     
-    // 2) Inflows from plan
-    cash = round2(cash + plan.ef$ + (plan.unallocated$ ?? 0));
+    // 2) Inflows from plan (income pays for needs/wants/debt; EF allocation and unallocated go to cash)
+    cash = round2(cash + plan.incomeNet + plan.ef$ + (plan.unallocated$ ?? 0));
     brokerage = round2(brokerage + plan.brokerage$);
     retirement = round2(retirement + plan.match401k$ + plan.retirementTaxAdv$);
     hsa = round2(hsa + (plan.hsa$ ?? 0));

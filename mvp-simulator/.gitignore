@@ -30,3 +30,9 @@ yarn-error.log*
 # OS
 .DS_Store
 Thumbs.db
+
+# Test report output (run npm run test:report and copy files out to share)
+test-results/
+
+# Test report output (optional: remove this line to commit test-results for sharing)
+test-results
