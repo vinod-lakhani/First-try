@@ -363,7 +363,7 @@ export default function MVPSimulatorPage() {
         taxDragBrokeragePct: form.taxDragBrokeragePct,
         openingBalances,
         monthlyPlan: Array.from({ length: horizonMonths }, (_, i) => ({ ...monthlyPlan, monthIndex: i })),
-        goals: { efTarget$: monthlyBasics * form.efTargetMonths },
+        goals: form.efTargetMonths > 0 ? { efTarget$: monthlyBasics * form.efTargetMonths } : {},
       };
       const series = simulateScenario(scenarioInput);
 

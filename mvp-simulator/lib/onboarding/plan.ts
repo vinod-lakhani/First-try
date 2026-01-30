@@ -471,7 +471,8 @@ export function generateBoostedPlanAndProjection(
   });
 
   // Step 2: Savings Allocation
-  const efTargetMonths = safetyStrategy?.efTargetMonths || 3;
+  // Use ?? so 0 is preserved (user "no EF target"); only default when undefined
+  const efTargetMonths = safetyStrategy?.efTargetMonths ?? 3;
   // Use actual allocated needs from income allocation engine
   const freq = income.payFrequency || 'biweekly';
   const paychecksPerMonth = freq === 'weekly' ? 4.33 : freq === 'biweekly' ? 2.17 : freq === 'semimonthly' ? 2 : 1;
@@ -959,8 +960,9 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
   });
 
   // Step 2: Savings Allocation Engine
-  const efTargetMonths = safetyStrategy?.efTargetMonths || 3;
-  
+  // Use ?? so 0 is preserved (user "no EF target"); only default when undefined
+  const efTargetMonths = safetyStrategy?.efTargetMonths ?? 3;
+
   // Convert to monthly for savings allocation (everything is monthly now)
   const paychecksPerMonth = getPaychecksPerMonth(income.payFrequency || 'biweekly');
   const monthlySavingsBudget = incomeAlloc.savings$ * paychecksPerMonth;
