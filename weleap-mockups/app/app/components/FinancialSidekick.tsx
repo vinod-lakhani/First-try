@@ -90,6 +90,9 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
   
   // Determine context based on current pathname
   const getContext = (): string => {
+    if (pathname?.includes('/tools/mvp-simulator')) {
+      return 'mvp-simulator';
+    }
     if (pathname?.includes('/tools/savings-helper')) {
       return 'savings-helper';
     }

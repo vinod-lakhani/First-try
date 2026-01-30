@@ -275,6 +275,21 @@ export default function ProfilePage() {
                 </div>
 
                 <div className="border-t pt-4">
+                  <h3 className="mb-2 font-medium text-slate-900 dark:text-white">Team tools</h3>
+                  <div className="space-y-2">
+                    <Link href="/app/tools/mvp-simulator">
+                      <Button variant="ghost" size="sm" className="w-full justify-start">
+                        <Link2 className="mr-2 h-4 w-4" />
+                        MVP Simulator (verify outputs)
+                      </Button>
+                    </Link>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                    Enter manual onboarding inputs and compare savings, allocations, and net worth to the real app.
+                  </p>
+                </div>
+
+                <div className="border-t pt-4">
                   <h3 className="mb-2 font-medium text-slate-900 dark:text-white">Data & Privacy</h3>
                   <div className="space-y-2">
                     <Button variant="ghost" size="sm" className="w-full justify-start">

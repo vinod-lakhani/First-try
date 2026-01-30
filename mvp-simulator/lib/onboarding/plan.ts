@@ -198,8 +198,9 @@ function calculateActualsFromExpenses(
   incomePayFrequency?: PayFrequency,
   debts?: OnboardingState['debts']
 ): { needsPct: number; wantsPct: number; savingsPct: number } {
-  if (fixedExpenses.length === 0 && (!debts || debts.length === 0)) {
+  if (fixedExpenses.length === 0) {
     // No expenses data, use targets as baseline
+    // Debts are handled separately by savings allocation, not here
     return fallbackTargets;
   }
 
@@ -420,8 +421,12 @@ export function generateBoostedPlanAndProjection(
     };
   }
   
-  const shiftLimitPct = riskConstraints?.shiftLimitPct ?? 0.04;
-  
+  // Convert shift limit from percentage (e.g., 4) to decimal (0.04) if needed
+  let shiftLimitPct = riskConstraints?.shiftLimitPct ?? 0.04;
+  if (shiftLimitPct > 1) {
+    shiftLimitPct = shiftLimitPct / 100;
+  }
+
   // Calculate actuals3m with proper error handling
   let actuals3m = riskConstraints?.actuals3m;
   if (!actuals3m) {
@@ -467,20 +472,17 @@ export function generateBoostedPlanAndProjection(
 
   // Step 2: Savings Allocation
   const efTargetMonths = safetyStrategy?.efTargetMonths || 3;
-  const monthlyBasics = calculateMonthlyBasics(fixedExpenses);
-  // If no expenses, use a default monthly basics (e.g., 30% of income as a rough estimate)
-  const efTarget$ = monthlyBasics > 0 
-    ? monthlyBasics * efTargetMonths 
-    : (incomePeriod$ * 2.17 * 0.3 * efTargetMonths); // Assume biweekly pay, 30% for needs
+  // Use actual allocated needs from income allocation engine
+  const freq = income.payFrequency || 'biweekly';
+  const paychecksPerMonth = freq === 'weekly' ? 4.33 : freq === 'biweekly' ? 2.17 : freq === 'semimonthly' ? 2 : 1;
+  const monthlyNeeds$ = incomeAlloc.needs$ * paychecksPerMonth;
+  const efTarget$ = monthlyNeeds$ * efTargetMonths;
   const efBalance$ = safetyStrategy?.efBalance$ || 
     assets.filter(a => a.type === 'cash').reduce((sum, a) => sum + a.value$, 0);
 
   const highAprDebts = debts
     .filter(d => d.isHighApr || d.aprPct > 10)
     .map(d => ({ balance$: d.balance$, aprPct: d.aprPct }));
-
-  const freq = income.payFrequency || 'biweekly';
-  const paychecksPerMonth = freq === 'weekly' ? 4.33 : freq === 'biweekly' ? 2.17 : freq === 'semimonthly' ? 2 : 1;
 
   // Run allocator in monthly space (same as app buildFinalPlanData)
   const monthlySavingsBudget = incomeAlloc.savings$ * paychecksPerMonth;
@@ -574,13 +576,15 @@ export function generateBoostedPlanAndProjection(
     notes: [...incomeAlloc.notes, ...savingsAlloc.notes],
   };
 
-  // Step 3: Net Worth Simulation
+  // Step 3: Net Worth Simulation (asset types: cash, investment→brokerage, 401k+roth→retirement)
+  const brokerageFromAssets = assets.filter(a => a.type === 'investment').reduce((sum, a) => sum + a.value$, 0);
+  const retirementFromAssets = assets.filter(a => a.type === '401k' || a.type === 'roth').reduce((sum, a) => sum + a.value$, 0);
   const openingBalances = {
     cash: efBalance$,
-    brokerage: assets.filter(a => a.type === 'brokerage').reduce((sum, a) => sum + a.value$, 0),
-    retirement: assets.filter(a => a.type === 'retirement').reduce((sum, a) => sum + a.value$, 0),
-    hsa: assets.find(a => a.type === 'hsa')?.value$,
-    otherAssets: assets.filter(a => a.type === 'other').reduce((sum, a) => sum + a.value$, 0),
+    brokerage: brokerageFromAssets,
+    retirement: retirementFromAssets,
+    hsa: undefined,
+    otherAssets: 0,
     liabilities: debts.map(d => ({
       name: d.name,
       balance: d.balance$,
@@ -818,8 +822,12 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
       };
     }
 
-    const shiftLimitPct = riskConstraints?.shiftLimitPct ?? 0.04;
-    
+    // Convert shift limit from percentage (e.g., 4) to decimal (0.04) if needed
+    let shiftLimitPct = riskConstraints?.shiftLimitPct ?? 0.04;
+    if (shiftLimitPct > 1) {
+      shiftLimitPct = shiftLimitPct / 100;
+    }
+
     // Calculate actuals3m
   // If actuals3m is explicitly provided in riskConstraints, use it (e.g., from savings optimizer sliders)
   // Otherwise, calculate from expenses (state is source of truth)
@@ -952,10 +960,14 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
 
   // Step 2: Savings Allocation Engine
   const efTargetMonths = safetyStrategy?.efTargetMonths || 3;
-  const monthlyBasics = calculateMonthlyBasics(fixedExpenses);
-  const efTarget$ = monthlyBasics > 0 
-    ? monthlyBasics * efTargetMonths 
-    : (incomePeriod$ * 2.17 * 0.3 * efTargetMonths);
+  
+  // Convert to monthly for savings allocation (everything is monthly now)
+  const paychecksPerMonth = getPaychecksPerMonth(income.payFrequency || 'biweekly');
+  const monthlySavingsBudget = incomeAlloc.savings$ * paychecksPerMonth;
+  const monthlyNeedsTotal = incomeAlloc.needs$ * paychecksPerMonth;
+  
+  // Use actual allocated needs from income allocation engine for EF target
+  const efTarget$ = monthlyNeedsTotal * efTargetMonths;
   const efBalance$ = safetyStrategy?.efBalance$ || 
     assets.filter(a => a.type === 'cash').reduce((sum, a) => sum + a.value$, 0);
 
@@ -965,11 +977,6 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
 
   // Calculate total debt minimum payments (per-paycheck)
   const totalDebtMinPayments$ = debts.reduce((sum, d) => sum + d.minPayment$, 0);
-
-  // Convert to monthly for savings allocation (everything is monthly now)
-  const paychecksPerMonth = getPaychecksPerMonth(income.payFrequency || 'biweekly');
-  const monthlySavingsBudget = incomeAlloc.savings$ * paychecksPerMonth;
-  const monthlyNeedsTotal = incomeAlloc.needs$ * paychecksPerMonth;
   // Convert debt minimum payments from per-paycheck to monthly
   const monthlyDebtMinimums = totalDebtMinPayments$ * paychecksPerMonth;
   const monthlyEssentials = Math.max(0, monthlyNeedsTotal - monthlyDebtMinimums);
@@ -1248,7 +1255,7 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
         : 'TBD';
       
       const currentProgress = assets
-        .filter(a => a.type === 'brokerage' || a.type === 'cash')
+        .filter(a => a.type === 'investment' || a.type === 'cash')
         .reduce((sum, a) => sum + a.value$, 0);
       const progressPct = goal.targetAmount$ ? Math.min(100, (currentProgress / goal.targetAmount$) * 100) : 0;
 
@@ -1279,13 +1286,15 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
     smartInsights.push(`Paying extra on high-APR debt saves you significant interest over time.`);
   }
 
-  // Step 3: Net Worth Simulator
+  // Step 3: Net Worth Simulator (asset types: cash, investment→brokerage, 401k+roth→retirement)
+  const brokerageFromAssets = assets.filter(a => a.type === 'investment').reduce((sum, a) => sum + a.value$, 0);
+  const retirementFromAssets = assets.filter(a => a.type === '401k' || a.type === 'roth').reduce((sum, a) => sum + a.value$, 0);
   const openingBalances = {
     cash: efBalance$,
-    brokerage: assets.filter(a => a.type === 'brokerage').reduce((sum, a) => sum + a.value$, 0),
-    retirement: assets.filter(a => a.type === 'retirement').reduce((sum, a) => sum + a.value$, 0),
-    hsa: assets.find(a => a.type === 'hsa')?.value$,
-    otherAssets: assets.filter(a => a.type === 'other').reduce((sum, a) => sum + a.value$, 0),
+    brokerage: brokerageFromAssets,
+    retirement: retirementFromAssets,
+    hsa: undefined,
+    otherAssets: 0,
     liabilities: debts.map(d => ({
       name: d.name,
       balance: d.balance$,

@@ -947,6 +947,20 @@ If users ask about:
 
   if (context) {
     const contextDescriptions: Record<string, string> = {
+      'mvp-simulator': `CURRENT SCREEN: MVP Simulator (verification tool)
+
+**Screen Purpose**: The user is on the MVP Simulator, an internal tool for the team to verify outputs (savings, allocations, monthly pulse, net worth) against the real WeLeap application. They enter the same inputs as the manual onboarding flow and run the same engines (income allocation, savings allocation, net worth simulation).
+
+**What the user has**:
+- Inputs: income (amount, frequency, gross vs take-home), allocation targets/actuals, shift limit, expenses, debts, assets, safety strategy (EF months, EF balance, liquidity, retirement focus, 401k match needed, IRA/401k room), assumptions (returns, inflation).
+- Outputs: Paycheck plan (Needs/Wants/Savings per period), savings breakdown (EF, debt, match, retirement, brokerage), monthly pulse (same in monthly terms), net worth projection (chart + KPIs: EF reached month, debt-free month, net worth at 5/10/20/40 years).
+
+**What to expect**: Users (team members) ask how an output was calculated so they can verify the real app matches. Answer using the exact formulas and logic from the engines:
+1. **Income allocation**: Starts from 3-month actuals (or manual %). If savings below target, shift from Wants to Savings up to shift limit % per period. Needs stay at actuals. Minimum wants floor 25% unless overridden.
+2. **Savings allocation**: Priority order: (1) 401k match, (2) HSA if eligible, (3) Emergency fund up to 40% of budget or EF gap, (4) High-APR debt up to 40% of remaining, (5) Split remainder by liquidity/retirement matrix (Roth vs Traditional by income/IDR), (6) Route retirement to IRA then 401k, spill to brokerage.
+3. **Net worth**: Monthly simulation: apply growth (cash yield, nominal return, tax drag on brokerage), add plan inflows (EF, brokerage, retirement), accrue interest on debts, apply min + extra payments (avalanche), outflow needs+wants+debt. EF and debt paydown redirect to brokerage when targets met.
+
+**Guidance**: Use the userPlanData.inputs and userPlanData.outputs below. Reference specific numbers when explaining. If userPlanData is missing, ask them to run the simulation first.`,
       'monthly-plan': 'The user is on the monthly plan allocation screen where they allocate their income between Needs, Wants, and Savings.',
       'monthly-plan-design': `CURRENT SCREEN: Monthly Plan Design (Allocate Income to Savings)
       
@@ -1606,26 +1620,40 @@ The user is in the onboarding flow, which guides them through setting up their f
   }
 
   if (userPlanData) {
-    prompt += `User's financial information:\n\n`;
+    const isMvpSimulator = context === 'mvp-simulator' && userPlanData.inputs && userPlanData.outputs;
+    // MVP Simulator: userPlanData has .inputs and .outputs for verification Q&A
+    if (isMvpSimulator) {
+      prompt += `**MVP SIMULATOR – INPUTS (what was entered):**\n`;
+      prompt += JSON.stringify(userPlanData.inputs, null, 2) + '\n\n';
+      prompt += `**MVP SIMULATOR – OUTPUTS (what the engines produced):**\n`;
+      prompt += JSON.stringify(userPlanData.outputs, null, 2) + '\n\n';
+      if (userPlanData.monthlyIncome != null) {
+        prompt += `Monthly income (for reference): $${Number(userPlanData.monthlyIncome).toLocaleString()}\n\n`;
+      }
+      prompt += `Use the above inputs and outputs to explain how any number was calculated. Reference the engines: income allocation (targets, actuals, shift limit), savings allocation (priority stack, liquidity/retirement split), net worth simulation (growth, inflows, debt paydown).\n\n`;
+    }
+    if (!isMvpSimulator) {
+      prompt += `User's financial information:\n\n`;
+      
+      // **CRITICAL DATA SUMMARY** - Help LLM understand what data is available
+      prompt += `**AVAILABLE DATA SUMMARY:**\n`;
+      prompt += `The following sections contain the user's complete financial data. Use these exact values when answering questions:\n`;
+      if (userPlanData.monthlyIncome) prompt += `- Income data available\n`;
+      if (userPlanData.monthlyNeeds || userPlanData.monthlyWants) prompt += `- Spending data (Needs/Wants/Base Savings) available\n`;
+      if (userPlanData.payrollContributions) prompt += `- **CRITICAL**: Payroll contributions and employer match data available (401k, HSA, match amounts)\n`;
+      if (userPlanData.savingsBreakdown) prompt += `- **CRITICAL**: Total Savings Breakdown available (Pre-tax + Match + Post-tax Cash = Total)\n`;
+      if (userPlanData.savingsAllocation) prompt += `- Savings allocation breakdown available (how post-tax cash is distributed)\n`;
+      if (userPlanData.debtTotal) prompt += `- Debt information available\n`;
+      if (userPlanData.netWorth) prompt += `- Net worth projections available\n`;
+      if (userPlanData.emergencyFund) prompt += `- Emergency fund data available\n`;
+      prompt += `\n**CRITICAL SAVINGS FORMULA**: Total Savings = Pre-tax (401k/HSA) + Employer Match + Post-tax Cash\n`;
+      prompt += `- Base Savings (income - needs - wants) is NOT the total. It gets split into pre-tax and post-tax components.\n`;
+      prompt += `- Always check the "Total Monthly Savings Breakdown" section for the complete picture.\n`;
+      prompt += `\n**IMPORTANT**: Always use the exact values from the sections below. Never say "I don't have access to your data" - all data is provided in this prompt.\n\n`;
+    }
     
-    // **CRITICAL DATA SUMMARY** - Help LLM understand what data is available
-    prompt += `**AVAILABLE DATA SUMMARY:**\n`;
-    prompt += `The following sections contain the user's complete financial data. Use these exact values when answering questions:\n`;
-    if (userPlanData.monthlyIncome) prompt += `- Income data available\n`;
-    if (userPlanData.monthlyNeeds || userPlanData.monthlyWants) prompt += `- Spending data (Needs/Wants/Base Savings) available\n`;
-    if (userPlanData.payrollContributions) prompt += `- **CRITICAL**: Payroll contributions and employer match data available (401k, HSA, match amounts)\n`;
-    if (userPlanData.savingsBreakdown) prompt += `- **CRITICAL**: Total Savings Breakdown available (Pre-tax + Match + Post-tax Cash = Total)\n`;
-    if (userPlanData.savingsAllocation) prompt += `- Savings allocation breakdown available (how post-tax cash is distributed)\n`;
-    if (userPlanData.debtTotal) prompt += `- Debt information available\n`;
-    if (userPlanData.netWorth) prompt += `- Net worth projections available\n`;
-    if (userPlanData.emergencyFund) prompt += `- Emergency fund data available\n`;
-    prompt += `\n**CRITICAL SAVINGS FORMULA**: Total Savings = Pre-tax (401k/HSA) + Employer Match + Post-tax Cash\n`;
-    prompt += `- Base Savings (income - needs - wants) is NOT the total. It gets split into pre-tax and post-tax components.\n`;
-    prompt += `- Always check the "Total Monthly Savings Breakdown" section for the complete picture.\n`;
-    prompt += `\n**IMPORTANT**: Always use the exact values from the sections below. Never say "I don't have access to your data" - all data is provided in this prompt.\n\n`;
-    
-    // Income
-    if (userPlanData.monthlyIncome) {
+    // Income (skip for simulator - already included above)
+    if (userPlanData.monthlyIncome && !isMvpSimulator) {
       const monthlyIncome = typeof userPlanData.monthlyIncome === 'number' ? userPlanData.monthlyIncome : 0;
       prompt += `**Income:**\n`;
       prompt += `- Monthly income: $${Math.round(monthlyIncome).toLocaleString()}\n\n`;

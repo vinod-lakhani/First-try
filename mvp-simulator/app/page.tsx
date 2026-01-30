@@ -17,6 +17,7 @@ import type {
   FixedExpense,
   Debt,
   Asset,
+  AssetType,
   PayFrequency,
   RiskConstraints,
   SafetyStrategy,
@@ -37,12 +38,11 @@ const PAY_FREQUENCIES: { value: PayFrequency; label: string }[] = [
   { value: 'monthly', label: 'Monthly' },
 ];
 
-const ASSET_TYPES: Array<'cash' | 'brokerage' | 'retirement' | 'hsa' | 'other'> = [
-  'cash',
-  'brokerage',
-  'retirement',
-  'hsa',
-  'other',
+const ASSET_TYPES: { value: AssetType; label: string }[] = [
+  { value: 'cash', label: 'Cash' },
+  { value: 'investment', label: 'Investment' },
+  { value: '401k', label: '401K' },
+  { value: 'roth', label: 'Roth' },
 ];
 
 interface SimulatorResult {
@@ -263,8 +263,10 @@ export default function MVPSimulatorPage() {
     debts: false,
     assets: false,
     allocation: true,
-    safety: true,
-    payroll: false,
+    ef: true,
+    k401: true,
+    hsa: true,
+    assumptions: false,
     pulse: false,
   });
   const [chatOpen, setChatOpen] = useState(false);
@@ -318,14 +320,19 @@ export default function MVPSimulatorPage() {
         state.fixedExpenses
           .filter((e) => e.category === 'needs')
           .reduce((s, e) => s + e.amount$, 0) || monthlyIncome$ * 0.3;
-      const efBalance$ =
+      const cashFromAssets =
         state.assets.filter((a) => a.type === 'cash').reduce((s, a) => s + a.value$, 0) || 0;
+      const efBalance$ = form.efBalance$ ?? 0;
+      const openingCash = efBalance$ + cashFromAssets;
+      const brokerageFromAssets = state.assets.filter((a) => a.type === 'investment').reduce((s, a) => s + a.value$, 0);
+      const retirementFromAssets =
+        state.assets.filter((a) => a.type === '401k' || a.type === 'roth').reduce((s, a) => s + a.value$, 0);
       const openingBalances = {
-        cash: efBalance$,
-        brokerage: state.assets.filter((a) => a.type === 'brokerage').reduce((s, a) => s + a.value$, 0),
-        retirement: state.assets.filter((a) => a.type === 'retirement').reduce((s, a) => s + a.value$, 0),
-        hsa: state.assets.find((a) => a.type === 'hsa')?.value$,
-        otherAssets: state.assets.filter((a) => a.type === 'other').reduce((s, a) => s + a.value$, 0),
+        cash: openingCash,
+        brokerage: brokerageFromAssets,
+        retirement: retirementFromAssets,
+        hsa: undefined,
+        otherAssets: 0,
         liabilities: state.debts.map((d) => ({
           name: d.name,
           balance: d.balance$,
@@ -502,6 +509,12 @@ export default function MVPSimulatorPage() {
     const netWorthAt20Y = kpis.netWorthAtYears?.[20] ?? (nw[239] ?? 0);
     const netWorthAt40Y = kpis.netWorthAtYears?.[40] ?? (nw[479] ?? nw[nw.length - 1] ?? 0);
 
+    const cashFromAssets = form.assets.filter((a) => a.type === 'cash').reduce((s, a) => s + a.value$, 0) || 0;
+    const efBalanceForNW = form.efBalance$ ?? 0;
+    const openingCash = efBalanceForNW + cashFromAssets;
+    const brokerageFromAssets = form.assets.filter((a) => a.type === 'investment').reduce((s, a) => s + a.value$, 0);
+    const retirementFromAssets = form.assets.filter((a) => a.type === '401k' || a.type === 'roth').reduce((s, a) => s + a.value$, 0);
+
     // Build calculation steps so the chat can show the exact math
     const incomeSteps: string[] = [
       `Income per period (user input) = $${incomePeriod$.toFixed(2)} at ${form.payFrequency} → ${paychecksPerMonth.toFixed(2)} paychecks/month → monthly income = $${monthlyIncome.toFixed(2)}.`,
@@ -509,7 +522,7 @@ export default function MVPSimulatorPage() {
       form.useActualsFromExpenses
         ? `Actuals baseline: derived from the user's expense entries (Needs/Wants/Savings split from categorized expenses).`
         : `Actuals baseline (user input): Needs ${form.actualsNeedsPct}%, Wants ${form.actualsWantsPct}%, Savings ${form.actualsSavingsPct}% → Needs = $${(incomePeriod$ * form.actualsNeedsPct / 100).toFixed(2)}, Wants = $${(incomePeriod$ * form.actualsWantsPct / 100).toFixed(2)}, Savings = $${(incomePeriod$ * form.actualsSavingsPct / 100).toFixed(2)}.`,
-      `Shift limit (user input): max ${(form.shiftLimitPct * 100).toFixed(0)}% of income per period can move from Wants → Savings. If savings is below target, shift = min(savings gap %, shift limit %) × income.`,
+      `Shift limit (user input): max ${(form.shiftLimitPct > 1 ? form.shiftLimitPct : form.shiftLimitPct * 100).toFixed(0)}% of income per period can move from Wants → Savings. If savings is below target, shift = min(savings gap %, shift limit %) × income.`,
       `Final allocation: Needs $${result.boostedPlan.needs$.toFixed(2)}, Wants $${result.boostedPlan.wants$.toFixed(2)}, Savings $${result.boostedPlan.savings$.toFixed(2)} per period (sum = income).`,
     ];
 
@@ -540,6 +553,7 @@ export default function MVPSimulatorPage() {
     ];
 
     const netWorthSteps: string[] = [
+      `Starting point (month 0): Opening cash = EF balance + Cash assets = $${efBalanceForNW.toFixed(0)} + $${cashFromAssets.toFixed(0)} = $${openingCash.toFixed(0)}. Brokerage from Investment assets ($${brokerageFromAssets.toFixed(0)}); retirement from 401K + Roth assets ($${retirementFromAssets.toFixed(0)}). Liabilities from user debts. Net worth at start = assets − liabilities = $${netWorthAtStart.toLocaleString('en-US', { maximumFractionDigits: 0 })}.`,
       `Net worth simulation: 40 years (480 months). Same data feeds the Net Worth graph. Each month: (1) Apply growth: cash × (1 + cashYield/12), brokerage × (1 + (nominalReturn − taxDrag)/12), retirement × (1 + nominalReturn/12), HSA × (1 + nominalReturn/12). User assumptions: cash yield ${form.cashYieldPct}%/yr, nominal return ${form.nominalReturnPct}%/yr, tax drag on brokerage ${form.taxDragBrokeragePct}%/yr.`,
       `(2) Inflows: cash += EF + unallocated; brokerage += brokerage$ from plan; retirement += match$ + retirement$ from plan; HSA += hsa$ from plan (all monthly from allocator).`,
       `(3) Debts: interest = balance × (APR/12); then apply min payment; then apply extra payment (high-APR debt $ from plan) to highest APR first. When a debt is paid off, its min payment is redirected to brokerage.`,
@@ -553,7 +567,7 @@ export default function MVPSimulatorPage() {
       'Target Needs %': form.targetNeedsPct,
       'Target Wants %': form.targetWantsPct,
       'Target Savings %': form.targetSavingsPct,
-      'Shift limit %': form.shiftLimitPct * 100,
+      'Shift limit %': form.shiftLimitPct > 1 ? form.shiftLimitPct : form.shiftLimitPct * 100,
       'EF target (months of needs)': form.efTargetMonths,
       'EF current balance': `$${form.efBalance$.toFixed(2)}`,
       'Has 401(k)': form.has401k ? 'Yes' : 'No',
@@ -832,11 +846,11 @@ export default function MVPSimulatorPage() {
                 </div>
               </Section>
 
-              {/* Safety & strategy */}
+              {/* Emergency fund */}
               <Section
-                title="Safety & strategy"
-                open={sectionsOpen.safety}
-                onToggle={() => toggleSection('safety')}
+                title="Emergency fund"
+                open={sectionsOpen.ef}
+                onToggle={() => toggleSection('ef')}
               >
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
@@ -861,42 +875,14 @@ export default function MVPSimulatorPage() {
                     />
                   </div>
                 </div>
-                <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Liquidity</label>
-                    <select
-                      value={form.liquidity}
-                      onChange={(e) => setForm((f) => ({ ...f, liquidity: e.target.value as SafetyStrategy['liquidity'] }))}
-                      className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-                    >
-                      <option value="High">High</option>
-                      <option value="Medium">Medium</option>
-                      <option value="Low">Low</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Retirement focus</label>
-                    <select
-                      value={form.retirementFocus}
-                      onChange={(e) => setForm((f) => ({ ...f, retirementFocus: e.target.value as SafetyStrategy['retirementFocus'] }))}
-                      className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-                    >
-                      <option value="High">High</option>
-                      <option value="Medium">Medium</option>
-                      <option value="Low">Low</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="mt-2 flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="onIDR"
-                    checked={form.onIDR}
-                    onChange={(e) => setForm((f) => ({ ...f, onIDR: e.target.checked }))}
-                    className="rounded border-slate-300"
-                  />
-                  <label htmlFor="onIDR" className="text-sm font-medium text-slate-700 dark:text-slate-300">On IDR (student loans)</label>
-                </div>
+              </Section>
+
+              {/* 401(k) */}
+              <Section
+                title="401(k)"
+                open={sectionsOpen.k401}
+                onToggle={() => toggleSection('k401')}
+              >
                 <div className="mt-2 flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -1026,32 +1012,15 @@ export default function MVPSimulatorPage() {
                 </div>
                 </>
                 )}
-                <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">IRA room this year ($)</label>
-                    <input
-                      type="number"
-                      value={form.iraRoomThisYear$}
-                      onChange={(e) => setForm((f) => ({ ...f, iraRoomThisYear$: parseFloat(e.target.value) || 0 }))}
-                      min={0}
-                      className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">401(k) room this year ($)</label>
-                    <input
-                      type="number"
-                      value={form.k401RoomThisYear$}
-                      onChange={(e) => setForm((f) => ({ ...f, k401RoomThisYear$: parseFloat(e.target.value) || 0 }))}
-                      min={0}
-                      className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-                    />
-                  </div>
-                </div>
-                {/* HSA (same logic as app) */}
-                <div className="mt-4 border-t border-slate-200 pt-4 dark:border-slate-600">
-                  <div className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">HSA</div>
-                  <div className="flex items-center gap-2">
+              </Section>
+
+              {/* HSA */}
+              <Section
+                title="HSA"
+                open={sectionsOpen.hsa}
+                onToggle={() => toggleSection('hsa')}
+              >
+                <div className="flex items-center gap-2">
                     <input
                       type="checkbox"
                       id="hsaEligible"
@@ -1155,7 +1124,6 @@ export default function MVPSimulatorPage() {
                       )}
                     </>
                   )}
-                </div>
               </Section>
 
               {/* Expenses */}
@@ -1266,11 +1234,11 @@ export default function MVPSimulatorPage() {
                     />
                     <select
                       value={a.type}
-                      onChange={(ev) => updateAsset(a.id, { type: ev.target.value as Asset['type'] })}
-                      className="max-w-[100px] rounded border border-slate-300 bg-white px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                      onChange={(ev) => updateAsset(a.id, { type: ev.target.value as AssetType })}
+                      className="max-w-[120px] rounded border border-slate-300 bg-white px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                     >
                       {ASSET_TYPES.map((t) => (
-                        <option key={t} value={t}>{t}</option>
+                        <option key={t.value} value={t.value}>{t.label}</option>
                       ))}
                     </select>
                     <Button type="button" variant="ghost" size="icon" onClick={() => removeAsset(a.id)}>
@@ -1283,11 +1251,11 @@ export default function MVPSimulatorPage() {
                 </Button>
               </Section>
 
-              {/* Assumptions (collapsed by default) */}
+              {/* Assumptions (returns, inflation, liquidity, retirement, IDR) */}
               <Section
-                title="Assumptions (returns, inflation)"
-                open={sectionsOpen.payroll}
-                onToggle={() => toggleSection('payroll')}
+                title="Assumptions"
+                open={sectionsOpen.assumptions}
+                onToggle={() => toggleSection('assumptions')}
               >
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
@@ -1330,6 +1298,64 @@ export default function MVPSimulatorPage() {
                       className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                     />
                   </div>
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Liquidity</label>
+                    <select
+                      value={form.liquidity}
+                      onChange={(e) => setForm((f) => ({ ...f, liquidity: e.target.value as SafetyStrategy['liquidity'] }))}
+                      className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    >
+                      <option value="High">High</option>
+                      <option value="Medium">Medium</option>
+                      <option value="Low">Low</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Retirement focus</label>
+                    <select
+                      value={form.retirementFocus}
+                      onChange={(e) => setForm((f) => ({ ...f, retirementFocus: e.target.value as SafetyStrategy['retirementFocus'] }))}
+                      className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    >
+                      <option value="High">High</option>
+                      <option value="Medium">Medium</option>
+                      <option value="Low">Low</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">IRA room this year ($)</label>
+                    <input
+                      type="number"
+                      value={form.iraRoomThisYear$}
+                      onChange={(e) => setForm((f) => ({ ...f, iraRoomThisYear$: parseFloat(e.target.value) || 0 }))}
+                      min={0}
+                      className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">401(k) room this year ($)</label>
+                    <input
+                      type="number"
+                      value={form.k401RoomThisYear$}
+                      onChange={(e) => setForm((f) => ({ ...f, k401RoomThisYear$: parseFloat(e.target.value) || 0 }))}
+                      min={0}
+                      className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    />
+                  </div>
+                </div>
+                <div className="mt-2 flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="onIDR"
+                    checked={form.onIDR}
+                    onChange={(e) => setForm((f) => ({ ...f, onIDR: e.target.checked }))}
+                    className="rounded border-slate-300"
+                  />
+                  <label htmlFor="onIDR" className="text-sm font-medium text-slate-700 dark:text-slate-300">On IDR (student loans)</label>
                 </div>
               </Section>
 

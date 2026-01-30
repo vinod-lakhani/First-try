@@ -62,12 +62,15 @@ export interface Debt {
 
 /**
  * Asset information
+ * Types map to net worth: Cash → cash; Investment → brokerage; 401K, Roth → retirement.
  */
+export type AssetType = "cash" | "investment" | "401k" | "roth";
+
 export interface Asset {
   id: string;
   name: string;
   value$: number;
-  type: "cash" | "brokerage" | "retirement" | "hsa" | "other";
+  type: AssetType;
   /** Account name or identifier */
   accountName?: string;
 }

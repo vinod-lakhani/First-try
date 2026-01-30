@@ -479,12 +479,16 @@ export function generateBoostedPlanAndProjection(
     .filter(d => d.isHighApr || d.aprPct > 10)
     .map(d => ({ balance$: d.balance$, aprPct: d.aprPct }));
 
+  const freq = income.payFrequency || 'biweekly';
+  const paychecksPerMonthForMatch = freq === 'weekly' ? 4.33 : freq === 'biweekly' ? 2.17 : freq === 'semimonthly' ? 2 : 1;
+  const matchNeedPerPaycheck$ = (safetyStrategy?.match401kPerMonth$ ?? 0) / paychecksPerMonthForMatch;
+
   const savingsAlloc = allocateSavings({
     savingsBudget$: incomeAlloc.savings$,
     efTarget$,
     efBalance$,
     highAprDebts,
-    matchNeedThisPeriod$: 0, // TODO: Get from employer match data
+    matchNeedThisPeriod$: matchNeedPerPaycheck$,
     incomeSingle$: income.incomeSingle$ || income.annualSalary$ || incomePeriod$ * 26,
     onIDR: safetyStrategy?.onIDR || false,
     liquidity: safetyStrategy?.liquidity || 'Medium',
