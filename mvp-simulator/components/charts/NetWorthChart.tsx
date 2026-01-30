@@ -11,11 +11,16 @@ import { Info, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-interface NetWorthChartProps {
+export interface NetWorthChartProps {
   labels: string[];
   netWorth: number[];
   assets?: number[];
   liabilities?: number[];
+  /** Asset breakdown for tooltip: Cash, 401K/Roth, Investment, HSA */
+  cash?: number[];
+  brokerage?: number[];
+  retirement?: number[];
+  hsa?: number[];
   height?: number;
   baselineNetWorth?: number[]; // Optional baseline series for comparison
 }
@@ -25,6 +30,10 @@ export function NetWorthChart({
   netWorth,
   assets,
   liabilities,
+  cash,
+  brokerage,
+  retirement,
+  hsa,
   height = 300,
   baselineNetWorth,
 }: NetWorthChartProps) {
@@ -40,6 +49,10 @@ export function NetWorthChart({
     let filteredLiabilities = liabilities || [];
     let filteredLabels = labels;
     let filteredBaseline = baselineNetWorth || [];
+    let filteredCash = cash || [];
+    let filteredBrokerage = brokerage || [];
+    let filteredRetirement = retirement || [];
+    let filteredHsa = hsa || [];
 
     if (timeRange !== 'ALL') {
       const totalMonths = netWorth.length;
@@ -58,6 +71,10 @@ export function NetWorthChart({
       filteredAssets = (assets || []).slice(0, rangeEnd);
       filteredLiabilities = (liabilities || []).slice(0, rangeEnd);
       filteredLabels = labels.slice(0, rangeEnd);
+      filteredCash = (cash || []).slice(0, rangeEnd);
+      filteredBrokerage = (brokerage || []).slice(0, rangeEnd);
+      filteredRetirement = (retirement || []).slice(0, rangeEnd);
+      filteredHsa = (hsa || []).slice(0, rangeEnd);
       if (baselineNetWorth && baselineNetWorth.length > 0) {
         filteredBaseline = baselineNetWorth.slice(0, rangeEnd);
       }
@@ -152,9 +169,13 @@ export function NetWorthChart({
       chartData: {
         labels: filteredLabels,
         datasets,
+        cash: filteredCash,
+        brokerage: filteredBrokerage,
+        retirement: filteredRetirement,
+        hsa: filteredHsa,
       },
     };
-  }, [labels, netWorth, assets, liabilities, timeRange, baselineNetWorth]);
+  }, [labels, netWorth, assets, liabilities, cash, brokerage, retirement, hsa, timeRange, baselineNetWorth]);
 
   useEffect(() => {
     // Check if canvas ref is available before importing Chart.js
@@ -189,6 +210,17 @@ export function NetWorthChart({
       const filteredBaseline = chartData.datasets.find((d: any) => d.label === 'Current Plan')?.data || [];
       const filteredAssets = chartData.datasets.find((d: any) => d.label === 'Assets')?.data || [];
       const filteredLiabilities = chartData.datasets.find((d: any) => d.label === 'Liabilities')?.data || [];
+      const tooltipCash = (chartData as any).cash || [];
+      const tooltipBrokerage = (chartData as any).brokerage || [];
+      const tooltipRetirement = (chartData as any).retirement || [];
+      const tooltipHsa = (chartData as any).hsa || [];
+
+      const formatTooltipValue = (value: number) =>
+        value >= 1000000
+          ? '$' + (value / 1000000).toFixed(2) + 'M'
+          : value >= 1000
+          ? '$' + (value / 1000).toFixed(1) + 'K'
+          : '$' + value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
       chartRef.current = new Chart(ctx, {
         type: 'line',
@@ -228,15 +260,14 @@ export function NetWorthChart({
                   return '';
                 },
                 label: function (context: any) {
-                  // Get value from the filtered dataset at the current index
                   const dataIndex = context.dataIndex;
                   const datasetLabel = context.dataset.label;
+                  // Hide aggregate Assets when we have breakdown (Cash, 401K/Roth, Investment, HSA in afterBody)
+                  const hasBreakdown = tooltipCash.length > 0 || tooltipBrokerage.length > 0 || tooltipRetirement.length > 0;
+                  if (datasetLabel === 'Assets' && hasBreakdown) return undefined;
                   let value: number;
-                  
                   if (datasetLabel === 'Net Worth' || datasetLabel === 'Modified Plan') {
                     value = filteredNetWorth[dataIndex] || 0;
-                  } else if (datasetLabel === 'Assets') {
-                    value = filteredAssets[dataIndex] || 0;
                   } else if (datasetLabel === 'Liabilities') {
                     value = filteredLiabilities[dataIndex] || 0;
                   } else if (datasetLabel === 'Current Plan') {
@@ -244,36 +275,24 @@ export function NetWorthChart({
                   } else {
                     value = context.parsed.y;
                   }
-                  
-                  const formatted =
-                    value >= 1000000
-                      ? '$' + (value / 1000000).toFixed(2) + 'M'
-                      : value >= 1000
-                      ? '$' + (value / 1000).toFixed(1) + 'K'
-                      : '$' +
-                        value.toLocaleString('en-US', {
-                          minimumFractionDigits: 0,
-                          maximumFractionDigits: 0,
-                        });
-                  
-                  // Add delta for Modified Plan when baseline exists
+                  const formatted = formatTooltipValue(value);
                   if (datasetLabel === 'Modified Plan' && filteredBaseline.length > 0) {
                     const baselineValue = filteredBaseline[dataIndex] || 0;
                     const delta = value - baselineValue;
-                    const deltaFormatted =
-                      Math.abs(delta) >= 1000000
-                        ? '$' + (delta / 1000000).toFixed(2) + 'M'
-                        : Math.abs(delta) >= 1000
-                        ? '$' + (delta / 1000).toFixed(1) + 'K'
-                        : '$' +
-                          delta.toLocaleString('en-US', {
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: 0,
-                          });
+                    const deltaFormatted = formatTooltipValue(Math.abs(delta));
                     return `${datasetLabel}: ${formatted} (${delta >= 0 ? '+' : ''}${deltaFormatted})`;
                   }
-                  
                   return `${datasetLabel}: ${formatted}`;
+                },
+                afterBody: function (context: any[]) {
+                  if (context.length === 0) return [];
+                  const dataIndex = context[0].dataIndex;
+                  const lines: string[] = [];
+                  if (tooltipCash.length > dataIndex) lines.push(`Cash: ${formatTooltipValue(tooltipCash[dataIndex] || 0)}`);
+                  if (tooltipRetirement.length > dataIndex) lines.push(`401K / Roth: ${formatTooltipValue(tooltipRetirement[dataIndex] || 0)}`);
+                  if (tooltipBrokerage.length > dataIndex) lines.push(`Investment: ${formatTooltipValue(tooltipBrokerage[dataIndex] || 0)}`);
+                  if (tooltipHsa.length > dataIndex && (tooltipHsa[dataIndex] ?? 0) > 0) lines.push(`HSA: ${formatTooltipValue(tooltipHsa[dataIndex] || 0)}`);
+                  return lines;
                 },
                 labelColor: function (context: any) {
                   return {

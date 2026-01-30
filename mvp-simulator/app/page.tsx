@@ -67,6 +67,10 @@ interface SimulatorResult {
     netWorth: number[];
     assets: number[];
     liabilities: number[];
+    cash?: number[];
+    brokerage?: number[];
+    retirement?: number[];
+    hsa?: number[];
     kpis: { efReachedMonth?: number; debtFreeMonth?: number; netWorthAtYears?: Record<number, number> };
   };
   error?: string;
@@ -390,6 +394,10 @@ export default function MVPSimulatorPage() {
           netWorth: [openingNetWorth, ...series.netWorth],
           assets: [openingAssets, ...series.assets],
           liabilities: [openingLiabilities, ...series.liabilities],
+          cash: [openingCash, ...series.cash],
+          brokerage: [brokerageFromAssets, ...series.brokerage],
+          retirement: [retirementFromAssets, ...series.retirement],
+          hsa: series.hsa ? [0, ...series.hsa] : undefined,
           kpis: {
             efReachedMonth: series.kpis.efReachedMonth,
             debtFreeMonth: series.kpis.debtFreeMonth,
@@ -406,6 +414,9 @@ export default function MVPSimulatorPage() {
           netWorth: [],
           assets: [],
           liabilities: [],
+          cash: [],
+          brokerage: [],
+          retirement: [],
           kpis: {},
         },
         error: err instanceof Error ? err.message : String(err),
@@ -1526,6 +1537,10 @@ export default function MVPSimulatorPage() {
                       netWorth={result.netWorth.netWorth}
                       assets={result.netWorth.assets}
                       liabilities={result.netWorth.liabilities}
+                      cash={result.netWorth.cash}
+                      brokerage={result.netWorth.brokerage}
+                      retirement={result.netWorth.retirement}
+                      hsa={result.netWorth.hsa}
                       height={280}
                     />
                     <div className="mt-4 flex flex-wrap gap-4 text-sm">
