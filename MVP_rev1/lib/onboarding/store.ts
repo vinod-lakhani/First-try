@@ -244,7 +244,7 @@ export const useOnboardingStore = create<OnboardingStore & { planInvalidationKey
     set((state) => {
       const base = state.safetyStrategy ?? defaultState.safetyStrategy;
       return {
-        safetyStrategy: { ...base, ...updates },
+        safetyStrategy: { ...base, ...updates } as SafetyStrategy,
       };
     }),
   

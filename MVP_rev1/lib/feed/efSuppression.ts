@@ -11,7 +11,7 @@ const EF_HORIZON_MONTHS = 12;
 const ON_TRACK_BUFFER = 0.9; // 10% buffer so we don't spam for tiny differences
 const GRACE_PERIOD_DAYS = 14;
 
-export interface EfsuppressionResult {
+export interface EfSuppressionResult {
   show: boolean;
   /** Reason for suppression (when show is false). */
   suppressedReason?: 'target_met' | 'on_track' | 'grace_period';

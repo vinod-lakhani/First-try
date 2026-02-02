@@ -632,8 +632,8 @@ export function buildSavingsExplain(
       },
     },
     guardrails: {
-      hsaClamped,
-      hsaMaxed,
+      hsaClamped: hsaClamped ?? false,
+      hsaMaxed: hsaMaxed ?? false,
       matchMaxed: matchGapMonthly <= 0 && allocation.match401k$ > 0,
       notes,
     },

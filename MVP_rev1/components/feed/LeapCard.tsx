@@ -163,11 +163,11 @@ export function LeapCard({
                 <p>dedupeKey: {debugInfo.dedupeKey}</p>
                 {leap.leapType === 'EMERGENCY_FUND_GAP' && leap.payload && (
                   <div className="mt-2 p-2 rounded bg-slate-100 dark:bg-slate-900 text-[10px] space-y-0.5">
-                    <p>efMonths: {leap.payload.efMonths}</p>
-                    <p>efTargetMonths: {leap.payload.efTargetMonths}</p>
-                    <p>efGapDollars: {leap.payload.efGapDollars}</p>
-                    <p>appliedPlanEfMonthly: {leap.payload.appliedPlanEfMonthly}</p>
-                    <p>efRequiredPerMonth: {leap.payload.efRequiredPerMonth}</p>
+                    <p>efMonths: {String((leap.payload as Record<string, unknown>).efMonths ?? '')}</p>
+                    <p>efTargetMonths: {String((leap.payload as Record<string, unknown>).efTargetMonths ?? '')}</p>
+                    <p>efGapDollars: {String((leap.payload as Record<string, unknown>).efGapDollars ?? '')}</p>
+                    <p>appliedPlanEfMonthly: {String((leap.payload as Record<string, unknown>).appliedPlanEfMonthly ?? '')}</p>
+                    <p>efRequiredPerMonth: {String((leap.payload as Record<string, unknown>).efRequiredPerMonth ?? '')}</p>
                     <p>efOnTrack: {String(leap.payload.efOnTrack)}</p>
                     <p>recentlyApplied: {String(leap.payload.recentlyApplied)}</p>
                     <p>criticallyLow: {String(leap.payload.criticallyLow)}</p>

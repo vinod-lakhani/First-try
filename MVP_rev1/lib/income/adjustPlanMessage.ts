@@ -98,7 +98,7 @@ export function buildAdjustPlanMessage(snapshot: IncomeAllocationSnapshot, propo
       { type: 'compare', leftLabel: 'Current plan', leftValue: `Save ${current}/mo`, rightLabel: `Proposed for ${nextMonth}`, rightValue: `Save ${proposed}/mo` },
       { type: 'bullets', items: [
         `You overspent by ${formatCurrency(overspendAmount)} → savings fell short of your target.`,
-        `We're suggesting you cut spending by about 4% next month. That moves savings from ${formatCurrency(lastMonthSavingsActual)} toward ${formatCurrency(proposed)} — one step closer to ${current}.`,
+        `We're suggesting you cut spending by about 4% next month. That moves savings from ${formatCurrency(lastMonthSavingsActual)} toward ${proposed} — one step closer to ${current}.`,
       ] },
       { type: 'question', value: `Want me to apply this for ${nextMonth}, or ask a question first?` },
       { type: 'actions', actions: [{ id: 'apply', label: 'Apply' }, { id: 'ask', label: 'Ask a question' }, { id: 'keep', label: 'Keep my plan' }] },

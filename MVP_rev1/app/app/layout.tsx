@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useOnboardingStore } from '@/lib/onboarding/store';
 import { FinancialSidekick } from './components/FinancialSidekick';
@@ -17,11 +17,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
-export default function AppLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -128,6 +124,18 @@ export default function AppLayout({
         )}
       </div>
     </SidekickProvider>
+  );
+}
+
+export default function AppLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <p className="text-slate-600 dark:text-slate-400">Loading...</p>
+      </div>
+    }>
+      <AppLayoutInner>{children}</AppLayoutInner>
+    </Suspense>
   );
 }
 

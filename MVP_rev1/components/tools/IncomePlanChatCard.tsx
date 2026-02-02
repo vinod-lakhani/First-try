@@ -14,6 +14,7 @@ import { sendChatMessageStreaming } from '@/lib/chat/chatService';
 import type { IncomeAllocationSnapshot } from '@/lib/income/incomeAllocationLifecycle';
 import type { AdjustPlanMessage, MessageBlock } from '@/lib/income/adjustPlanMessage';
 import { CHAT_HELPER_TEXT, CHAT_INPUT_PLACEHOLDER } from '@/lib/chat/chatPrompts';
+import type { ChatCurrentPlanData } from '@/lib/chat/buildChatPlanData';
 
 interface ChatMessage {
   id: string;
@@ -55,11 +56,7 @@ export interface IncomePlanChatCardProps {
     totalSavingsMonthly: number;
   } | null;
   /** Current plan data for chat (net worth, savings breakdown, savings allocation) — ensures consistency across all chat windows */
-  currentPlanDataForChat?: {
-    netWorth?: Record<string, unknown>;
-    savingsBreakdown?: Record<string, unknown>;
-    savingsAllocation?: Record<string, unknown>;
-  };
+  currentPlanDataForChat?: ChatCurrentPlanData;
 }
 
 export function IncomePlanChatCard({

@@ -17,6 +17,7 @@ import { ChatMarkdown } from '@/components/chat/ChatMarkdown';
 import { ChatLoadingDots } from '@/components/chat/ChatLoadingDots';
 import { sendChatMessageStreaming } from '@/lib/chat/chatService';
 import { CHAT_INPUT_PLACEHOLDER } from '@/lib/chat/chatPrompts';
+import type { ChatCurrentPlanData } from '@/lib/chat/buildChatPlanData';
 import type { ProposedPlan } from '@/lib/tools/savings/types';
 import type { SavingsAllocationExplain, DeltaRowId } from '@/lib/tools/savings/explain';
 
@@ -60,11 +61,7 @@ export interface SavingsChatPanelProps {
   /** Current context for chat (source, leapId, leapType) */
   currentContextForChat?: { source?: string; leapId?: string; leapType?: string };
   /** Current plan data for chat (net worth, savings breakdown, savings allocation) — ensures consistency across all chat windows */
-  currentPlanDataForChat?: {
-    netWorth?: Record<string, unknown>;
-    savingsBreakdown?: Record<string, unknown>;
-    savingsAllocation?: Record<string, unknown>;
-  };
+  currentPlanDataForChat?: ChatCurrentPlanData;
   /** When set, show as assistant message (plan updated by user edit, not applied yet) */
   pendingUpdateMessage?: string | null;
   /** Engine-only explain (toolOutput.explain) — Sidekick uses ONLY these numbers */
