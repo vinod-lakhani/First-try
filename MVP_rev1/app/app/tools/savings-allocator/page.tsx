@@ -1255,7 +1255,7 @@ function SavingsAllocatorContent() {
   const efMonthsProposed = monthlyBasics > 0 ? Math.min(efTargetMonths, efBalance$ / monthlyBasics) : efTargetMonths;
 
   const uiMessages = useMemo(() => generateUIMessages({
-    currentPlan: effectiveCurrentPlan ?? undefined,
+    currentPlan: effectiveCurrentPlan ?? null,
     proposedPlan: proposedPlanSnapshot,
     mode,
     lastEditedKey,
