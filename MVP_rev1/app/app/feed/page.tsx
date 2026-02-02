@@ -36,7 +36,6 @@ import { Bell, ChevronDown, ChevronUp, BookOpen } from 'lucide-react';
 import { SIDEKICK_INSIGHTS } from '@/lib/feed/sidekickInsights';
 import { SidekickInsightItem } from '@/components/feed/SidekickInsightItem';
 import { LeapCard, type FeedDisplayMode } from '@/components/feed/LeapCard';
-import type { UserFinancialState } from '@/lib/feed/leapTypes';
 
 function toolRoute(tool: Leap['originatingTool']): string {
   switch (tool) {
