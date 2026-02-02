@@ -247,15 +247,18 @@ export function IncomePlanChatCard({
                     if (block.type === 'actions') {
                       return (
                         <div key={idx} className="flex flex-wrap gap-2 pt-2">
-                          <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={onApply}>
-                            Apply
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => { setShowSuggestions(true); onAskQuestion(); textareaRef.current?.focus(); }}>
-                            Ask a question
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={onKeepPlan}>
-                            Keep my plan
-                          </Button>
+                          {block.actions.map((action) => {
+                            if (action.id === 'apply') {
+                              return <Button key={action.id} size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={onApply}>{action.label}</Button>;
+                            }
+                            if (action.id === 'ask') {
+                              return <Button key={action.id} size="sm" variant="outline" onClick={() => { setShowSuggestions(true); onAskQuestion(); textareaRef.current?.focus(); }}>{action.label}</Button>;
+                            }
+                            if (action.id === 'keep') {
+                              return <Button key={action.id} size="sm" variant="ghost" onClick={onKeepPlan}>{action.label}</Button>;
+                            }
+                            return null;
+                          })}
                         </div>
                       );
                     }

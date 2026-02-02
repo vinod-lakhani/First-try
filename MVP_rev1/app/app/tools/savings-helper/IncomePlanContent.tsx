@@ -414,7 +414,7 @@ export function IncomePlanContent(props?: IncomePlanContentProps) {
 
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [confirmMode, setConfirmMode] = useState<'first_time' | 'oversaved' | 'undersaved' | null>(null);
+  const [confirmMode, setConfirmMode] = useState<'first_time' | 'oversaved' | 'undersaved' | 'on_track' | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Chat-led "Adjust plan" flow
@@ -459,7 +459,19 @@ export function IncomePlanContent(props?: IncomePlanContentProps) {
 
   const onApplyFromChat = () => {
     setPendingAction('APPLY_RECOMMENDED');
-    setConfirmMode(snapshot.state === 'OVERSAVED' ? 'oversaved' : snapshot.state === 'UNDERSAVED' ? 'undersaved' : snapshot.state === 'FIRST_TIME' ? 'first_time' : null);
+    const rec = snapshot.plan.recommendedPlan;
+    const current = snapshot.plan.currentPlan?.plannedSavings ?? 0;
+    const amountToApply = proposedPlannedSavingsFromChat ?? rec.plannedSavings;
+    const hasProposedChange = proposedPlannedSavingsFromChat != null || Math.abs(rec.plannedSavings - current) > 1;
+    const isOnTrackWithChange = snapshot.state === 'ON_TRACK' && hasProposedChange;
+    setConfirmMode(
+      snapshot.state === 'OVERSAVED' ? 'oversaved'
+      : snapshot.state === 'UNDERSAVED' ? 'undersaved'
+      : snapshot.state === 'FIRST_TIME' ? 'first_time'
+      : isOnTrackWithChange ? (amountToApply >= current ? 'oversaved' : 'undersaved')
+      : snapshot.state === 'ON_TRACK' ? 'on_track'
+      : null
+    );
     setShowConfirmModal(true);
   };
 
@@ -488,20 +500,41 @@ export function IncomePlanContent(props?: IncomePlanContentProps) {
     const needsPct = spendPct * 0.5;
     const wantsPct = spendPct * 0.5;
     const targets = { needsPct, wantsPct, savingsPct };
-    if (baselineState.riskConstraints) {
-      baselineState.updateRiskConstraints({ targets, actuals3m: targets, bypassWantsFloor: true });
+    // Single atomic update so Income, Monthly Pulse, etc. always see latest user state
+    if (typeof baselineState.applyIncomePlanFromSavingsHelper === 'function') {
+      baselineState.applyIncomePlanFromSavingsHelper(targets);
     } else {
-      baselineState.setRiskConstraints({ targets, actuals3m: targets, shiftLimitPct: 0.04, bypassWantsFloor: true });
+      if (baselineState.riskConstraints) {
+        baselineState.updateRiskConstraints({ targets, actuals3m: targets, bypassWantsFloor: true });
+      } else {
+        baselineState.setRiskConstraints({ targets, actuals3m: targets, shiftLimitPct: 0.04, bypassWantsFloor: true });
+      }
+      baselineState.setInitialPaycheckPlan(undefined);
+      if (typeof baselineState.invalidatePlan === 'function') {
+        baselineState.invalidatePlan();
+      }
     }
-    baselineState.setInitialPaycheckPlan(undefined);
   };
 
   const handleConfirm = () => {
     const rec = snapshot.plan.recommendedPlan;
+    if (confirmMode === 'on_track') {
+      setShowConfirmModal(false);
+      setConfirmMode(null);
+      setPendingAction(null);
+      setUiMode('DEFAULT');
+      setLastInjectedMessageKey(null);
+      setToastMessage('Keeping your plan for next month.');
+      setTimeout(() => setToastMessage(null), 3000);
+      return;
+    }
     if (confirmMode === 'first_time' || confirmMode === 'oversaved' || confirmMode === 'undersaved') {
       const amountToApply = proposedPlannedSavingsFromChat ?? rec.plannedSavings;
       const spendToApply = netIncomeMonthly - amountToApply;
       persistPlan(amountToApply, spendToApply);
+      if (confirmMode === 'first_time') {
+        baselineState.setComplete(true);
+      }
       setShowConfirmModal(false);
       setConfirmMode(null);
       setPendingAction(null);
@@ -640,58 +673,70 @@ export function IncomePlanContent(props?: IncomePlanContentProps) {
             currentPlanDataForChat={currentPlanDataForChat}
           />
 
-          {/* 4. Net Worth — when OVERSAVED/UNDERSAVED show proposed vs current plan; else planned + current saving */}
+          {/* 4. Net worth impact — same format as savings-allocator: title, subtitle, boxes above chart */}
           {baselinePlanData && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Wealth Accumulation</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="overflow-x-auto rounded-lg border bg-white p-4 dark:bg-slate-800">
-                  <NetWorthChart
-                    key={`income-plan-nw-${simulateScenario}-${simulateAmount}-${proposedPlanData ? 'proposed' : 'planned'}-${(proposedPlanData ?? baselinePlanData).netWorthChartData.netWorth.length}-${(proposedPlanData ?? baselinePlanData).netWorthChartData.netWorth[(proposedPlanData ?? baselinePlanData).netWorthChartData.netWorth.length - 1] ?? 0}`}
-                    labels={(proposedPlanData ?? baselinePlanData).netWorthChartData.labels}
-                    netWorth={(proposedPlanData ?? baselinePlanData).netWorthChartData.netWorth}
-                    assets={(proposedPlanData ?? baselinePlanData).netWorthChartData.assets}
-                    liabilities={(proposedPlanData ?? baselinePlanData).netWorthChartData.liabilities}
-                    baselineNetWorth={proposedPlanData ? baselinePlanData.netWorthChartData.netWorth : currentSavingPlanData?.netWorthChartData?.netWorth}
-                    seriesLabels={proposedPlanData
-                      ? { primary: 'Proposed plan', baseline: 'Planned net worth (current)' }
-                      : { primary: 'Planned net worth', baseline: 'Based on current saving' }}
-                    height={400}
-                  />
-                  <p className="mt-2 text-xs text-center text-slate-500 dark:text-slate-400">
-                    Projections assume ~9% growth on investments (retirement, brokerage), 4% on cash. Undersaved = less contributed each month, so the gap vs current plan grows over time.
-                  </p>
+            <div className="space-y-4">
+              <h2 className="font-semibold text-slate-900 dark:text-white">Net worth impact</h2>
+              {/* Subtitle: EF months when available from plan (matches savings-allocator context line) */}
+              {baselinePlanData.emergencyFund?.monthsToTarget != null && baselinePlanData.emergencyFund?.monthsTarget != null && (
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600 dark:text-slate-400">
+                  <span>
+                    You&apos;re at ~{Math.round(baselinePlanData.emergencyFund.monthsToTarget)} months, target is {baselinePlanData.emergencyFund.monthsTarget}
+                  </span>
                 </div>
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                  {(proposedPlanData ?? baselinePlanData).netWorthProjection.map((projection: { label: string; value: number }) => {
-                    const compareData = proposedPlanData ? baselinePlanData : currentSavingPlanData;
-                    const compareValue = compareData?.netWorthProjection?.find((p: { label: string }) => p.label === projection.label)?.value;
-                    // Today = opening net worth; same for both plans, so delta must be 0 when comparing proposed vs current plan
-                    const delta =
-                      proposedPlanData && projection.label === 'Today'
-                        ? 0
-                        : (compareValue != null ? projection.value - compareValue : 0);
-                    const showDelta = compareValue != null && (proposedPlanData ? true : Math.abs(delta) > 1);
-                    const deltaLabel = proposedPlanData ? 'vs current plan' : 'vs current saving';
-                    return (
-                      <div key={projection.label} className="rounded-lg border bg-white p-4 text-center dark:bg-slate-800">
-                        <p className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-400">{projection.label}</p>
-                        <p className={`text-2xl font-bold ${projection.value >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                          ${projection.value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              )}
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                {(proposedPlanData ?? baselinePlanData).netWorthProjection.map((projection: { label: string; value: number }) => {
+                  const compareData = proposedPlanData ? baselinePlanData : currentSavingPlanData;
+                  const compareValue = compareData?.netWorthProjection?.find((p: { label: string }) => p.label === projection.label)?.value;
+                  const delta =
+                    proposedPlanData && projection.label === 'Today'
+                      ? 0
+                      : (compareValue != null ? projection.value - compareValue : 0);
+                  const showDelta = compareValue != null && (proposedPlanData ? true : Math.abs(delta) > 1);
+                  const deltaLabel = proposedPlanData ? 'vs Current' : 'vs current saving';
+                  return (
+                    <div
+                      key={projection.label}
+                      className="rounded-lg border bg-white p-4 text-center dark:bg-slate-800 dark:border-slate-700"
+                    >
+                      <p className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-400">
+                        {projection.label}
+                      </p>
+                      <p className={`text-2xl font-bold ${
+                        projection.value >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                      }`}>
+                        ${projection.value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      </p>
+                      {showDelta && (
+                        <p className={`mt-1 text-xs font-medium ${
+                          delta >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                        }`}>
+                          {delta >= 0 ? '+' : ''}${delta.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {deltaLabel}
                         </p>
-                        {showDelta && (
-                          <p className={`mt-1 text-xs font-medium ${delta >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                            {delta >= 0 ? '+' : ''}${delta.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {deltaLabel}
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="overflow-x-auto rounded-lg border bg-white p-4 dark:bg-slate-800 dark:border-slate-700">
+                <NetWorthChart
+                  key={`income-plan-nw-${simulateScenario}-${simulateAmount}-${proposedPlanData ? 'proposed' : 'planned'}-${(proposedPlanData ?? baselinePlanData).netWorthChartData.netWorth.length}-${(proposedPlanData ?? baselinePlanData).netWorthChartData.netWorth[(proposedPlanData ?? baselinePlanData).netWorthChartData.netWorth.length - 1] ?? 0}`}
+                  labels={(proposedPlanData ?? baselinePlanData).netWorthChartData.labels}
+                  netWorth={(proposedPlanData ?? baselinePlanData).netWorthChartData.netWorth}
+                  assets={(proposedPlanData ?? baselinePlanData).netWorthChartData.assets}
+                  liabilities={(proposedPlanData ?? baselinePlanData).netWorthChartData.liabilities}
+                  baselineNetWorth={proposedPlanData ? baselinePlanData.netWorthChartData.netWorth : currentSavingPlanData?.netWorthChartData?.netWorth}
+                  seriesLabels={proposedPlanData
+                    ? { primary: 'Proposed plan', baseline: 'Planned net worth (current)' }
+                    : { primary: 'Planned net worth', baseline: 'Based on current saving' }}
+                  height={400}
+                />
+                <p className="mt-2 text-xs text-center text-slate-500 dark:text-slate-400">
+                  Projections assume ~9% growth on investments (retirement, brokerage), 4% on cash. Undersaved = less contributed each month, so the gap vs current plan grows over time.
+                </p>
+              </div>
+            </div>
           )}
 
           {/* 5. Details accordion */}
@@ -749,19 +794,21 @@ export function IncomePlanContent(props?: IncomePlanContentProps) {
       )}
 
       {/* Confirmation modal (only when user clicks Apply from chat or FIRST_TIME primary CTA) */}
-      {showConfirmModal && (confirmMode === 'first_time' || confirmMode === 'oversaved' || confirmMode === 'undersaved') && (
+      {showConfirmModal && (confirmMode === 'first_time' || confirmMode === 'oversaved' || confirmMode === 'undersaved' || confirmMode === 'on_track') && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <Card className="w-full max-w-md">
             <CardHeader>
               <CardTitle>
-                {confirmMode === 'first_time' ? 'Set your income plan?' : `Confirm plan for ${nextMonthLabel}`}
+                {confirmMode === 'first_time' ? 'Set your income plan?' : confirmMode === 'on_track' ? 'Keep plan for next month?' : `Confirm plan for ${nextMonthLabel}`}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-slate-600 dark:text-slate-400">
                 {confirmMode === 'first_time'
-                  ? `This sets your monthly savings target to $${Math.round(snapshot.plan.recommendedPlan.plannedSavings).toLocaleString()}.`
-                  : `Monthly savings target: $${Math.round(snapshot.plan.currentPlan?.plannedSavings ?? 0).toLocaleString()} → $${Math.round(snapshot.plan.recommendedPlan.plannedSavings).toLocaleString()}`
+                  ? `This sets your monthly savings target to $${Math.round((proposedPlannedSavingsFromChat ?? snapshot.plan.recommendedPlan.plannedSavings)).toLocaleString()}.`
+                  : confirmMode === 'on_track'
+                    ? 'Your current plan stays in place for next month. No changes will be made.'
+                    : `Monthly savings target: $${Math.round(snapshot.plan.currentPlan?.plannedSavings ?? 0).toLocaleString()} → $${Math.round((proposedPlannedSavingsFromChat ?? snapshot.plan.recommendedPlan.plannedSavings)).toLocaleString()}`
                 }
               </p>
               <div className="flex gap-3">

@@ -43,6 +43,10 @@ export function usePlanData(options?: UsePlanDataOptions): FinalPlanData | null 
   const plaidConnected = useOnboardingStore((state) => state.plaidConnected);
   // Bumped by invalidatePlan() when user confirms savings allocation so we always recalc
   const planInvalidationKey = useOnboardingStore((state) => (state as { planInvalidationKey?: number }).planInvalidationKey ?? 0);
+  // Serialize targets/actuals3m so plan recalc triggers when savings-helper (or any tool) updates user state
+  const riskConstraintsKey = typeof riskConstraints?.targets === 'object' && typeof riskConstraints?.actuals3m === 'object'
+    ? JSON.stringify(riskConstraints.targets) + '|' + JSON.stringify(riskConstraints.actuals3m) + '|' + (riskConstraints.bypassWantsFloor ? '1' : '0')
+    : '';
 
   const [planData, setPlanData] = useState<FinalPlanData | null>(null);
 
@@ -68,6 +72,7 @@ export function usePlanData(options?: UsePlanDataOptions): FinalPlanData | null 
     riskConstraints,
     riskConstraintsTargets,
     riskConstraintsActuals3m,
+    riskConstraintsKey,
     useCurrentStateActuals,
     safetyStrategy,
     payrollContributions,

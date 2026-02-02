@@ -135,6 +135,8 @@ export interface OnboardingStore extends OnboardingState {
   resetOnboarding: () => void;
   /** Bump to force usePlanData to recalc (e.g. after Confirm & Apply). Not persisted. */
   invalidatePlan: () => void;
+  /** Apply income plan from savings-helper in one atomic update so Income/Monthly Pulse see latest. */
+  applyIncomePlanFromSavingsHelper: (targets: { needsPct: number; wantsPct: number; savingsPct: number }) => void;
 }
 
 /**
@@ -329,6 +331,30 @@ export const useOnboardingStore = create<OnboardingStore & { planInvalidationKey
   },
 
   invalidatePlan: () => set({ planInvalidationKey: Date.now() }),
+
+  applyIncomePlanFromSavingsHelper: (targets) =>
+    set((state) => {
+      const existing = state.riskConstraints;
+      const newRiskConstraints: RiskConstraints = existing
+        ? { ...existing, targets: { ...targets }, actuals3m: { ...targets }, bypassWantsFloor: true }
+        : {
+            shiftLimitPct: 0.04,
+            targets: { ...targets },
+            actuals3m: { ...targets },
+            bypassWantsFloor: true,
+          };
+      // Clear customSavingsAllocation so Income/Monthly Pulse use the new total from targets
+      // (otherwise buildFinalPlanData keeps using the old custom allocation total, e.g. $3412)
+      const newSafetyStrategy = state.safetyStrategy
+        ? { ...state.safetyStrategy, customSavingsAllocation: undefined }
+        : state.safetyStrategy;
+      return {
+        riskConstraints: newRiskConstraints,
+        safetyStrategy: newSafetyStrategy,
+        initialPaycheckPlan: undefined,
+        planInvalidationKey: Date.now(),
+      };
+    }),
   }),
   {
     name: 'weleap-onboarding-storage', // unique name for localStorage key

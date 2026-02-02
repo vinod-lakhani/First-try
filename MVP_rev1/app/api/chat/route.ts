@@ -2323,7 +2323,7 @@ If PROPOSED_PLAN is missing or empty:
       prompt += `3) Your primary job is to explain the recommended monthly savings target and what would change next month (if anything).\n`;
       prompt += `4) Align with the UI: Use **Current savings target**, **Actual savings (last month)**, **Proposed for next month** — the user sees these above the chat.\n`;
       prompt += `5) Propose at most ONE change at a time. Keep it calm and supportive.\n`;
-      prompt += `6) CRITICAL: You cannot apply plan changes directly. When the user confirms, tell them: "Click **Explore options** above, then click the green **Apply** button in this chat to confirm."\n\n`;
+      prompt += `6) CRITICAL: You cannot apply plan changes directly. When the user confirms, tell them: "Click the green **Apply** button at the top of this chat to finalize this adjustment."\n\n`;
       const isFirstTime = ctx.state === 'FIRST_TIME';
       prompt += `When asked:\n`;
       if (isFirstTime) {
@@ -2333,9 +2333,9 @@ If PROPOSED_PLAN is missing or empty:
         prompt += `- "Why?" -> provide 2-3 data-backed bullets, short.\n`;
       }
       prompt += `- "What if I want to save more / less?" -> propose a step-sized change using shift limit and show tradeoff.\n`;
-      prompt += `- If user says "yes" or "apply it" -> say: "Sounds good! To confirm: click **Explore options** above, then click the green **Apply** button that appears in this chat."\n`;
-      prompt += `- If user insists on a larger change -> allow it but warn gently and remind them: click Explore options, then Apply in the chat.\n\n`;
-      prompt += `**PROPOSAL OUTPUT:** When you propose a specific new monthly savings amount (e.g. "save $100 more" = current + 100), you MUST output on a new line at the very end of your response: PROPOSED_SAVINGS: <number> (the exact dollar amount, no commas). Example: PROPOSED_SAVINGS: 3512. This lets the app show that amount when they click Explore options and Apply.\n\n`;
+      prompt += `- If user says "yes" or "apply it" -> say: "Sounds good! To confirm: click the green **Apply** button at the top of this chat to finalize this adjustment."\n`;
+      prompt += `- If user insists on a larger change -> allow it but warn gently and remind them: click the green Apply button at the top of this chat to finalize.\n\n`;
+      prompt += `**PROPOSAL OUTPUT:** When you propose a specific new monthly savings amount (e.g. "save $100 more" = current + 100), you MUST output on a new line at the very end of your response: PROPOSED_SAVINGS: <number> (the exact dollar amount, no commas). Example: PROPOSED_SAVINGS: 3512. This lets the app show that amount when they click Apply.\n\n`;
       prompt += `Always end with a question or next step.\n`;
       if (isFirstTime) {
         prompt += `**FIRST_TIME only:** When explaining the plan you MUST: (1) Say it is based on their last three months of actual spending/savings. (2) State the safely save amount and savings percentage. (3) Say clearly if they are "above the 20% target threshold", "at the 20% target", or "below the 20% target" (and that this is a realistic starting point).\n\n`;

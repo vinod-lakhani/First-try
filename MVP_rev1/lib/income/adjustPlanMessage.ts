@@ -51,7 +51,7 @@ export function buildAdjustPlanMessage(snapshot: IncomeAllocationSnapshot, propo
         { type: 'compare', leftLabel: 'Current plan', leftValue: 'No plan yet', rightLabel: `Proposed for ${nextMonth}`, rightValue: `${proposed}/mo` },
         { type: 'bullets', items: ['This is based on your last 3 months of actual spending.'] },
         { type: 'question', value: 'Want to set this as your plan, or ask a question first?' },
-        { type: 'actions', actions: [{ id: 'apply', label: 'Apply' }, { id: 'ask', label: 'Ask a question' }, { id: 'keep', label: 'Keep my plan' }] },
+        { type: 'actions', actions: [{ id: 'apply', label: 'Apply' }, { id: 'ask', label: 'Ask a question' }] },
       ],
     };
   }
