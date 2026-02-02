@@ -1,0 +1,165 @@
+{
+  "timestamp": "2025-12-17T02:09:42.846Z",
+  "baseUrl": "https://weleap-mvp.vercel.app",
+  "totalTests": 5,
+  "testResults": [
+    {
+      "id": "calc-error-down-payment",
+      "name": "Calculation Error - Down Payment Savings",
+      "question": "I don't think I can afford to save 3.4k a month for my down payment because this is my entire saving and investing category. Give me something a little more reasonable with what I can reduce from my \"wants\" spending",
+      "response": "To create a more reasonable savings plan for your down payment, we'll need to adjust your current allocations based on your monthly income of **$8,680**.\n\n### Current Allocations\n- **Total monthly savings**: **$3,412**\n- **Current Wants**: Let's calculate using your monthly income allocation.\n\n### Income Allocation Breakdown\n- **Needs**: **50% of income** = **$4,340**\n- **Wants**: **30% of income** = **$2,604**\n- **Savings**: **20% of income** = **$1,736**\n\nSince your current savings of **$3,412** exceeds the recommended **$1,736**, we’ll look to adjust your Wants spending to increase your savings for the down payment.\n\n### Adjusted Savings Plan\n1. **Identify Savings Gap**: \n   - Current savings allocation: **$3,412**\n   - Recommended savings allocation: **$1,736**\n   - You are currently saving **$1,676** more than the recommended amount.\n   \n2. **Shift from Wants**:\n   - To reasonably save for your down payment, let’s target a savings of **$2,500** per month.\n   - This means you need to reduce your savings by **$912** from what you currently save.\n\n### New Allocations\n- **Wants Adjustment**: \n   - Target Wants spending: \n     - Current Wants: **$2,604**\n     - New Wants: **$2,604 + $912 = $3,516** (this is above the recommended; you'll need to reduce Wants instead)\n   - To achieve a balance, let's reduce Wants to **$1,500** for a more manageable savings target.\n\n### Summary\n- **New Needs**: **$4,340** (fixed)\n- **New Wants**: **$1,500**\n- **New Savings**: **$2,500**\n\nThis adjustment allows you to save **$2,500** per month towards your down payment by reducing your Wants to **$1,500**. This way, you maintain a healthy savings rate while managing your spending effectively.",
+      "validations": [
+        {
+          "type": "no_calculation_error",
+          "description": "Should not have calculation error like \"$1,500 - $11,700 = $228,300\"",
+          "pass": true,
+          "message": null
+        },
+        {
+          "type": "correct_time_calculation",
+          "description": "Time to save calculation should be: (Target - Current) / Monthly = Months",
+          "pass": true,
+          "message": null
+        },
+        {
+          "type": "mentions_shift_limit",
+          "description": "Should mention 4% shift limit when suggesting wants reduction",
+          "pass": false,
+          "message": "Should mention 4% shift limit when suggesting wants reduction"
+        },
+        {
+          "type": "uses_3month_average",
+          "description": "Should reference 3-month average when discussing income allocation",
+          "pass": false,
+          "message": "Should reference 3-month average when discussing income allocation"
+        },
+        {
+          "type": "verifies_totals",
+          "description": "Should verify that Needs + Wants + Savings = Income",
+          "pass": false,
+          "message": "Should verify totals: Needs + Wants + Savings = Income"
+        },
+        {
+          "type": "no_closing_phrase",
+          "description": "Should not end with closing phrases like \"Let me know if...\"",
+          "pass": true,
+          "message": null
+        }
+      ],
+      "passed": 3,
+      "total": 6,
+      "allPassed": false
+    },
+    {
+      "id": "down-payment-priority-stack",
+      "name": "Down Payment - Savings Priority Stack Integration",
+      "question": "I'm living in the Bay Area, when would I be able to to buy a house or apartment? Nothing fancy, just an average starter home. I also don't know how much I should be saving every month so that I have enough to pay for the down payment",
+      "response": "To determine when you might be able to buy an average starter home in the Bay Area, we need to consider several factors, including the average home price in your desired area and your current savings rate.\n\n### Average Starter Home Price\nAs of recent data, an average starter home in the Bay Area might cost around **$800,000**. A typical down payment is **20%**, which would be **$160,000**.\n\n### Current Savings\nYou're currently saving **$3,412** per month. \n\n### Down Payment Savings Plan\nTo reach a down payment of **$160,000**, here's how long it would take with your current savings:\n\n- **Time to Save**: \n  - **$160,000** (down payment) ÷ **$3,412** (monthly savings) = approximately **47 months** or about **3.9 years**.\n\n### Considerations\n- This calculation does not account for any home price appreciation over time, which could affect your target amount.\n- It's important to consider additional costs related to home buying, like closing costs, moving expenses, and ongoing homeownership costs (maintenance, property taxes, etc.).\n\n### Saving Strategy\nTo ensure you're financially prepared:\n1. Maintain your current saving rate of **$3,412** monthly.\n2. Consider setting aside additional savings for emergency funds and other financial goals.\n\nBy sticking to this plan, you should be well on your way to saving for a down payment in approximately **3.9 years**.",
+      "validations": [
+        {
+          "type": "mentions_priority_stack",
+          "description": "Should explain how down payment fits into savings allocation priority stack",
+          "pass": false,
+          "message": "Should explain how down payment fits into savings allocation priority stack"
+        },
+        {
+          "type": "shows_allocation_breakdown",
+          "description": "Should show full savings allocation breakdown when relevant",
+          "pass": true,
+          "message": null
+        },
+        {
+          "type": "no_closing_phrase",
+          "description": "Should not end with closing phrases",
+          "pass": true,
+          "message": null
+        }
+      ],
+      "passed": 2,
+      "total": 3,
+      "allPassed": false
+    },
+    {
+      "id": "comparison-user-data",
+      "name": "Comparison Question - Use Actual User Data",
+      "question": "Am I on track compared to other people my age?",
+      "response": "I can't provide specific comparisons to other people your age, as financial situations can vary widely based on individual circumstances. However, I can help you understand your financial health based on your current income, savings, and expenses. \n\nIf you share your financial goals or any specific areas you'd like to evaluate, I can provide insights on how you might align with those goals.",
+      "validations": [
+        {
+          "type": "uses_actual_data",
+          "description": "Should use actual user data (savings, income) to calculate metrics",
+          "pass": false,
+          "message": "Should use actual user data (savings $11,700, income) to calculate metrics"
+        },
+        {
+          "type": "calculates_metrics",
+          "description": "Should calculate specific metrics like \"months of salary saved\"",
+          "pass": true,
+          "message": null
+        },
+        {
+          "type": "no_closing_phrase",
+          "description": "Should not end with closing phrases",
+          "pass": true,
+          "message": null
+        }
+      ],
+      "passed": 2,
+      "total": 3,
+      "allPassed": false
+    },
+    {
+      "id": "add-down-payment-plan",
+      "name": "Add Down Payment Plan - Priority Stack",
+      "question": "Can you add this down payment savings plan to my financial plan?",
+      "response": "I can help you with that! Please provide me with the details of your down payment savings plan, such as the target amount, timeline, and how much you plan to save monthly.",
+      "validations": [
+        {
+          "type": "mentions_priority_stack",
+          "description": "Should explain how down payment fits into savings allocation",
+          "pass": false,
+          "message": "Should explain how down payment fits into savings allocation priority stack"
+        },
+        {
+          "type": "no_closing_phrase",
+          "description": "Should not end with closing phrases",
+          "pass": true,
+          "message": null
+        }
+      ],
+      "passed": 1,
+      "total": 2,
+      "allPassed": false
+    },
+    {
+      "id": "down-payment-timeline",
+      "name": "Down Payment Timeline - Correct Calculation",
+      "question": "If I'm saving 2k per month for my down payment, then when can I buy a house? Also where should this money exist while I'm saving it, in a bank account, in the stock market, high yield savings account, ETF, etc?",
+      "response": "To determine when you can buy a house with your monthly savings of **$2,000**, we need to consider a few factors: your target down payment amount and any specific timeline you have in mind for purchasing a home.\n\n### Savings Duration\n1. **Determine the Target Down Payment:** The typical down payment is often **20%** of the home's purchase price. For example, if you aim to buy a house worth **$300,000**, your down payment would be **$60,000**.\n2. **Calculate Time to Save:** \n   - If your target is **$60,000** and you're saving **$2,000** per month, it would take you **30 months** to reach that amount.\n   - For a house worth **$400,000**, the down payment would be **$80,000**, requiring **40 months** at your current savings rate.\n\n### Where to Save Your Money\nSince you are saving for a down payment, the ideal place to keep your savings would be in a **High Yield Savings Account (HYSA)**. Here’s why:\n\n- **Safety:** HYSAs are insured and provide a safe place for your savings without the risk of losing principal.\n- **Liquidity:** You can easily access your funds when you're ready to buy a house.\n- **Interest:** HYSAs offer better interest rates than traditional savings accounts, allowing your savings to grow while you save.\n\nInvesting in the stock market or ETFs can be riskier for a short-term goal like a down payment, as market fluctuations could affect your total savings when you need them. \n\nIf you have a specific home price in mind or a target date for purchasing, I can help you refine this estimate further.",
+      "validations": [
+        {
+          "type": "correct_calculation",
+          "description": "Time calculation should be correct: ($240,000 - $11,700) / $2,000 = 114 months",
+          "pass": false,
+          "message": "Should show correct calculation: ($240,000 - $11,700) / $2,000 = 114 months (9.5 years)"
+        },
+        {
+          "type": "no_closing_phrase",
+          "description": "Should not end with closing phrases",
+          "pass": true,
+          "message": null
+        }
+      ],
+      "passed": 1,
+      "total": 2,
+      "allPassed": false
+    }
+  ],
+  "summary": {
+    "passedTests": 0,
+    "totalTests": 5,
+    "passedValidations": 9,
+    "totalValidations": 16,
+    "passRate": "56.3%"
+  }
+}

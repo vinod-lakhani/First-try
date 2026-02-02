@@ -1,0 +1,233 @@
+================================================================================
+COMPREHENSIVE LLM TEST RESULTS
+================================================================================
+Timestamp: 2025-11-29T22:00:24.007Z
+Base URL: http://localhost:3000
+
+Summary:
+  Tests Run: 7
+  Validations Passed: 27/29
+  Pass Rate: 93.1%
+
+================================================================================
+
+
+================================================================================
+TEST 1: walk me through the numbers in the recommended plan
+Context: savings-helper
+================================================================================
+
+Question:
+"walk me through the numbers in the recommended plan"
+
+Response:
+## Recommended Plan Overview
+
+The Recommended Plan optimizes your income allocation based on your monthly income of **$8,680**. Here's how it breaks down:
+
+- **Needs**: **47.0%** of income  
+  - Dollar amount: **$4,080.60**
+
+- **Wants**: **33.0%** of income  
+  - Dollar amount: **$2,861.40**
+
+- **Savings**: **20.0%** of income  
+  - Dollar amount: **$1,736.00**
+
+### Changes from Current Plan
+
+- **Needs**: Decreased from **47.5%** to **47.0%**  
+- **Wants**: Decreased from **36.0%** to **33.0%**  
+- **Savings**: Increased from **16.5%** to **20.0%**  
+
+### Reason for Changes
+
+The adjustments were made to increase your savings while respecting a **4% shift limit** from wants to savings. This approach helps you move closer to the recommended allocation of **50% Needs, 30% Wants, and 20% Savings** without making drastic changes to your current lifestyle.
+
+This Recommended Plan optimally balances your essential expenses, discretionary spending, and savings goals.
+
+Validation Results:
+  ✅ Mentions Recommended Plan values
+  ✅ Explains income allocation (Needs/Wants/Savings)
+  ✅ Uses actual dollar amounts
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+================================================================================
+TEST 2: walk me through the numbers
+Context: savings-helper
+================================================================================
+
+Question:
+"walk me through the numbers"
+
+Response:
+## Recommended Plan Overview
+
+The Recommended Plan optimizes your income allocation based on your monthly income of **$8,680**. Here’s how your allocations break down:
+
+- **Needs**: **47.0%** of income, which is **$4,070**
+- **Wants**: **33.0%** of income, which is **$2,861**
+- **Savings**: **20.0%** of income, which is **$1,736**
+
+### Current Plan vs. Recommended Plan
+
+| Category  | Current Plan | Recommended Plan | Change      |
+|-----------|--------------|------------------|-------------|
+| Needs     | **47.5%**    | **47.0%**        | Decrease by **0.5%**  |
+| Wants     | **36.0%**    | **33.0%**        | Decrease by **3.0%**  |
+| Savings   | **16.5%**    | **20.0%**        | Increase by **3.5%**  |
+
+### Changes Explained
+
+- **Wants** were reduced by **3.0%** to increase **Savings** by **3.5%**, ensuring that you're moving closer to the target allocation of **50/30/20**.
+- The shift respects the **4% limit**, which means it won't drastically change your spending habits suddenly.
+
+The Recommended Plan reflects a balanced approach, allowing you to maintain your essential needs while increasing your savings, which is important for long-term financial health.
+
+Validation Results:
+  ✅ Uses Recommended Plan values
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+================================================================================
+TEST 3: give me a breakdown of my net worth in 10 years
+Context: financial-sidekick
+================================================================================
+
+Question:
+"give me a breakdown of my net worth in 10 years"
+
+Response:
+Based on your current plan, you're projected to have **$326,977** in net worth in 10 years. 
+
+### Asset Breakdown:
+- **Cash/Emergency Fund**: **$18,000**
+- **Brokerage**: **$95,000**
+- **Retirement (401k/IRA)**: **$213,977**
+- **Total Assets**: **$326,977**
+
+Liabilities remain at **$0**.
+
+Validation Results:
+  ✅ Uses asset breakdown data directly
+  ✅ Breaks down by asset type
+  ✅ No linear math calculations
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+================================================================================
+TEST 4: how much cash will I have in 5 years
+Context: financial-sidekick
+================================================================================
+
+Question:
+"how much cash will I have in 5 years"
+
+Response:
+Based on your current plan, you'll have **$15,000** in cash (emergency fund) in 5 years.
+
+Validation Results:
+  ✅ Uses exact value from breakdown
+  ✅ No manual calculation
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+================================================================================
+TEST 5: what will my net worth be in 5 years
+Context: financial-sidekick
+================================================================================
+
+Question:
+"what will my net worth be in 5 years"
+
+Response:
+Based on your current plan, you're projected to have **$127,985** in net worth in 5 years. This projection factors in growth across your assets.
+
+Validation Results:
+  ✅ Uses projection value directly
+  ✅ Mentions growth is factored in
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+================================================================================
+TEST 6: what can I do to increase my net worth by an additional $100,000 in 5 years
+Context: financial-sidekick
+================================================================================
+
+Question:
+"what can I do to increase my net worth by an additional $100,000 in 5 years"
+
+Response:
+Based on your current plan, you're projected to have **$127,985** in net worth in 5 years. To reach **$227,985** (your current projection plus an additional **$100,000**), you need to increase your net worth by **$100,000**.
+
+### Calculation:
+
+1. **Monthly Savings Needed**:
+   - Total increase needed: **$100,000**
+   - Time frame: **5 years** (60 months)
+   - Required monthly savings: **$100,000 / 60 months = $1,666.67/month**
+
+2. **Allocation through Savings Priority Stack**:
+   - Emergency Fund (up to 40% of additional savings): 
+     - **$1,666.67 × 0.40 = $666.67** 
+   - High-APR Debt Payoff (if applicable): 
+     - Assume no debt here, so **$0**.
+   - Retirement Contributions:
+     - The remaining amount goes into retirement: 
+     - **$1,666.67 - $666.67 = $1,000**.
+
+### Summary of Needed Monthly Savings:
+- **Emergency Fund**: **$666.67**
+- **Retirement**: **$1,000**
+
+To achieve this goal, you would need to save approximately **$1,666.67 per month**. You can explore different scenarios using the **Savings Helper tool** to find the most comfortable savings rate and see the projected impact on your net worth.
+
+Validation Results:
+  ❌ Uses growth formulas (not linear): Should factor in growth rates, not use simple division
+  ❌ Shows growth-adjusted impact: Should show monthly savings needed with growth factored in
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+================================================================================
+TEST 7: walk me through your recommended plan
+Context: savings-helper
+================================================================================
+
+Question:
+"walk me through your recommended plan"
+
+Response:
+The **Recommended Plan** allocates your monthly income as follows:
+
+- **Needs**: **47.0%** ($4,081)
+- **Wants**: **33.0%** ($2,864)
+- **Savings**: **20.0%** ($1,736)
+
+### Comparison with Current Plan
+- **Current Plan**:
+  - Needs: **47.5%** ($4,118)
+  - Wants: **36.0%** ($3,124)
+  - Savings: **16.5%** ($1,431)
+
+### Changes Made
+- **Wants** were reduced by **3.0%** to increase **Savings** by **3.5%**, respecting the **4% shift limit**. This adjustment helps you move closer to the ideal **50/30/20** allocation while ensuring you save more.
+
+This recommended allocation will help optimize your savings while maintaining a balanced budget.
+
+Validation Results:
+  ✅ Uses plain English (not LaTeX)
+  ✅ Uses bold numbers or bullet points
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+================================================================================
+END OF TEST RESULTS
+================================================================================

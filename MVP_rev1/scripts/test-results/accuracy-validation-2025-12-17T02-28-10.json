@@ -1,0 +1,165 @@
+{
+  "timestamp": "2025-12-17T02:28:10.094Z",
+  "baseUrl": "https://weleap-mvp.vercel.app",
+  "totalTests": 5,
+  "testResults": [
+    {
+      "id": "calc-error-down-payment",
+      "name": "Calculation Error - Down Payment Savings",
+      "question": "I don't think I can afford to save 3.4k a month for my down payment because this is my entire saving and investing category. Give me something a little more reasonable with what I can reduce from my \"wants\" spending",
+      "response": "To find a more reasonable savings amount for your down payment, we can adjust your \"wants\" spending while maintaining your essential expenses.\n\n### Current Spending Breakdown\n- **Monthly Income:** **$8,680**\n- **Total Monthly Savings:** **$3,412**\n- **Wants Spending:** Currently, you are allocating part of your savings to \"wants.\"\n\n### Income Allocation Logic\n1. **Needs:** Fixed short-term and will remain unchanged.\n2. **Wants:** Can be adjusted to allow for increased savings.\n\n### Suggested Adjustments\nGiven that savings is currently **$3,412**, let’s look at how we can reduce your wants spending to increase your savings. \n\n### Shift Calculation\n- **Current Wants Spending:** Let's say your wants spending is **$2,600** (hypothetical).\n- To increase savings, we can shift a portion from Wants to Savings. The shift limit is exactly **4% of your income**, which is **$347.20**.\n\nIf you reduce your wants spending by **$347.20**:\n- **New Wants Spending:** **$2,252.80**\n- **New Savings Amount:** **$3,759.20**\n\n### Conclusion\nThis adjustment allows you to save **$3,759.20** per month towards your down payment without significantly impacting your essential needs. You can decide to adjust your wants spending further if necessary, but this provides a more manageable approach to boosting your savings while maintaining your budget.",
+      "validations": [
+        {
+          "type": "no_calculation_error",
+          "description": "Should not have calculation error like \"$1,500 - $11,700 = $228,300\"",
+          "pass": true,
+          "message": null
+        },
+        {
+          "type": "correct_time_calculation",
+          "description": "Time to save calculation should be: (Target - Current) / Monthly = Months",
+          "pass": true,
+          "message": null
+        },
+        {
+          "type": "mentions_shift_limit",
+          "description": "Should mention 4% shift limit when suggesting wants reduction",
+          "pass": true,
+          "message": null
+        },
+        {
+          "type": "uses_3month_average",
+          "description": "Should reference 3-month average when discussing income allocation",
+          "pass": false,
+          "message": "Should reference 3-month average when discussing income allocation"
+        },
+        {
+          "type": "verifies_totals",
+          "description": "Should verify that Needs + Wants + Savings = Income",
+          "pass": false,
+          "message": "Should verify totals: Needs + Wants + Savings = Income"
+        },
+        {
+          "type": "no_closing_phrase",
+          "description": "Should not end with closing phrases like \"Let me know if...\"",
+          "pass": true,
+          "message": null
+        }
+      ],
+      "passed": 4,
+      "total": 6,
+      "allPassed": false
+    },
+    {
+      "id": "down-payment-priority-stack",
+      "name": "Down Payment - Savings Priority Stack Integration",
+      "question": "I'm living in the Bay Area, when would I be able to to buy a house or apartment? Nothing fancy, just an average starter home. I also don't know how much I should be saving every month so that I have enough to pay for the down payment",
+      "response": "To determine when you might be able to buy a starter home in the Bay Area, we first need to consider the average home prices. As of now, the average price for a starter home in the Bay Area is approximately **$1,000,000**. A typical down payment is around **20%**, which would be **$200,000**.\n\n### Savings Plan for Down Payment:\n1. **Current Savings**: You currently have **$11,700** in your emergency fund.\n2. **Target for Down Payment**: Your target is **$200,000**.\n3. **Remaining Amount Needed**: \n   - **$200,000 - $11,700 = $188,300**\n\n### Monthly Savings Recommendation:\nIf you want to reach your down payment goal, here's how much you should save each month:\n\n- **Timeframe**: Let's say you want to buy a house in **5 years** (60 months).\n- **Monthly Savings Required**: \n   - **$188,300 / 60 months = $3,138.33**\n\n### Summary:\nTo save for a down payment of **$200,000** within 5 years, you need to save approximately **$3,138.33** each month, in addition to your current savings. \n\nIf you'd like to adjust your timeframe or savings strategy, consider using the Savings Helper tool to explore different scenarios and see how changing your savings rate affects your down payment timeline.",
+      "validations": [
+        {
+          "type": "mentions_priority_stack",
+          "description": "Should explain how down payment fits into savings allocation priority stack",
+          "pass": false,
+          "message": "Should explain how down payment fits into savings allocation priority stack"
+        },
+        {
+          "type": "shows_allocation_breakdown",
+          "description": "Should show full savings allocation breakdown when relevant",
+          "pass": true,
+          "message": null
+        },
+        {
+          "type": "no_closing_phrase",
+          "description": "Should not end with closing phrases",
+          "pass": true,
+          "message": null
+        }
+      ],
+      "passed": 2,
+      "total": 3,
+      "allPassed": false
+    },
+    {
+      "id": "comparison-user-data",
+      "name": "Comparison Question - Use Actual User Data",
+      "question": "Am I on track compared to other people my age?",
+      "response": "I don't have access to specific benchmarks for your age group, but I can help you assess your financial situation based on your current data. If you'd like to focus on particular aspects such as savings, debt, or net worth, I can provide insights and recommendations based on your financial plan. ",
+      "validations": [
+        {
+          "type": "uses_actual_data",
+          "description": "Should use actual user data (savings, income) to calculate metrics",
+          "pass": false,
+          "message": "Should use actual user data (savings $11,700, income) to calculate metrics"
+        },
+        {
+          "type": "calculates_metrics",
+          "description": "Should calculate specific metrics like \"months of salary saved\"",
+          "pass": true,
+          "message": null
+        },
+        {
+          "type": "no_closing_phrase",
+          "description": "Should not end with closing phrases",
+          "pass": true,
+          "message": null
+        }
+      ],
+      "passed": 2,
+      "total": 3,
+      "allPassed": false
+    },
+    {
+      "id": "add-down-payment-plan",
+      "name": "Add Down Payment Plan - Priority Stack",
+      "question": "Can you add this down payment savings plan to my financial plan?",
+      "response": "I don't have the capability to directly modify your financial plan. However, I can guide you on how to create a down payment savings plan.\n\n1. **Determine Your Down Payment Goal**: Decide how much you need for your down payment. \n\n2. **Set a Timeline**: Decide when you want to purchase the home. This will help determine how much you need to save each month.\n\n3. **Calculate Monthly Savings**: Divide your down payment goal by the number of months until your target date to find out how much you need to save monthly.\n\n4. **Adjust Your Budget**: Look at your current expenses and see where you can allocate funds towards your down payment savings.\n\nIf you provide me with your target down payment amount and timeline, I can help you calculate how much you should save each month!",
+      "validations": [
+        {
+          "type": "mentions_priority_stack",
+          "description": "Should explain how down payment fits into savings allocation",
+          "pass": false,
+          "message": "Should explain how down payment fits into savings allocation priority stack"
+        },
+        {
+          "type": "no_closing_phrase",
+          "description": "Should not end with closing phrases",
+          "pass": true,
+          "message": null
+        }
+      ],
+      "passed": 1,
+      "total": 2,
+      "allPassed": false
+    },
+    {
+      "id": "down-payment-timeline",
+      "name": "Down Payment Timeline - Correct Calculation",
+      "question": "If I'm saving 2k per month for my down payment, then when can I buy a house? Also where should this money exist while I'm saving it, in a bank account, in the stock market, high yield savings account, ETF, etc?",
+      "response": "To determine when you can buy a house, we need to know your target down payment amount. Assuming you're saving **$2,000 per month**, you can calculate how long it will take to reach your goal by dividing your target down payment by your monthly savings. \n\nFor example, if your target down payment is **$40,000**, it would take you **20 months** to save that amount:\n\n- **$40,000 ÷ $2,000/month = 20 months**\n\nRegarding where to keep this money while saving, a **High Yield Savings Account (HYSA)** is a great option. It offers a safe place for your funds with some interest growth (typically around **4% annually**), allowing your savings to grow without exposing it to the market's volatility. \n\nIf your timeline is longer (several years) and you're comfortable with some risk, you could consider a more aggressive investment like an ETF or a diversified stock portfolio, but this comes with market risks. For shorter-term savings (1-3 years), the HYSA is usually preferable to ensure your principal is intact when you're ready to buy.",
+      "validations": [
+        {
+          "type": "correct_calculation",
+          "description": "Time calculation should be correct: ($240,000 - $11,700) / $2,000 = 114 months",
+          "pass": false,
+          "message": "Should show correct calculation: ($240,000 - $11,700) / $2,000 = 114 months (9.5 years)"
+        },
+        {
+          "type": "no_closing_phrase",
+          "description": "Should not end with closing phrases",
+          "pass": true,
+          "message": null
+        }
+      ],
+      "passed": 1,
+      "total": 2,
+      "allPassed": false
+    }
+  ],
+  "summary": {
+    "passedTests": 0,
+    "totalTests": 5,
+    "passedValidations": 10,
+    "totalValidations": 16,
+    "passRate": "62.5%"
+  }
+}

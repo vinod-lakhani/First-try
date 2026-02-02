@@ -1,0 +1,64 @@
+{
+  "timestamp": "2025-12-17T02:09:27.694Z",
+  "baseUrl": "http://localhost:3000",
+  "totalTests": 5,
+  "testResults": [
+    {
+      "id": "calc-error-down-payment",
+      "name": "Calculation Error - Down Payment Savings",
+      "question": "I don't think I can afford to save 3.4k a month for my down payment because this is my entire saving and investing category. Give me something a little more reasonable with what I can reduce from my \"wants\" spending",
+      "error": "HTTP 500: Internal Server Error",
+      "validations": [],
+      "passed": 0,
+      "total": 6,
+      "allPassed": false
+    },
+    {
+      "id": "down-payment-priority-stack",
+      "name": "Down Payment - Savings Priority Stack Integration",
+      "question": "I'm living in the Bay Area, when would I be able to to buy a house or apartment? Nothing fancy, just an average starter home. I also don't know how much I should be saving every month so that I have enough to pay for the down payment",
+      "error": "HTTP 500: Internal Server Error",
+      "validations": [],
+      "passed": 0,
+      "total": 3,
+      "allPassed": false
+    },
+    {
+      "id": "comparison-user-data",
+      "name": "Comparison Question - Use Actual User Data",
+      "question": "Am I on track compared to other people my age?",
+      "error": "HTTP 500: Internal Server Error",
+      "validations": [],
+      "passed": 0,
+      "total": 3,
+      "allPassed": false
+    },
+    {
+      "id": "add-down-payment-plan",
+      "name": "Add Down Payment Plan - Priority Stack",
+      "question": "Can you add this down payment savings plan to my financial plan?",
+      "error": "HTTP 500: Internal Server Error",
+      "validations": [],
+      "passed": 0,
+      "total": 2,
+      "allPassed": false
+    },
+    {
+      "id": "down-payment-timeline",
+      "name": "Down Payment Timeline - Correct Calculation",
+      "question": "If I'm saving 2k per month for my down payment, then when can I buy a house? Also where should this money exist while I'm saving it, in a bank account, in the stock market, high yield savings account, ETF, etc?",
+      "error": "HTTP 500: Internal Server Error",
+      "validations": [],
+      "passed": 0,
+      "total": 2,
+      "allPassed": false
+    }
+  ],
+  "summary": {
+    "passedTests": 0,
+    "totalTests": 5,
+    "passedValidations": 0,
+    "totalValidations": 16,
+    "passRate": "0.0%"
+  }
+}
