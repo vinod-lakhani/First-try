@@ -1,0 +1,179 @@
+🧪 Edge Case Tests for LLM Chat Scenarios
+
+Base URL: http://localhost:3000
+
+================================================================================
+EDGE CASE 1: Wants Too Low to Close Savings Gap
+================================================================================
+Scenario: Savings already at target, or wants too low to shift more
+
+📝 Question: "Can you hit my 25% savings target this month?"
+   Context: Income $3,000; Actuals: Needs 62%, Wants 18%, Savings 20% (at target); Trying to reach 25%
+
+✅ Answer (✓ CLEAN):
+Based on your current income of $3,000, a 25% savings target would mean saving $750 this month. Currently, you are saving $600, which is 20% of your income. To hit the 25% target, you would need to increase your savings by $150. 
+
+Given your current spending situation, you may need to adjust your Wants allocation to make this happen. Since your Needs are already at 62% of your income, it's crucial to ensure you maintain essential expenses while reallocating some from Wants.
+
+================================================================================
+EDGE CASE 2: Income Change Mid-Month
+================================================================================
+Scenario: Income drops from $5,500 to $4,800
+
+📝 Question: "My income is dropping from $5,500 to $4,800 next month. What changes in my allocations?"
+   Context: Income changes require recalculation of all dollar targets as % of new income
+
+✅ Answer (✓ CLEAN):
+With your income dropping to $4,800, all your allocation targets will need to be recalculated as a percentage of your new income. 
+
+1. **New Target Allocations**:
+   - **Needs**: 50% of $4,800 = $2,400
+   - **Wants**: 30% of $4,800 = $1,440
+   - **Savings**: 20% of $4,800 = $960
+
+2. **Current Spending**:
+   - Your current spending on needs is $2,750, which exceeds the new target of $2,400.
+   - Your wants spending is $1,650, exceeding the new target of $1,440.
+   - Your savings at $1,100 is also...
+
+================================================================================
+EDGE CASE 3: Roth IRA Eligibility Phase-Out
+================================================================================
+Scenario: Income $230k single (over Roth limit)
+
+📝 Question: "Can I contribute to a Roth IRA? My income is $230,000 per year."
+   Context: Income over Roth IRA phase-out limit ($146k single)
+
+✅ Answer (✓ CLEAN):
+Since your income is $230,000, you are at the threshold where Roth IRA contributions begin to phase out. The phase-out starts at $146,000 for single filers, meaning you may not be eligible to contribute directly to a Roth IRA. You can consider a Traditional IRA, or if you want to contribute to a Roth, you could look into a backdoor Roth IRA, but it's best to consult a tax advisor for guidance on the process.
+
+================================================================================
+EDGE CASE 4: Single Month Wants Spike
+================================================================================
+Scenario: User overspent on travel this month, but 3-month avg is normal
+
+📝 Question: "I overspent on travel this month and spent 40% on wants. How do we adjust?"
+   Context: Single month spike should use 3-month average, not current month
+
+✅ Answer (✓ CLEAN):
+Your allocation uses the 3-month average, so we won't adjust based on this month's spending spike. Your average for Wants is $1,120, which is 32% of your income. Since your current allocation for Wants is $1,400 (40%), it's above the average. 
+
+To align with your recommended plan, you should reduce Wants to $1,050 (30% of your income). This will help you increase your Savings closer to the target of $700 while keeping Needs fixed at $1,750. Adjust the Wants slider down to $1,050 to start moving ...
+
+================================================================================
+EDGE CASE 5: Small Savings Budget with Large EF Gap
+================================================================================
+Scenario: Only $300/month savings but $5,000 EF gap and $2,000 high-APR debt
+
+📝 Question: "I only have $300 per month to save. Where should it go?"
+   Context: Small budget must be split across priorities (EF, debt, retirement)
+
+✅ Answer (✓ CLEAN):
+To allocate your $300 monthly savings, we follow these priorities:
+
+1. **Emergency Fund**: Allocate 40% ($120) to build your emergency fund. You're currently at $1,000 and aiming for $6,000, which helps protect you from unexpected expenses.
+
+2. **High-APR Debt Payoff**: Next, allocate 40% of the remaining funds ($72) towards paying off your credit card debt with a 24% APR. This is a high-interest debt that should be prioritized for payoff.
+
+3. **Retirement Accounts**: Allocate the remaining amou...
+
+================================================================================
+EDGE CASE 6: High Liquidity Need (Near-Term Purchase)
+================================================================================
+Scenario: User wants cash for car in 9 months, high liquidity need
+
+📝 Question: "I want to save cash for a car purchase in 9 months. How should I adjust my savings allocation?"
+   Context: High liquidity should favor brokerage over retirement
+
+✅ Answer (✓ CLEAN):
+Since you want to save for a car purchase in 9 months, you can adjust your savings allocation to prioritize that goal. 
+
+1. **Reasoning**: It's important to build a separate savings target for your car purchase, which might mean adjusting your current savings for other goals like retirement or emergency fund contributions.
+
+2. **Numeric Example**: With your monthly savings of $1,600, if you aim to save for a $7,200 car, you'd need to allocate $800 each month to meet that goal. This could mean re...
+
+================================================================================
+EDGE CASE 7: Approaching IRA Contribution Limit
+================================================================================
+Scenario: $5,500 contributed, $6,500 limit, $1,000 more to allocate
+
+📝 Question: "I've already contributed $5,500 to my IRA this year. The limit is $6,500. I have $1,000 more to allocate this month. What should I do?"
+   Context: Should allocate $1,000 to IRA (within limit) and route overflow to 401k
+
+✅ Answer (✓ CLEAN):
+Since you've already contributed $5,500 to your IRA and the limit is $6,500, you can contribute an additional $1,000 to your IRA to reach the limit. After that, any remaining savings can be directed towards your 401(k) if you're not already contributing up to the match, or to a taxable brokerage account if you’ve maxed out your retirement contributions.
+
+================================================================================
+EDGE CASE 8: Long-Term Needs Over Target (Lifestyle Nudge)
+================================================================================
+Scenario: Needs 56-60% for 4 consecutive months
+
+📝 Question: "Why do you keep telling me to cut rent? My needs are 58% of my income."
+   Context: Needs over target for 3+ months should trigger lifestyle change suggestions
+
+✅ Answer (✓ CLEAN):
+Your needs are currently at 58% of your income, which exceeds the recommended target of 50%. Since fixed expenses like rent can't change immediately, we suggest planning for long-term adjustments when your lease is up or when you have the opportunity to negotiate or move. This approach helps you create more room in your budget for savings without making drastic changes right now.
+
+================================================================================
+EDGE CASE 9: No Employer 401(k) Match Available
+================================================================================
+Scenario: Employer doesn't offer 401k match
+
+📝 Question: "My employer doesn't offer a 401(k) match. What's my next best option for retirement savings?"
+   Context: Should recommend IRA or 401k beyond match as next priority
+
+✅ Answer (✓ CLEAN):
+Since your employer doesn't offer a 401(k) match, consider contributing to a Roth IRA if your income allows it. Since your annual income is $60,000, you're eligible, and contributions can grow tax-free. If you reach the contribution limit for a Roth IRA ($7,000 for those under 50), you can then direct any additional savings to a traditional IRA or a taxable brokerage account for further retirement savings.
+
+================================================================================
+EDGE CASE 10: Multiple High-APR Debts
+================================================================================
+Scenario: Multiple credit cards with different APRs, need to prioritize
+
+📝 Question: "I have three credit cards: $2,000 at 24% APR, $1,500 at 20% APR, and $1,000 at 18% APR. How should I prioritize paying them off?"
+   Context: Should prioritize highest APR first (avalanche method)
+
+✅ Answer (✓ CLEAN):
+You should prioritize paying off your credit cards based on their APR rates, starting with the highest rate first. Here's the order:
+
+1. **Credit Card A**: $2,000 balance at 24% APR - this should be your first priority since it has the highest interest rate.
+2. **Credit Card B**: $1,500 balance at 20% APR - this is next in line.
+3. **Credit Card C**: $1,000 balance at 18% APR - this should be paid off last.
+
+By focusing on the highest APR first, you can save more on interest payments over time.
+
+================================================================================
+EDGE CASE 11: Income Exactly at Roth Cutoff ($190k)
+================================================================================
+Scenario: Income exactly $190,000 (threshold for Roth vs Traditional)
+
+📝 Question: "I make exactly $190,000 per year. Should I choose Roth or Traditional 401(k)?"
+   Context: At exactly $190k, should recommend Traditional (>= threshold)
+
+✅ Answer (✓ CLEAN):
+Since your income is exactly $190,000, you should choose a Traditional 401(k). This option reduces your taxable income now, which can be beneficial if you expect to be in a higher tax bracket in the future. Additionally, contributing to a Traditional 401(k) lowers your Adjusted Gross Income (AGI), potentially lowering your tax obligations.
+
+================================================================================
+EDGE CASE 12: Zero or Negative Savings
+================================================================================
+Scenario: Spending exceeds income, negative savings
+
+📝 Question: "I'm spending more than I make. My savings is negative. What should I do?"
+   Context: Should suggest reducing expenses, starting with wants, and explain urgency
+
+✅ Answer (✓ CLEAN):
+You're currently spending $1,800 on needs and $1,500 on wants, which totals $3,300, exceeding your monthly income of $3,000. To address this, you need to reduce your spending on wants, which should ideally be around $900 based on your target allocation. 
+
+Consider cutting back on discretionary expenses and prioritizing your needs. You should also focus on building your savings by shifting funds from your wants category to savings. Since your savings gap is significant, aim for a gradual adjustme...
+
+
+================================================================================
+✅ All edge case tests completed!
+================================================================================
+
+📊 Summary:
+- Tested 12 edge case scenarios
+- Covered: income changes, eligibility limits, small budgets,
+  multiple debts, boundary conditions, and error cases
+- Check responses above for forbidden phrases and accuracy
+

@@ -1,0 +1,1299 @@
+================================================================================
+COMPREHENSIVE LLM TEST RESULTS - EXPANDED
+================================================================================
+Timestamp: 2025-12-17T02:43:44.744Z
+Base URL: https://weleap-mvp.vercel.app
+
+Summary:
+  Tests Run: 52
+  Validations Passed: 162/164
+  Pass Rate: 98.8%
+
+Category Breakdown:
+  Income Allocation: 30/30 (100.0%) - 10 tests
+  Savings Allocation: 34/34 (100.0%) - 11 tests
+  Goal-Based & Scenario: 19/19 (100.0%) - 6 tests
+  Tax & Income Sensitivity: 18/18 (100.0%) - 6 tests
+  Long-Term vs Short-Term Adjustment: 12/12 (100.0%) - 4 tests
+  General Financial Literacy: 18/18 (100.0%) - 6 tests
+  Out-of-Scope: 12/12 (100.0%) - 4 tests
+  Accuracy Validation: 19/21 (90.5%) - 5 tests
+
+================================================================================
+
+
+================================================================================
+CATEGORY: Income Allocation
+================================================================================
+
+
+--------------------------------------------------------------------------------
+TEST 1: How should I divide my paycheck between needs, wants, and savings?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+Based on your 3-month average actual spending, here's how to divide your paycheck of **$8,680**:
+
+### Current Allocations:
+- **Needs:** **$4,340** (50% of income)
+- **Wants:** **$2,604** (30% of income)
+- **Savings:** **$1,736** (20% of income)
+
+### Breakdown:
+- **Needs:** Fixed short-term expenses (like rent and groceries) are set at **$4,340**.
+- **Wants:** Your wants allocation is **$2,604**, which represents discretionary spending.
+- **Savings:** Your targeted savings amount is **$1,736**.
+
+Total: Needs **$4,340** + Wants **$2,604** + Savings **$1,736** = Monthly Income **$8,680** ✓
+
+This division aligns with the standard budgeting framework, ensuring you cover your essentials while also saving and enjoying some discretionary spending.
+
+Validation Results:
+  ✅ Mentions Needs/Wants/Savings split
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 2: What does it mean to "keep current allocations"?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+"Keep current allocations" means maintaining your existing distribution of income or savings while making necessary adjustments to ensure you meet your financial goals. This typically involves using your three-month average actual spending as a baseline and applying any shifts needed to meet savings targets, particularly focusing on essential expenses (needs) that remain fixed in the short term. 
+
+For example, if your current allocation is set at certain percentages for needs, wants, and savings, you would continue using those percentages, along with any allowable shifts to boost savings without drastically changing your lifestyle. This approach helps in managing your finances smoothly while adhering to your goals.
+
+Validation Results:
+  ✅ Explains current allocations
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 3: If my actual savings rate is lower than my target, what happens?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+If your actual savings rate is lower than your target savings rate, a shift will occur from your Wants allocation to your Savings allocation. This shift is necessary to help you meet your savings goals. 
+
+The maximum shift limit from Wants to Savings is exactly **4%** of your income. Needs (such as rent, utilities, and groceries) remain fixed in the short-term and cannot be adjusted immediately. This process helps ensure that you prioritize increasing your savings first.
+
+Validation Results:
+  ✅ Explains adjustment process
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 4: Can you show me how my next paycheck will be allocated?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+Based on your 3-month average actual spending, your next paycheck allocation will be as follows:
+
+### Current Allocations
+- **Needs:** $4,340 (50% of income)
+- **Wants:** $2,604 (30% of income)
+- **Savings:** $1,736 (20% of income)
+
+### Breakdown of Allocations
+- **Needs:** $4,340 (fixed)
+- **Wants:** $2,604
+- **Savings:** $1,736
+
+### Verification
+Total: Needs $4,340 + Wants $2,604 + Savings $1,736 = Monthly Income $8,680 ✓
+
+Your allocations are based on the average of your spending over the last three months.
+
+Validation Results:
+  ✅ Shows specific dollar amounts
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 5: Why is my fixed expense allocation not changing even though it's high?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+Your fixed expenses, which typically include rent, utilities, and minimum debt payments, remain unchanged in the short term because they are essential expenses that cannot be adjusted immediately. This is to ensure your basic needs are met. If you consistently find that your fixed expenses exceed your target for three or more consecutive months, it may be time to consider long-term lifestyle changes, such as moving to a more affordable place or negotiating bills for better rates.
+
+Validation Results:
+  ✅ Explains fixed expenses rule
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 6: How does the system decide how much to shift from wants to savings?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+The system decides how much to shift from Wants to Savings based on the following logic:
+
+1. **Savings Gap**: It calculates the difference between the target savings amount and the actual savings amount. If the actual savings are below the target, a shift is necessary.
+
+2. **Maximum Shift Limit**: The maximum amount that can be shifted from Wants to Savings is exactly **4% of your income**. 
+
+3. **Current Wants Percentage**: The system also checks the current percentage allocated to Wants to determine how much is available to shift.
+
+4. **Shift Calculation**:
+   - The shift amount is determined by the minimum of the savings gap percentage, available wants percentage, and the fixed shift limit of 4%.
+
+5. **Final Adjustments**: After determining the shift, the system adjusts the Wants and Savings amounts accordingly.
+
+This process ensures that savings are prioritized while minimizing the impact on discretionary spending.
+
+Validation Results:
+  ✅ Explains shift logic
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 7: Can you explain the logic behind the 3-month average actuals?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+The 3-month average actuals are used to smooth out spending patterns and avoid overreacting to temporary spikes or dips in expenses. By averaging your spending over the past three months, we get a more stable and accurate picture of your financial habits. This approach helps ensure that your budgeting decisions are based on consistent behavior rather than one-off expenses, which can lead to better financial planning and resource allocation. This method is particularly important for managing wants and savings effectively.
+
+Validation Results:
+  ✅ Explains 3-month average
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 8: What is the shift limit and how does it protect me from drastic changes?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+The shift limit is exactly **4%** of your monthly income. This limit is designed to protect you from making drastic lifestyle changes by allowing only a controlled shift from Wants to Savings when your actual savings fall below your target. By smoothing out fluctuations in your spending, it ensures that your essential expenses (Needs) remain stable in the short term, preventing sudden changes in your budget that could disrupt your financial stability.
+
+Validation Results:
+  ✅ Explains shift limit protection
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 9: What happens if I spend more than planned on entertainment this month?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+If you spend more than planned on entertainment this month, the WeLeap app will use your 3-month average actual spending to determine your allocations. This approach helps smooth out any spikes in spending and prevents drastic changes based on one-time expenses.
+
+If your entertainment spending exceeds your average, it won’t directly impact your overall budget immediately. Your fixed needs (like rent and utilities) will remain unchanged. However, if your overall spending leads to lower savings or affects other discretionary areas, adjustments may be needed in future months to ensure you stay on track with your financial goals.
+
+Validation Results:
+  ✅ Explains single-month vs average
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 10: What happens if my income changes next month?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+If your income changes next month, all your financial targets will be recalculated based on the new monthly income. Specifically:
+
+1. **New Target Allocations**: Your new target amounts for Needs, Wants, and Savings will be adjusted as follows:
+   - New target Needs $ = new monthly income × 50%
+   - New target Wants $ = new monthly income × 30%
+   - New target Savings $ = new monthly income × 20%
+
+2. **Fixed Needs**: Your fixed expenses (Needs) will remain unchanged in the short term, as they represent essential expenses that cannot be adjusted immediately.
+
+3. **Adjustment of Actual Spending**: Your actual spending percentages may also change when calculated against the new income, and this may impact how much you can allocate towards Wants and Savings.
+
+It's important to track how these changes affect your overall financial plan and make adjustments as necessary to stay aligned with your goals.
+
+Validation Results:
+  ✅ Explains income change handling
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+================================================================================
+CATEGORY: Savings Allocation
+================================================================================
+
+
+--------------------------------------------------------------------------------
+TEST 11: I just got a bonus—how will you allocate it across my goals?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+To allocate your bonus effectively, we'll use the Savings Allocation Priority Stack, which prioritizes your savings goals as follows:
+
+1. **Emergency Fund** (up to 40% of the bonus, if there's a gap).
+2. **High-APR Debt Payoff** (up to 40% of remaining after EF allocation).
+3. **Employer Match** (capture any needed match for this period).
+4. **Retirement Contributions** (IRA or 401(k)).
+5. **Brokerage/Other Goals** (if any remaining funds).
+
+### Allocation Breakdown
+
+**Assuming your bonus is $5,000:**
+
+1. **Emergency Fund Gap:**
+   - Current EF: **$11,700**
+   - Target EF: **$12,000**
+   - Gap: **$12,000 - $11,700 = $300**
+   - Allocation to EF: **$300** (fills the gap, which is 6% of your bonus)
+
+2. **Remaining After EF:**
+   - Remaining Bonus: **$5,000 - $300 = $4,700**
+
+3. **High-APR Debt Payoff:**
+   - Total High-APR Debt: **$4,700** (Chase Credit Card: **$3,500**, Amex Credit Card: **$1,200**)
+   - Allocation Cap: **$4,700 × 0.40 = $1,880**
+   - Allocation to Debt Payoff: **$1,880** (entire amount goes towards debt)
+
+4. **Remaining After Debt Payoff:**
+   - Remaining Bonus: **$4,700 - $1,880 = $2,820**
+
+5. **401(k) Employer Match:**
+   - Assuming you need to allocate for the match:
+   - Allocation for Match: **$575** (if needed, otherwise skip)
+
+6. **Remaining After Match:**
+   - Remaining Bonus: **$2,820 - $575 = $2,245**
+
+7. **Retirement Contributions:**
+   - Allocate the remaining amount to Retirement:
+   - Allocation to Retirement: **$2,245**
+
+### Summary of Allocations
+
+- **Emergency Fund:** **$300**
+- **High-APR Debt Payoff:** **$1,880**
+- **401(k) Employer Match:** **$575**
+- **Retirement Contributions:** **$2,245**
+
+### Total Allocation:
+
+
+Validation Results:
+  ✅ Mentions priority stack
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 12: How much should I put in my emergency fund versus debt?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+To determine how much you should allocate to your emergency fund versus debt, we follow the Savings Allocation Priority Stack, which prioritizes:
+
+1. **Emergency Fund**
+2. **High-APR Debt Payoff**
+
+### Current Allocation Breakdown:
+- **Emergency Fund Target:** **$12,000**
+- **Current Emergency Fund:** **$11,700**
+- **Emergency Fund Gap:** **$300** (to reach the target)
+
+### Monthly Savings Allocation:
+You have a total monthly savings of **$1,432**, allocated as follows:
+- Emergency Fund: **$300/month** (20.9% of savings)
+- Extra Debt Payoff: **$383/month** (26.7% of savings)
+- 401(k) Employer Match: **$575/month** (40.1% of savings)
+- Retirement Tax-Advantaged: **$174/month** (12.2% of savings)
+
+### Recommended Allocation:
+1. **Emergency Fund:** 
+   - Given the gap of **$300**, you should allocate **$300** to your emergency fund to fill the gap.
+  
+2. **Debt Payoff:**
+   - After allocating for the emergency fund, the remaining amount for debt payoff would be **$1,432 - $300 = $1,132**.
+   - You can maintain or adjust your debt payoff allocation based on your priorities, but your current extra debt payoff is **$383/month**.
+
+### Summary:
+- **Allocate:** **$300** to your Emergency Fund (to meet the target).
+- **Remaining for Debt Payoff:** **$1,132** available for debt, which can be adjusted as needed.
+
+Your current allocations are working well, but make sure to prioritize reaching your emergency fund target first. 
+
+Total: Emergency Fund $300 + Extra Debt Payoff $1,132 = Monthly Savings $1,432 ✓
+
+Validation Results:
+  ✅ Explains EF vs debt priority
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 13: Why do you prioritize high-interest debt after the emergency fund?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+We prioritize high-interest debt after the emergency fund because paying off high-APR debts, like credit cards, can save you a significant amount in interest over time. High-interest debt incurs costs that exceed potential investment returns, making it financially beneficial to eliminate these debts first. By addressing high-interest debts, you can improve your financial health and free up more money for savings and investments in the future.
+
+Validation Results:
+  ✅ Explains debt prioritization logic
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 14: What does it mean to "capture the full employer match"?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+"Capturing the full employer match" refers to contributing enough to your retirement account, such as a 401(k), to receive the maximum contribution that your employer will match. Many employers offer a matching contribution as an incentive for employees to save for retirement, typically expressed as a percentage of your own contributions up to a certain limit.
+
+For example, if your employer matches 50% of your contributions up to 6% of your salary, you'll want to contribute at least 6% of your salary to capture the full match. If you contribute less than that, you’re leaving free money on the table, as your employer will not match the contributions beyond that limit. Capturing the full employer match is an important savings strategy, as it effectively increases your retirement savings without additional cost to you.
+
+Validation Results:
+  ✅ Explains employer match
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 15: Should I focus on Roth or 401(k) for retirement?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+Since your annual income is **$104,160**, which is below the $190,000 threshold for single filers, you should consider a **Roth 401(k)**. This option allows you to pay taxes now and withdraw tax-free in retirement, which can be beneficial if you expect your tax rate to be lower now than in retirement.
+
+Additionally, if you were considering the **Traditional 401(k)**, remember that contributions to this account reduce your taxable income now. However, since your income is below the Roth threshold, the Roth 401(k) is a great option for tax-free growth.
+
+Validation Results:
+  ✅ Provides retirement account recommendation
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 16: If I'm on an IDR loan plan, which account type should I prioritize?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+If you're on an Income-Driven Repayment (IDR) plan for your student loans, you should prioritize contributing to a Traditional 401(k). This is because contributions to a Traditional 401(k) reduce your Adjusted Gross Income (AGI), which can lower your student loan payments under IDR plans. By doing this, you receive a tax deduction now and potentially save on your loan payments.
+
+Validation Results:
+  ✅ Recommends Traditional for IDR
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 17: How do you split my remaining savings between retirement and brokerage?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+To determine how to split your remaining savings between retirement and brokerage, we first need to consider your monthly savings allocation and your liquidity versus retirement focus.
+
+### Current Monthly Savings Allocation
+Your total monthly savings is **$1,432**, allocated as follows:
+- Emergency Fund: **$300**
+- Extra Debt Payoff: **$383**
+- 401(k) Employer Match: **$575**
+- Retirement Tax-Advantaged (IRA/401k): **$174**
+
+### Remaining Savings for Distribution
+After accounting for the above allocations:
+- Total allocated so far: **$300 + $383 + $575 + $174 = $1,432**
+- Since you are focusing on allocating the remaining savings to retirement and brokerage, we can assume this allocation will occur after your other commitments.
+
+### Liquidity vs. Retirement Focus
+Given your preferences:
+- Liquidity need: Medium
+- Retirement focus: High
+
+Using the liquidity and retirement focus matrix, your split would be **70% retirement** and **30% brokerage**.
+
+### Calculation of Remaining Savings Allocation
+For a total remaining savings of **$1,432**:
+- Retirement allocation = **$1,432 × 0.70 = $1,002**
+- Brokerage allocation = **$1,432 × 0.30 = $430**
+
+### Summary of Allocations
+- **Retirement**: **$1,002**
+- **Brokerage**: **$430**
+
+This allocation reflects your higher focus on retirement while still maintaining some liquidity through brokerage savings.
+
+Validation Results:
+  ✅ Explains retirement vs brokerage split
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 18: What happens if I already reached my IRA contribution limit?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+If you've already reached your IRA contribution limit, any additional retirement savings would need to be directed to your 401(k) if you have one, or to a taxable brokerage account. 
+
+For 2023, the IRA contribution limit is **$6,500** per year (or **$7,500** if you're aged 50 or older). If you exceed this limit, you may face a 6% penalty on the excess contributions for each year they remain in the account. 
+
+It's always a good idea to track your contributions and ensure you stay within the limits to avoid penalties.
+
+Validation Results:
+  ✅ Explains IRA limit handling
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 19: Can you show me an example allocation for my $1,500 monthly savings budget?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+## Example Allocation for $1,500 Monthly Savings Budget
+
+Your savings allocation follows the **Savings Allocation Priority Stack**, which is structured as follows:
+
+1. **Emergency Fund**
+2. **High-APR Debt Payoff**
+3. **Employer Match**
+4. **Retirement Contributions**
+5. **Brokerage/Other Savings**
+
+### Current Allocation Breakdown
+
+Based on your monthly savings budget of **$1,500**, here’s how you can allocate it:
+
+- **Emergency Fund**: **$300** (20% of savings)
+- **Extra Debt Payoff**: **$383** (25.5% of savings)
+- **401(k) Employer Match**: **$575** (38.3% of savings)
+- **Retirement Tax-Advantaged (IRA/401k)**: **$174** (11.6% of savings)
+  
+### Total Allocation
+- **Total**: 
+  - Emergency Fund: **$300** 
+  - Extra Debt Payoff: **$383**
+  - Employer Match: **$575**
+  - Retirement Contributions: **$174**
+
+**Total Savings Allocated**: **$1,432** 
+
+### Remaining Budget
+- The remaining budget of **$68** can be directed towards the brokerage or can be added to the emergency fund or debt payoff as needed.
+
+### Summary
+Your monthly savings budget of **$1,500** can be allocated as outlined above, focusing on building your emergency fund, paying off high-APR debt, capturing your employer match, and contributing to retirement savings.
+
+Total: Emergency Fund **$300** + Extra Debt Payoff **$383** + Employer Match **$575** + Retirement Contributions **$174** = Monthly Savings **$1,432** ✓
+
+Validation Results:
+  ✅ Shows specific allocation breakdown
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 20: What if I want to increase my liquidity—how will the allocation change?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+To increase your liquidity, we need to adjust your savings allocation towards more liquid assets, such as cash or a brokerage account. Currently, your savings allocation is as follows:
+
+- Emergency Fund: **$300/month** (20.9% of savings)
+- Extra Debt Payoff: **$383/month** (26.7% of savings)
+- 401(k) Employer Match: **$575/month** (40.1% of savings)
+- Retirement Tax-Advantaged (IRA/401k): **$174/month** (12.2% of savings)
+
+### Recommended Changes for Increased Liquidity:
+
+1. **Emergency Fund**: Increase this allocation to build a stronger cash reserve for unexpected expenses.
+2. **Brokerage Account**: If you want to prioritize liquidity, consider reallocating funds from the retirement contributions to the brokerage to allow easier access to cash.
+
+### Example Adjustment:
+
+- Increase Emergency Fund to **$500/month** (35% of savings).
+- Decrease 401(k) Employer Match to **$400/month** (28% of savings).
+- Reduce Retirement contributions to **$100/month** (7% of savings).
+- Allocate the remaining **$432/month** from the Extra Debt Payoff to the Brokerage Account.
+
+**New Allocation:**
+- Emergency Fund: **$500/month**
+- Extra Debt Payoff: **$0/month** (focus on liquidity)
+- 401(k) Employer Match: **$400/month**
+- Retirement Tax-Advantaged (IRA/401k): **$100/month**
+- Brokerage: **$432/month**
+
+### Total Allocation:
+- Emergency Fund: **$500**
+- 401(k) Employer Match: **$400**
+- IRA/401k: **$100**
+- Brokerage: **$432**
+  
+Total: **$1,432/month** ✓
+
+This adjustment allows you to enhance your liquidity while still contributing to your retirement and managing debt.
+
+Validation Results:
+  ✅ Explains liquidity impact
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 21: Help me figure out how much I can save
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+Your current plan has you saving **$1,432** per month, which is approximately **16.5%** of your monthly income of **$8,680**.
+
+To determine how much you can save, we will start from your 3-month average actual spending. Here's the breakdown:
+
+- **Needs**: Based on the average, let's say it's fixed at **$4,340** (50% of income).
+- **Wants**: This will be the remainder after accounting for Needs and Savings.
+- **Savings Target**: Since your target savings is **20%** of income, that would be **$1,736**.
+
+### Current Allocation Verification:
+- Total monthly income: **$8,680**
+- Needs: **$4,340**
+- Current Savings: **$1,432** (actual savings)
+- Wants: **$8,680 - $4,340 - $1,432 = $2,908**
+
+### Summary:
+- Your current savings of **$1,432** is below the target savings of **$1,736**.
+- To meet your savings target, you need to save an additional **$304** per month.
+
+### Next Steps:
+- Consider adjusting your Wants to increase Savings, as the maximum shift from Wants to Savings is **4% of your income**, which is **$347.20**.
+
+Total: Needs $4,340 + Wants $2,908 + Savings $1,736 = Monthly Income $8,680 ✓
+
+Validation Results:
+  ✅ Explains current savings capacity
+  ✅ Shows allocation breakdown
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+================================================================================
+CATEGORY: Goal-Based & Scenario
+================================================================================
+
+
+--------------------------------------------------------------------------------
+TEST 22: I want to build a 3-month emergency fund in 6 months—how much should I save each month?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+To build a 3-month emergency fund, your target amount is **$12,000** (which is your monthly income of **$8,680** multiplied by 3). 
+
+You currently have **$11,700** in your emergency fund, so you need to save an additional **$300** to reach your target of **$12,000**.
+
+To find out how much to save each month over 6 months, use the formula:
+
+**Monthly Savings = Total Savings Needed ÷ Number of Months**
+
+**Monthly Savings = $300 ÷ 6 = $50**
+
+You should save **$50** each month for the next 6 months to fully build your emergency fund.
+
+Validation Results:
+  ✅ Calculates monthly savings needed
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 23: How would paying off my credit card faster affect my investment plan?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+Paying off your credit card faster can significantly impact your investment plan in a few ways:
+
+1. **Interest Savings**: By paying off your Chase Credit Card, which has a balance of **$3,500** at **22.99% APR**, you'll save on interest payments. This is a high-interest rate, and any extra payments you make will reduce the principal faster, leading to substantial interest savings over time.
+
+2. **Increased Cash Flow**: Once the credit card is paid off, you'll have more disposable income each month. Currently, you're allocating **$383/month** towards extra debt payoff. Once that debt is cleared, you can redirect that amount toward investments or savings, such as your 401(k) or brokerage account.
+
+3. **Debt-to-Income Ratio Improvement**: Paying off high-APR debt improves your credit score and debt-to-income ratio, which can positively affect your ability to secure future financing for investments, such as a home or other large purchases.
+
+4. **Psychological Benefits**: Eliminating debt can reduce stress and give you peace of mind, allowing you to focus more on your long-term investment strategy without the worry of high-interest debt hanging over you.
+
+In summary, accelerating your credit card payments frees up funds for investments, saves on interest, and enhances your financial profile.
+
+Validation Results:
+  ✅ Explains debt payoff impact
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 24: I want to buy a house in two years—how should my savings priorities change?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+To prioritize your savings for a house purchase in two years, we will follow the Savings Allocation Priority Stack, which is as follows:
+
+1. **Emergency Fund**
+2. **High-APR Debt Payoff**
+3. **Employer Match**
+4. **Retirement**
+5. **Brokerage/Down Payment**
+
+Since you want to buy a house, your savings will focus more on the down payment, which comes from the Brokerage portion of your savings allocation after addressing your Emergency Fund, high-APR debt, employer match, and retirement contributions.
+
+Here's how you can adjust your savings:
+
+1. **Continue Building Emergency Fund**: Ensure you reach your target of **$12,000** in your emergency fund. Currently, you're contributing **$300/month**. This should remain a priority until you hit your target.
+
+2. **Pay Off High-APR Debt**: Focus on paying off your high-APR debts. You're allocating **$383/month** towards extra debt payoff, which is crucial given the high interest rates on your Chase and Amex cards.
+
+3. **Employer Match Contributions**: Continue contributing **$575/month** to capture your 401(k) employer match, as this is essentially "free money."
+
+4. **Retirement Contributions**: Maintain your retirement contributions, currently at **$174/month**, to ensure you're still preparing for your future.
+
+5. **Allocate Remaining Savings to Brokerage for Down Payment**: After fulfilling the above priorities, any additional funds can be allocated towards your down payment goal. 
+
+Your monthly savings of **$1,432** could be allocated as follows:
+
+- Emergency Fund: **$300**
+- Extra Debt Payoff: **$383**
+- Employer Match: **$575**
+- Retirement Contribution: **$174**
+- Remaining for Down Payment (Brokerage): **$1,432 - ($300 + $383 + $575 + $174) = $0**
+
+Since your current allocation only allows for essentials, if you want to increase your down payment savings, consider adjusting your discretionary spending in the "Wants" category. 
+
+If you need to prioritize saving more aggressively for the down payment, you can temporarily reduce retirement contributions or additional debt payments after reaching your emergency fund target. 
+
+This structured approach will help you build your savings effectively for your home purchase in two years.
+
+Validation Results:
+  ✅ Discusses near-term goal adjustments
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 25: If I have multiple goals, how do you decide which one gets funded first?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+When allocating your savings across multiple goals, we follow the **Savings Allocation Priority Stack**:
+
+1. **Emergency Fund**: First, we aim to fill any gap in your emergency fund, up to 40% of your total available savings for the month.
+2. **High-APR Debt Payoff**: Next, we focus on paying off any high-interest debt (APR > 10%), also capping at 40% of the remaining savings after emergency fund contributions.
+3. **Employer Match**: Then we allocate funds to capture any employer 401(k) match, as this is essentially free money.
+4. **Retirement Savings**: After that, we direct funds to retirement accounts like IRAs or 401(k)s.
+5. **Brokerage or Other Goals**: Lastly, any remaining savings can go toward brokerage accounts or other financial goals.
+
+This priority system ensures that you're protecting yourself against emergencies, reducing costly debt, and taking advantage of employer contributions before focusing on long-term retirement savings and other financial objectives.
+
+Validation Results:
+  ✅ Explains priority ordering
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 26: What if my employer doesn't offer a 401(k)? What's my next best option?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+If your employer doesn't offer a 401(k), the next best option is to consider opening an Individual Retirement Account (IRA). You can choose between a Traditional IRA or a Roth IRA based on your tax situation and income level. 
+
+- **Traditional IRA**: Contributions may be tax-deductible, and you pay taxes when you withdraw in retirement.
+- **Roth IRA**: Contributions are made with after-tax dollars, but withdrawals in retirement are tax-free.
+
+Both options can help you save for retirement effectively. If you want to explore investment options further, consider consulting a financial advisor for tailored guidance.
+
+Validation Results:
+  ✅ Recommends IRA alternative
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 27: I want to save 2000 in the next 2 month
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+To save **$2,000** in the next **2 months**, you need to save **$1,000** per month.
+
+### Current Savings Allocation
+Your current monthly savings is **$1,432**, allocated as follows:
+- Emergency Fund: **$300**
+- Extra Debt Payoff: **$383**
+- 401(k) Employer Match: **$575**
+- Retirement Tax-Advantaged (IRA/401k): **$174**
+
+### Recommended Reallocation
+To prioritize your savings goal of **$2,000**, you may consider reallocating your savings. 
+
+1. **Current Total Savings**: **$1,432**
+2. **Monthly Goal**: **$1,000**
+
+Your current savings of **$1,432** is sufficient to meet your goal of saving **$1,000** per month, allowing for some flexibility in how you allocate the extra savings.
+
+### Suggested Allocation
+- Keep your Emergency Fund contribution at **$300**.
+- Reduce the contributions to Extra Debt Payoff and Retirement as needed to ensure you meet your goal of saving **$1,000** in total.
+
+### Summary
+You can save **$2,000** in the next **2 months** by maintaining your current savings strategy while ensuring to save **$1,000** each month. 
+
+Total Monthly Savings: **$1,432** (exceeds the goal of **$1,000**) ✓
+
+Validation Results:
+  ✅ Calculates monthly savings needed
+  ✅ Discusses plan adjustments
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+================================================================================
+CATEGORY: Tax & Income Sensitivity
+================================================================================
+
+
+--------------------------------------------------------------------------------
+TEST 28: At what income should I switch from Roth to 401(k)?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+You should consider switching from a Roth account to a Traditional 401(k) if your income is at or above **$190,000** as a single filer. This is the cutoff where the tax benefits of a Traditional 401(k) can be more advantageous, allowing you to reduce your taxable income now. Since your annual income is **$104,160**, you are currently below that threshold.
+
+Validation Results:
+  ✅ Mentions income threshold
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 29: Why does the system use $190K as the cutoff for Roth IRA?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+The cutoff of $190,000 for Roth IRA eligibility is based on the IRS guidelines for Modified Adjusted Gross Income (MAGI). If your income is below this threshold, you can contribute directly to a Roth IRA, which allows you to pay taxes on your contributions now and withdraw funds tax-free in retirement. If your income exceeds this limit, your ability to contribute directly to a Roth IRA begins to phase out, which is designed to limit higher earners from accessing this tax advantage.
+
+Validation Results:
+  ✅ Explains Roth cutoff rationale
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 30: What if I expect to make less money in retirement?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+If you expect to make less money in retirement, it may be beneficial to choose a Traditional 401(k) for your retirement savings. This option allows you to reduce your taxable income now, which can provide a tax deduction at your higher current rate. Later, when you withdraw funds in retirement at a lower rate, you'll pay less in taxes. 
+
+This strategy helps you save on taxes now and potentially pay lower taxes later when you're in a lower tax bracket during retirement.
+
+Validation Results:
+  ✅ Discusses tax strategy for lower retirement income
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 31: Can you explain why 401(k) helps with student loans under IDR?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+A 401(k) can help with student loans under Income-Driven Repayment (IDR) plans because contributions to a Traditional 401(k) reduce your Adjusted Gross Income (AGI). 
+
+When your AGI is lower, it can lead to lower monthly payments on your student loans since IDR plans calculate payments based on your income. By contributing to a Traditional 401(k), you not only save for retirement but also potentially decrease your student loan payments, effectively giving you a discount on both your taxes and loan payments.
+
+Validation Results:
+  ✅ Explains AGI reduction for IDR
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 32: What does "reduces AGI" mean in simple terms?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+"Reduces AGI" means it lowers the income number that the IRS uses to calculate your taxes and loan payments. This can save you money on both taxes and payments because a lower income figure can put you in a lower tax bracket and reduce your monthly payment amount for things like student loans.
+
+Validation Results:
+  ✅ Explains AGI in simple terms
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 33: Can I contribute to both Roth and 401(k) in the same year?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+Yes, you can contribute to both a Roth and a 401(k) in the same year, as long as you adhere to the individual contribution limits for each account. This allows you to take advantage of the benefits offered by both types of accounts.
+
+Validation Results:
+  ✅ Explains contribution limits
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+================================================================================
+CATEGORY: Long-Term vs Short-Term Adjustment
+================================================================================
+
+
+--------------------------------------------------------------------------------
+TEST 34: Why can't I just reduce my rent to free up more money right now?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+Reducing your rent immediately isn't feasible because it's a fixed expense that typically requires long-term planning, such as waiting until your lease ends or negotiating with your landlord. These essential expenses can't be adjusted on short notice, so it's better to focus on other areas of your spending that can be modified quickly, like discretionary wants, to free up funds for savings or debt repayment. Consider planning for the next lease cycle to explore options for reducing your rent.
+
+Validation Results:
+  ✅ Explains long-term vs short-term fixes
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 35: What does a long-term fix mean in this context?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+In this context, a long-term fix refers to structural changes in your financial plan that address ongoing financial issues, especially when your essential spending (Needs) exceeds target levels for three or more consecutive months. These changes are not immediate and require planning, such as:
+
+- Reducing rent by moving, getting a roommate, or refinancing.
+- Selling a car or negotiating bills.
+- Cutting back on subscriptions or discretionary spending.
+
+The goal is to free up more money for savings over the long term rather than making temporary adjustments.
+
+Validation Results:
+  ✅ Defines long-term adjustments
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 36: How many months over target do I need to trigger a lifestyle recommendation?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+You need to exceed your target for **3 or more consecutive months** in your essential expenses (Needs) to trigger a lifestyle recommendation. This is to ensure that any necessary changes to your spending or living situation are based on a consistent pattern rather than temporary fluctuations.
+
+Validation Results:
+  ✅ Mentions threshold for lifestyle recommendations
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 37: What kind of actions count as long-term adjustments?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+Long-term adjustments are structural changes you make to your financial plan that take time to implement and typically address ongoing expense trends. Here are some key actions that count as long-term adjustments:
+
+- **Reducing Rent**: This could involve finding a roommate, negotiating a lower rent, or moving to a more affordable place when your lease is up.
+  
+- **Selling a Car**: If your car payments are too high, selling your vehicle and using public transportation or a less expensive option can help free up funds.
+
+- **Negotiating Bills**: This includes reaching out to service providers to lower rates for utilities, internet, or insurance.
+
+- **Reducing Subscriptions**: Canceling or downgrading subscription services that are not essential can help you save more.
+
+These adjustments are important because they help stabilize your financial situation over the long term by reducing fixed expenses.
+
+Validation Results:
+  ✅ Lists long-term adjustment examples
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+================================================================================
+CATEGORY: General Financial Literacy
+================================================================================
+
+
+--------------------------------------------------------------------------------
+TEST 38: Why is having an emergency fund so important?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+Having an emergency fund is crucial because it provides a financial safety net for unexpected expenses, such as medical bills, car repairs, or job loss. This fund helps you avoid going into debt when emergencies arise, ensuring you remain financially stable during tough times. It gives you peace of mind and allows you to manage your finances without stress from unforeseen financial burdens.
+
+Validation Results:
+  ✅ Explains emergency fund importance
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 39: How much interest am I really paying on a 20% APR credit card?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+To calculate the interest you're paying on a credit card with a 20% APR, we need to look at your balance and how interest accrues monthly. 
+
+For a balance of **$3,500** at a **20%** APR, the monthly interest rate is calculated as:
+
+- Monthly interest rate = Annual percentage rate / 12 months = **20% / 12 = 1.67%**
+
+Now, to find the monthly interest charge:
+
+- Monthly interest charge = Balance × Monthly interest rate
+- Monthly interest charge = **$3,500 × 0.0167 = $58.45**
+
+So, you are paying approximately **$58.45** in interest each month on your credit card balance of **$3,500** at a **20%** APR.
+
+Validation Results:
+  ✅ Explains interest calculation
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 40: What's the benefit of automating savings?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+Automating savings helps ensure consistency and discipline in your financial habits. By setting up automatic transfers to your savings accounts, you prioritize saving without the temptation to spend that money. This can lead to building an emergency fund or reaching financial goals faster, as it removes the need for manual intervention and helps you save before you have a chance to spend it elsewhere. Additionally, automating savings can leverage compound growth over time, maximizing the benefits of interest earned on your savings.
+
+Validation Results:
+  ✅ Explains automation benefits
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 41: What is the difference between discretionary and fixed spending?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+Discretionary spending refers to non-essential expenses that can be adjusted or eliminated, such as dining out, entertainment, and luxury items. In contrast, fixed spending includes essential expenses that are necessary and typically remain constant each month, like rent, utilities, and minimum debt payments. Understanding the difference helps in budgeting and managing finances effectively.
+
+Validation Results:
+  ✅ Explains discretionary vs fixed
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 42: What's a good rule of thumb for monthly saving?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+A common rule of thumb for monthly saving is the 50/30/20 rule, which suggests allocating:
+
+- **50%** of your income to Needs (essential expenses like rent, utilities, groceries)
+- **30%** to Wants (discretionary spending like dining out, entertainment)
+- **20%** to Savings (including retirement accounts and emergency funds)
+
+However, it's important to adjust these percentages based on your individual financial situation, goals, and needs. Consider your personal expenses and savings targets to find what works best for you.
+
+Validation Results:
+  ✅ Mentions savings rate target
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 43: How does inflation affect my savings plan?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+Inflation impacts your savings plan by reducing the purchasing power of your money over time. This means that even if your savings grow nominally, inflation can erode the real value of those savings. For example, if you save **$1,000** today and the inflation rate is **3%**, in a year, that **$1,000** will only buy what **$970** would purchase today. 
+
+To counteract inflation, it's important to aim for a savings strategy that includes investments with returns that outpace inflation, such as stocks or inflation-protected securities. This ensures that your savings grow not just in nominal terms, but also retain their value against rising prices.
+
+Validation Results:
+  ✅ Discusses inflation impact
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+================================================================================
+CATEGORY: Out-of-Scope
+================================================================================
+
+
+--------------------------------------------------------------------------------
+TEST 44: Should I buy Tesla stock instead of contributing to my 401(k)?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+I can't provide specific investment recommendations like buying Tesla stock. However, I can help you decide how much to save and where to allocate your savings, such as to your 401(k). Contributing to your 401(k) can be a great way to benefit from tax advantages and possibly employer matching contributions, which can provide a guaranteed return on your investment. Consider consulting a financial advisor for specific stock recommendations and investment strategies.
+
+Validation Results:
+  ✅ Declines investment advice politely
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 45: Can you predict which investment will perform best next year?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+I can't predict specific investment performance or recommend particular stocks or investments. However, I can help you decide how much to save and where to allocate your savings, such as for your emergency fund, debt payoff, or retirement accounts. For specific investment choices, consider consulting a financial advisor or looking into diversified index funds.
+
+Validation Results:
+  ✅ Declines prediction requests
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 46: What's the best crypto to invest in right now?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+I can't provide specific investment recommendations, including cryptocurrencies. My focus is on helping you decide how much to save and where to allocate your savings effectively. For specific investment picks, consider consulting a financial advisor or looking into diversified index funds.
+
+Validation Results:
+  ✅ Declines crypto recommendations
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 47: Can I avoid taxes by opening an offshore account?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+I can't provide guidance on specific tax strategies, including using offshore accounts to avoid taxes. It's important to comply with tax laws and regulations. For personalized advice on tax strategies, consider consulting a financial advisor or tax professional who can provide guidance based on your specific situation.
+
+Validation Results:
+  ✅ Declines tax avoidance advice
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+================================================================================
+CATEGORY: Accuracy Validation
+================================================================================
+
+
+--------------------------------------------------------------------------------
+TEST 48: I don't think I can afford to save 3.4k a month for my down payment because this is my entire saving and investing category. Give me something a little more reasonable with what I can reduce from my "wants" spending
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+Based on your 3-month average actual spending, your current monthly savings allocation is **$1,432**. This includes:
+
+- Emergency Fund: **$300** (20.9%)
+- Extra Debt Payoff: **$383** (26.7%)
+- 401(k) Employer Match: **$575** (40.1%)
+- Retirement Tax-Advantaged (IRA/401k): **$174** (12.2%)
+
+To help you save for your down payment without overextending your budget, we can consider adjusting your "wants" spending.
+
+Your current wants percentage is **[30%]** of your income, which is **$2,604**. The maximum shift from Wants to Savings is exactly **4% of your income**, which amounts to **$347**.
+
+Here’s how the adjustments would look:
+
+1. **Current Wants**: **$2,604**
+2. **Maximum Shift**: **$347**
+3. **New Wants**: **$2,604 - $347 = $2,257**
+4. **New Savings**: **$1,432 + $347 = $1,779**
+
+Total: Needs **$4,000** + Wants **$2,257** + Savings **$1,779** = Monthly Income **$8,680** ✓
+
+This adjustment allows you to save **$1,779** monthly towards your down payment, which is a more manageable goal.
+
+Validation Results:
+  ✅ No calculation error
+  ✅ Correct time calculation
+  ✅ Mentions 4% shift limit
+  ✅ Uses 3-month average
+  ✅ Verifies totals
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 49: I'm living in the Bay Area, when would I be able to to buy a house or apartment? Nothing fancy, just an average starter home. I also don't know how much I should be saving every month so that I have enough to pay for the down payment
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+To determine when you could buy a starter home in the Bay Area, let’s first establish a rough estimate for a typical starter home price. As of recent data, the average price for a starter home might be around **$700,000**. A common down payment is **20%**, which would be **$140,000**.
+
+### Current Savings and Monthly Savings
+
+You currently have **$11,700** in your emergency fund and save **$1,432** each month. Here's how we can break down your savings towards the down payment:
+
+1. **Current Savings**: **$11,700**
+2. **Monthly Savings**: **$1,432**
+
+### Calculation of Time to Save for Down Payment
+
+To find out how long it will take to save for the down payment:
+
+- **Target Down Payment**: **$140,000**
+- **Current Savings**: **$11,700**
+- **Needed Savings**: **$140,000 - $11,700 = $128,300**
+
+Now, divide the needed savings by your monthly savings:
+
+**Time (Months) = Needed Savings / Monthly Savings**
+
+**Time = $128,300 / $1,432 ≈ 89.6 months**
+
+This is approximately **90 months** or about **7.5 years**.
+
+### Summary
+
+- You need about **$140,000** for a down payment on a starter home.
+- With your current savings and monthly contributions, it will take you approximately **7.5 years** to reach that goal.
+
+You can adjust your monthly savings to reach your goal sooner if needed.
+
+Validation Results:
+  ❌ Mentions priority stack: Should explain how down payment fits into savings allocation priority stack
+  ✅ Shows allocation breakdown
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 50: Am I on track compared to other people my age?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+To assess your financial situation compared to others, let's evaluate your savings in relation to your income.
+
+You currently have **$11,700** in savings and an annual income of **$104,160**. This translates to a monthly income of **$8,680**.
+
+Now, let's calculate how many months of salary you’ve saved:
+
+- Savings: **$11,700**
+- Monthly Income: **$8,680**
+
+Calculation:
+
+**Months of Salary Saved = Savings ÷ Monthly Income**  
+**= $11,700 ÷ $8,680 ≈ 1.35 months**
+
+This means you have saved approximately **1.35 months of your salary**.
+
+Generally, a common benchmark is to aim for at least **3-6 months of living expenses** in savings. Given that you have around **1.35 months of salary saved**, you might consider increasing your savings to reach a more robust emergency fund and financial stability.
+
+Validation Results:
+  ✅ Uses actual user data
+  ✅ Calculates metrics
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 51: Can you add this down payment savings plan to my financial plan?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+To add a down payment savings plan to your financial plan, we'll first determine how much you want to save and the timeline for your goal. 
+
+Here’s how it fits into your current savings allocation:
+
+1. **Current Monthly Savings**: **$1,432**
+   - Emergency Fund: **$300/month** (20.9%)
+   - Extra Debt Payoff: **$383/month** (26.7%)
+   - 401(k) Employer Match: **$575/month** (40.1%)
+   - Retirement Tax-Advantaged (IRA/401k): **$174/month** (12.2%)
+
+2. **Savings Allocation Priority**: 
+   - Emergency Fund → High-APR Debt → Employer Match → Retirement → Down Payment (Brokerage)
+
+3. **Next Steps**: 
+   - Determine your down payment goal amount and the timeframe to achieve it.
+   - Adjust your current savings to allocate funds towards the down payment after meeting higher priority goals (Emergency Fund, debt payoff, employer match, and retirement contributions).
+
+Please provide your target down payment amount and the timeline you'd like to save within, and I can help you adjust your plan accordingly.
+
+Validation Results:
+  ✅ Mentions priority stack
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+--------------------------------------------------------------------------------
+TEST 52: If I'm saving 2k per month for my down payment, then when can I buy a house? Also where should this money exist while I'm saving it, in a bank account, in the stock market, high yield savings account, ETF, etc?
+Context: financial-sidekick
+--------------------------------------------------------------------------------
+
+Response:
+To determine when you can buy a house, we first need to know your target down payment amount. However, I can help you understand your savings growth based on your current savings plan.
+
+Assuming you're saving **$2,000** per month, the timeline to reach your down payment goal can be calculated using the formula:
+
+**Months to Save = Target Amount ÷ Monthly Savings**
+
+Once you provide the target down payment amount, I can give you the exact timeline.
+
+### Where to Save Your Down Payment:
+
+1. **High-Yield Savings Account**: This is a great option for short-term savings (1-5 years) as it offers higher interest rates compared to traditional savings accounts while keeping your money liquid. 
+
+2. **Certificates of Deposit (CDs)**: If you're sure you won't need the money for a set period, CDs can offer guaranteed returns.
+
+3. **Money Market Accounts**: These can also offer higher interest rates while providing easy access to your funds.
+
+4. **Avoid Stock Market Investments**: Since you're saving for a short-term goal, it's generally not advisable to invest in stocks or ETFs, as they can be volatile and you may need access to your money before you have time to recover from any downturns.
+
+Please provide your target down payment amount to calculate how long it will take you to reach that goal.
+
+Validation Results:
+  ❌ Correct calculation: Should show correct calculation: ($240,000 - $11,700) / $2,000 = 114 months (9.5 years)
+  ✅ No Forbidden Phrases
+  ✅ No LaTeX Formatting
+
+
+================================================================================
+END OF TEST RESULTS
+================================================================================

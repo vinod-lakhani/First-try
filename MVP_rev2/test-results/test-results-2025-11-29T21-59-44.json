@@ -1,0 +1,170 @@
+{
+  "timestamp": "2025-11-29T22:00:24.007Z",
+  "baseUrl": "http://localhost:3000",
+  "summary": {
+    "totalTests": 7,
+    "passedValidations": 27,
+    "totalValidations": 29,
+    "passRate": "93.1%"
+  },
+  "results": [
+    {
+      "success": true,
+      "question": "walk me through the numbers in the recommended plan",
+      "context": "savings-helper",
+      "answer": "## Recommended Plan Overview\n\nThe Recommended Plan optimizes your income allocation based on your monthly income of **$8,680**. Here's how it breaks down:\n\n- **Needs**: **47.0%** of income  \n  - Dollar amount: **$4,080.60**\n\n- **Wants**: **33.0%** of income  \n  - Dollar amount: **$2,861.40**\n\n- **Savings**: **20.0%** of income  \n  - Dollar amount: **$1,736.00**\n\n### Changes from Current Plan\n\n- **Needs**: Decreased from **47.5%** to **47.0%**  \n- **Wants**: Decreased from **36.0%** to **33.0%**  \n- **Savings**: Increased from **16.5%** to **20.0%**  \n\n### Reason for Changes\n\nThe adjustments were made to increase your savings while respecting a **4% shift limit** from wants to savings. This approach helps you move closer to the recommended allocation of **50% Needs, 30% Wants, and 20% Savings** without making drastic changes to your current lifestyle.\n\nThis Recommended Plan optimally balances your essential expenses, discretionary spending, and savings goals.",
+      "validations": {
+        "Mentions Recommended Plan values": {
+          "pass": true,
+          "message": "Should reference Recommended Plan bar graph values, not Current Plan"
+        },
+        "Explains income allocation (Needs/Wants/Savings)": {
+          "pass": true,
+          "message": "Should explain Needs/Wants/Savings breakdown, not savings allocation"
+        },
+        "Uses actual dollar amounts": {
+          "pass": true,
+          "message": "Should include specific dollar amounts"
+        },
+        "No Forbidden Phrases": {
+          "pass": true
+        },
+        "No LaTeX Formatting": {
+          "pass": true
+        }
+      }
+    },
+    {
+      "success": true,
+      "question": "walk me through the numbers",
+      "context": "savings-helper",
+      "answer": "## Recommended Plan Overview\n\nThe Recommended Plan optimizes your income allocation based on your monthly income of **$8,680**. Here’s how your allocations break down:\n\n- **Needs**: **47.0%** of income, which is **$4,070**\n- **Wants**: **33.0%** of income, which is **$2,861**\n- **Savings**: **20.0%** of income, which is **$1,736**\n\n### Current Plan vs. Recommended Plan\n\n| Category  | Current Plan | Recommended Plan | Change      |\n|-----------|--------------|------------------|-------------|\n| Needs     | **47.5%**    | **47.0%**        | Decrease by **0.5%**  |\n| Wants     | **36.0%**    | **33.0%**        | Decrease by **3.0%**  |\n| Savings   | **16.5%**    | **20.0%**        | Increase by **3.5%**  |\n\n### Changes Explained\n\n- **Wants** were reduced by **3.0%** to increase **Savings** by **3.5%**, ensuring that you're moving closer to the target allocation of **50/30/20**.\n- The shift respects the **4% limit**, which means it won't drastically change your spending habits suddenly.\n\nThe Recommended Plan reflects a balanced approach, allowing you to maintain your essential needs while increasing your savings, which is important for long-term financial health.",
+      "validations": {
+        "Uses Recommended Plan values": {
+          "pass": true,
+          "message": "Should reference Recommended Plan from savings-helper"
+        },
+        "No Forbidden Phrases": {
+          "pass": true
+        },
+        "No LaTeX Formatting": {
+          "pass": true
+        }
+      }
+    },
+    {
+      "success": true,
+      "question": "give me a breakdown of my net worth in 10 years",
+      "context": "financial-sidekick",
+      "answer": "Based on your current plan, you're projected to have **$326,977** in net worth in 10 years. \n\n### Asset Breakdown:\n- **Cash/Emergency Fund**: **$18,000**\n- **Brokerage**: **$95,000**\n- **Retirement (401k/IRA)**: **$213,977**\n- **Total Assets**: **$326,977**\n\nLiabilities remain at **$0**.",
+      "validations": {
+        "Uses asset breakdown data directly": {
+          "pass": true,
+          "message": "Should use exact values from assetBreakdown data, not calculate from scratch"
+        },
+        "Breaks down by asset type": {
+          "pass": true,
+          "message": "Should break down by Cash, Brokerage, Retirement"
+        },
+        "No linear math calculations": {
+          "pass": true,
+          "message": "Should use provided breakdown data, not linear calculations"
+        },
+        "No Forbidden Phrases": {
+          "pass": true
+        },
+        "No LaTeX Formatting": {
+          "pass": true
+        }
+      }
+    },
+    {
+      "success": true,
+      "question": "how much cash will I have in 5 years",
+      "context": "financial-sidekick",
+      "answer": "Based on your current plan, you'll have **$15,000** in cash (emergency fund) in 5 years.",
+      "validations": {
+        "Uses exact value from breakdown": {
+          "pass": true,
+          "message": "Should use $15,000 from 5-year asset breakdown directly"
+        },
+        "No manual calculation": {
+          "pass": true,
+          "message": "Should state the value directly from breakdown, not calculate"
+        },
+        "No Forbidden Phrases": {
+          "pass": true
+        },
+        "No LaTeX Formatting": {
+          "pass": true
+        }
+      }
+    },
+    {
+      "success": true,
+      "question": "what will my net worth be in 5 years",
+      "context": "financial-sidekick",
+      "answer": "Based on your current plan, you're projected to have **$127,985** in net worth in 5 years. This projection factors in growth across your assets.",
+      "validations": {
+        "Uses projection value directly": {
+          "pass": true,
+          "message": "Should use $127,985 from 5-year projection directly"
+        },
+        "Mentions growth is factored in": {
+          "pass": true,
+          "message": "Should mention that growth/returns are already factored in"
+        },
+        "No Forbidden Phrases": {
+          "pass": true
+        },
+        "No LaTeX Formatting": {
+          "pass": true
+        }
+      }
+    },
+    {
+      "success": true,
+      "question": "what can I do to increase my net worth by an additional $100,000 in 5 years",
+      "context": "financial-sidekick",
+      "answer": "Based on your current plan, you're projected to have **$127,985** in net worth in 5 years. To reach **$227,985** (your current projection plus an additional **$100,000**), you need to increase your net worth by **$100,000**.\n\n### Calculation:\n\n1. **Monthly Savings Needed**:\n   - Total increase needed: **$100,000**\n   - Time frame: **5 years** (60 months)\n   - Required monthly savings: **$100,000 / 60 months = $1,666.67/month**\n\n2. **Allocation through Savings Priority Stack**:\n   - Emergency Fund (up to 40% of additional savings): \n     - **$1,666.67 × 0.40 = $666.67** \n   - High-APR Debt Payoff (if applicable): \n     - Assume no debt here, so **$0**.\n   - Retirement Contributions:\n     - The remaining amount goes into retirement: \n     - **$1,666.67 - $666.67 = $1,000**.\n\n### Summary of Needed Monthly Savings:\n- **Emergency Fund**: **$666.67**\n- **Retirement**: **$1,000**\n\nTo achieve this goal, you would need to save approximately **$1,666.67 per month**. You can explore different scenarios using the **Savings Helper tool** to find the most comfortable savings rate and see the projected impact on your net worth.",
+      "validations": {
+        "Uses growth formulas (not linear)": {
+          "pass": false,
+          "message": "Should factor in growth rates, not use simple division"
+        },
+        "Shows growth-adjusted impact": {
+          "pass": false,
+          "message": "Should show monthly savings needed with growth factored in"
+        },
+        "No Forbidden Phrases": {
+          "pass": true
+        },
+        "No LaTeX Formatting": {
+          "pass": true
+        }
+      }
+    },
+    {
+      "success": true,
+      "question": "walk me through your recommended plan",
+      "context": "savings-helper",
+      "answer": "The **Recommended Plan** allocates your monthly income as follows:\n\n- **Needs**: **47.0%** ($4,081)\n- **Wants**: **33.0%** ($2,864)\n- **Savings**: **20.0%** ($1,736)\n\n### Comparison with Current Plan\n- **Current Plan**:\n  - Needs: **47.5%** ($4,118)\n  - Wants: **36.0%** ($3,124)\n  - Savings: **16.5%** ($1,431)\n\n### Changes Made\n- **Wants** were reduced by **3.0%** to increase **Savings** by **3.5%**, respecting the **4% shift limit**. This adjustment helps you move closer to the ideal **50/30/20** allocation while ensuring you save more.\n\nThis recommended allocation will help optimize your savings while maintaining a balanced budget.",
+      "validations": {
+        "Uses plain English (not LaTeX)": {
+          "pass": true,
+          "message": "Should use plain English, not LaTeX formulas"
+        },
+        "Uses bold numbers or bullet points": {
+          "pass": true,
+          "message": "Should use bold text or bullet points for clarity"
+        },
+        "No Forbidden Phrases": {
+          "pass": true
+        },
+        "No LaTeX Formatting": {
+          "pass": true
+        }
+      }
+    }
+  ]
+}

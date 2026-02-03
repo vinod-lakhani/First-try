@@ -1,0 +1,158 @@
+🧪 Detailed LLM Chat Scenario Tests
+
+================================================================================
+Test: Case 1 - Income Allocation with Exact Numbers
+================================================================================
+Expected: Needs $2,320 (fixed), Wants $880, Savings $800
+Savings gap: 3% (20% target - 17% actual)
+Shift limit: 4%, so shift 3% from Wants to Savings
+
+
+📝 Question: "How will you allocate my next paycheck? Show me the exact dollar breakdown."
+
+✅ Answer:
+To allocate your next paycheck of $4,000 based on your current spending and recommended plan, we start with your 3-month average actual spending:
+
+1. **Needs**: Fixed at $2,320 (remains unchanged)
+2. **Wants**: To meet your savings target, we need to shift some from Wants to Savings. Your target for Savings is $800, and you're currently at $680, creating a savings gap of $120.
+   - Shift limit is 4% of $4,000, which is $160, but we only need to shift $120 to meet the gap.
+
+3. **New Allocation**:
+   - Needs: $2,320 (fixed)
+   - Wants: $1,000 - $120 = $880
+   - Savings: $680 + $120 = $800
+
+**Total Allocation**: 
+- Needs: $2,320
+- Wants: $880
+- Savings: $800
+
+Total: $2,320 + $880 + $800 = $4,000 ✓
+
+Your next paycheck allocation will be: Needs $2,320, Wants $880, Savings $800.
+
+🔍 Validation:
+  ✅ Mentions 3-month average
+  ✅ Needs stay fixed
+  ✅ Mentions shift from wants to savings
+  ✅ Provides dollar amounts
+  ✅ No forbidden closing phrases
+
+================================================================================
+Test: Bonus Allocation - Exact Priority Stack
+================================================================================
+Bonus: $5,000
+Expected:
+  Step 1: EF $2,000 (40% of $5k, fills $4k gap partially)
+  Step 2: Debt $1,200 (22% APR credit card)
+  Step 3: Match (if needed)
+  Step 4-6: Remaining $1,800 split by liquidity matrix
+
+
+📝 Question: "I just got a $5,000 bonus. Show me step-by-step how to allocate it with exact dollar amounts for each step."
+
+✅ Answer:
+Let's allocate your $5,000 bonus step-by-step according to the savings priority stack.
+
+**Step 1: Emergency Fund**
+- Current Emergency Fund: $6,000
+- Target Emergency Fund: $10,000
+- Gap: $10,000 - $6,000 = $4,000
+- Cap for allocation: 40% of total bonus = $5,000 × 0.40 = $2,000
+- Allocation to Emergency Fund: $2,000 (fills part of the gap)
+
+**Step 2: High-APR Debt Payoff**
+- Remaining after Emergency Fund: $5,000 - $2,000 = $3,000
+- Total high-APR debt balance: $1,200
+- Cap for debt allocation: 40% of remaining = $3,000 × 0.40 = $1,200
+- Allocation to Debt: $1,200 (covers the entire debt)
+
+**Step 3: Capture Employer 401(k) Match**
+- Assuming you need to capture the full employer match this period, if applicable, we would allocate any remaining amount for that. Since we don't have specific match details, we’ll skip this step for now.
+
+**Step 4: Choose Account Type**
+- We'll assume you will choose a Roth 401(k) since your income is below the threshold for a Traditional 401(k).
+
+**Step 5: Split Remaining Savings**
+- Remaining after Emergency Fund and Debt: $3,000 - $1,200 = $1,800
+- Since you're focused on retirement and your liquidity need is medium, let’s allocate based on the liquidity vs. retirement focus matrix: 
+  - High retirement focus, medium liquidity = 50% retirement, 50% brokerage
+- Retirement allocation: $1,800 × 0.50 = $900
+- Brokerage allocation: $1,800 × 0.50 = $900
+
+**Step 6: Route Retirement Dollars**
+- Assuming you have space in your IRA:
+  - IRA limit: $7,000/year (under 50)
+  - If you haven’t contributed yet this year, you can allocate the full $900 to the IRA.
+  - Remaining: $0 for 401(k) or brokerage.
+
+**Final Allocation Summary:**
+- Emergency Fund: $2,000 
+- High-APR Debt Payoff: $1,200 
+- Retirement (IRA): $
+
+🔍 Validation:
+  ✅ Emergency fund first (40% cap)
+  ✅ High-APR debt second
+  ✅ Follows priority stack
+  ✅ Total adds up to $5,000
+  ✅ No forbidden closing phrases
+
+================================================================================
+Test: IDR Exception Override (Income < $190K but on IDR)
+================================================================================
+Income: $120k (< $190k normally → Roth)
+Status: On IDR → Should choose Traditional 401k
+
+
+📝 Question: "I make $120,000 per year and I'm on an IDR plan for student loans. Should I choose Roth or Traditional 401(k)?"
+
+✅ Answer:
+Since you're on an Income-Driven Repayment (IDR) plan for your student loans, you should choose a Traditional 401(k). This option reduces your Adjusted Gross Income (AGI), which can lower your student loan payments under IDR plans, effectively giving you a discount on both your taxes and loan payments.
+
+🔍 Validation:
+  ✅ Recommends Traditional 401k
+  ✅ Explains IDR exception
+  ✅ Explains AGI reduction
+  ✅ No forbidden closing phrases
+
+================================================================================
+Test: Income Change Handling
+================================================================================
+Current: $5,500/mo
+Next month: $4,800/mo
+Expected: Recalculate targets as % of new income
+
+
+📝 Question: "My income is dropping from $5,500 to $4,800 next month. What changes in my allocation?"
+
+✅ Answer:
+When your income drops to $4,800, your target allocations will adjust based on the new income. Here’s how your new allocations will look:
+
+1. **New Target Needs**: 
+   - $4,800 × 0.50 = $2,400
+
+2. **New Target Wants**: 
+   - $4,800 × 0.30 = $1,440
+
+3. **New Target Savings**: 
+   - $4,800 × 0.20 = $960
+
+Since your actual spending percentages are based on the 3-month average, these will remain unchanged in the short term. Therefore, your fixed Needs will stay at $2,750 for now.
+
+**New Allocation Summary**:
+- Needs: $2,750 (fixed short-term)
+- Wants: $1,440 (target)
+- Savings: $960 (target)
+
+This means you will have a savings gap to address, which is $960 (target) - $0.2% of $4,800 (actual savings of $96). Adjust your Wants accordingly to meet your savings target over time.
+
+🔍 Validation:
+  ✅ Mentions recalculation
+  ✅ Mentions percentage-based targets
+  ✅ No forbidden closing phrases
+
+================================================================================
+✅ All detailed tests completed!
+================================================================================
+

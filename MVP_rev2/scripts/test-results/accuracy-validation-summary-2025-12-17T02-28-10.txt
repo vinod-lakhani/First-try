@@ -1,0 +1,39 @@
+Accuracy Validation Test Results
+=====================================
+
+Timestamp: 2025-12-17T02:28:10.094Z
+Base URL: https://weleap-mvp.vercel.app
+
+Summary:
+  Tests Passed: 0/5
+  Validations Passed: 10/16 (62.5%)
+
+Test Results:
+================================================================================
+
+❌ Calculation Error - Down Payment Savings
+   Question: I don't think I can afford to save 3.4k a month for my down payment because this is my entire saving...
+   Validations: 4/6
+      ❌ uses_3month_average: Should reference 3-month average when discussing income allocation
+      ❌ verifies_totals: Should verify totals: Needs + Wants + Savings = Income
+
+❌ Down Payment - Savings Priority Stack Integration
+   Question: I'm living in the Bay Area, when would I be able to to buy a house or apartment? Nothing fancy, just...
+   Validations: 2/3
+      ❌ mentions_priority_stack: Should explain how down payment fits into savings allocation priority stack
+
+❌ Comparison Question - Use Actual User Data
+   Question: Am I on track compared to other people my age?...
+   Validations: 2/3
+      ❌ uses_actual_data: Should use actual user data (savings $11,700, income) to calculate metrics
+
+❌ Add Down Payment Plan - Priority Stack
+   Question: Can you add this down payment savings plan to my financial plan?...
+   Validations: 1/2
+      ❌ mentions_priority_stack: Should explain how down payment fits into savings allocation priority stack
+
+❌ Down Payment Timeline - Correct Calculation
+   Question: If I'm saving 2k per month for my down payment, then when can I buy a house? Also where should this ...
+   Validations: 1/2
+      ❌ correct_calculation: Should show correct calculation: ($240,000 - $11,700) / $2,000 = 114 months (9.5 years)
+
