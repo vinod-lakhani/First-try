@@ -122,7 +122,9 @@ function SavingsAllocatorContent() {
   const [simulateAmount, setSimulateAmount] = useState(200);
   const appliedFeedParamsRef = useRef(false);
 
-  // When opening from feed (source=feed) or onboarding (source=onboarding), apply URL scenario and simulateAmount once.
+  // When opening from feed (source=feed), onboarding (source=onboarding), or savings-helper (source=sidekick), apply URL scenario once.
+  // IMPORTANT: first_time is ONLY for source=onboarding AND no saved plan exists. If user has a saved plan (customSavingsAllocation), use my_data.
+  // Post-onboarding (savings-helper Apply → allocator with source=sidekick or proposedSavingsFromHelper set) must use my_data so Current = last locked, Proposed = new target; plan updates only on Confirm & Apply here.
   useEffect(() => {
     if (appliedFeedParamsRef.current) return;
     if (source === 'feed') {
@@ -137,28 +139,71 @@ function SavingsAllocatorContent() {
         appliedFeedParamsRef.current = true;
       }
     } else if (source === 'onboarding') {
-      setAllocatorScenario('first_time');
+      // CRITICAL: Check if user has a saved plan - if so, use my_data instead of first_time
+      const hasSavedPlan = !!baselineState.safetyStrategy?.customSavingsAllocation;
+      const scenario = hasSavedPlan ? 'my_data' : 'first_time';
+      console.log('[Savings Allocator] Setting scenario for onboarding:', {
+        hasSavedPlan,
+        scenario,
+        customSavingsAllocation: baselineState.safetyStrategy?.customSavingsAllocation,
+      });
+      setAllocatorScenario(scenario);
+      appliedFeedParamsRef.current = true;
+    } else if (source === 'sidekick') {
+      setAllocatorScenario('my_data');
       appliedFeedParamsRef.current = true;
     }
-  }, [source, urlScenario, urlSimulateAmount]);
-  
+  }, [source, urlScenario, urlSimulateAmount, baselineState.safetyStrategy?.customSavingsAllocation]);
+
   // Calculate paychecks per month - MUST be before any hooks that use it
   const paychecksPerMonth = getPaychecksPerMonth(baselineState.income?.payFrequency || 'biweekly');
   const monthlyIncome = (baselineState.income?.netIncome$ || baselineState.income?.grossIncome$ || 0) * paychecksPerMonth;
   
+  // Debug: Log when baselinePlanData changes to verify it's using customSavingsAllocation
+  useEffect(() => {
+    if (baselinePlanData) {
+      const emergencyCategory = baselinePlanData.paycheckCategories.find(c => c.key === 'emergency');
+      const emergencyMonthly = emergencyCategory ? emergencyCategory.amount * paychecksPerMonth : 0;
+      const customEf$ = baselineState.safetyStrategy?.customSavingsAllocation?.ef$;
+      const mismatch = customEf$ && Math.abs(emergencyMonthly - customEf$) > 1;
+      console.log('[Savings Allocator] baselinePlanData updated:', {
+        hasEmergencyCategory: !!emergencyCategory,
+        emergencyAmountPerPaycheck: emergencyCategory?.amount,
+        emergencyMonthly,
+        customSavingsAllocation: baselineState.safetyStrategy?.customSavingsAllocation,
+        customEf$,
+        paychecksPerMonth,
+        MISMATCH: mismatch ? `WARNING: baselinePlanData EF (${emergencyMonthly}) doesn't match customSavingsAllocation EF (${customEf$})` : 'OK',
+      });
+      if (mismatch) {
+        console.error('[Savings Allocator] CRITICAL: baselinePlanData is NOT using customSavingsAllocation!', {
+          emergencyMonthly,
+          customEf$,
+          customSavingsAllocation: baselineState.safetyStrategy?.customSavingsAllocation,
+        });
+      }
+    }
+  }, [baselinePlanData, paychecksPerMonth, baselineState.safetyStrategy?.customSavingsAllocation]);
+  
   // Debug: Log when planData changes
   useEffect(() => {
+    const emergencyCategory = baselinePlanData?.paycheckCategories.find(c => c.key === 'emergency');
     console.log('[Savings Allocator] baselinePlanData changed:', {
       hasPlanData: !!baselinePlanData,
       categoriesCount: baselinePlanData?.paycheckCategories.length,
       riskConstraints: baselineState.riskConstraints,
+      emergencyCategoryAmountPerPaycheck: emergencyCategory?.amount,
+      emergencyCategoryMonthly: emergencyCategory ? emergencyCategory.amount * paychecksPerMonth : 0,
+      customSavingsAllocation: baselineState.safetyStrategy?.customSavingsAllocation,
+      customEf$: baselineState.safetyStrategy?.customSavingsAllocation?.ef$,
+      paychecksPerMonth,
       categories: baselinePlanData?.paycheckCategories.map(c => ({
         key: c.key,
         amount: c.amount,
         monthly: c.amount * paychecksPerMonth,
       })),
     });
-  }, [baselinePlanData, baselineState.riskConstraints, paychecksPerMonth]);
+  }, [baselinePlanData, baselineState.riskConstraints, baselineState.safetyStrategy?.customSavingsAllocation, paychecksPerMonth]);
 
   // Get baseline savings budget and allocation details
   // CRITICAL: This must recalculate when planData changes (which happens when riskConstraints change)
@@ -212,9 +257,13 @@ function SavingsAllocatorContent() {
     console.log('[Savings Allocator] Calculated baselineSavingsData:', {
       result,
       emergencyCategoryAmount: emergencyCategory?.amount,
+      emergencyCategoryMonthly: (emergencyCategory?.amount || 0) * paychecksPerMonth,
       debtExtraCategoryAmount: debtExtraCategory?.amount,
       longTermCategorySubCategories: longTermCategory?.subCategories,
       riskConstraints: baselineState.riskConstraints,
+      customSavingsAllocation: baselineState.safetyStrategy?.customSavingsAllocation,
+      paychecksPerMonth,
+      hasCustomAlloc: !!baselineState.safetyStrategy?.customSavingsAllocation,
     });
     
     return result;
@@ -694,9 +743,25 @@ function SavingsAllocatorContent() {
     const cur401k = pretaxOverrides.k401EmployeeMonthly ?? engine401k;
     const curHsa = pretaxOverrides.hsaMonthly ?? engineHsa;
     if (key === 'k401EmployeeMonthly') {
-      setPretaxOverrides(prev => ({ ...prev, k401EmployeeMonthly: Math.max(0, cur401k + delta) }));
+      const newValue = Math.max(0, cur401k + delta);
+      console.log('[Savings Allocator] handlePreTaxStepper 401K:', {
+        engine401k,
+        cur401k,
+        delta,
+        newValue,
+        pretaxOverrides: pretaxOverrides.k401EmployeeMonthly,
+      });
+      setPretaxOverrides(prev => ({ ...prev, k401EmployeeMonthly: newValue }));
     } else {
-      setPretaxOverrides(prev => ({ ...prev, hsaMonthly: Math.max(0, curHsa + delta) }));
+      const newValue = Math.max(0, curHsa + delta);
+      console.log('[Savings Allocator] handlePreTaxStepper HSA:', {
+        engineHsa,
+        curHsa,
+        delta,
+        newValue,
+        pretaxOverrides: pretaxOverrides.hsaMonthly,
+      });
+      setPretaxOverrides(prev => ({ ...prev, hsaMonthly: newValue }));
     }
   };
 
@@ -719,6 +784,13 @@ function SavingsAllocatorContent() {
     if (Number.isNaN(n) || n <= 0) return;
     useOnboardingStore.getState().setProposedSavingsFromHelper(n);
   }, [proposedSavingsFromHelper]);
+
+  // Post-onboarding: when user applied a new target in savings-helper (proposedSavingsFromHelper set), use my_data so Current = last locked, Proposed = new target. Plan is NOT updated until Confirm & Apply here. first_time is ONLY for source=onboarding.
+  useEffect(() => {
+    if (proposedSavingsFromHelper == null || proposedSavingsFromHelper <= 0) return;
+    if (source === 'onboarding') return;
+    setAllocatorScenario('my_data');
+  }, [proposedSavingsFromHelper, source]);
 
   // Use post-tax savings available as the budget for allocation
   const savingsBudget = useMemo(() => {
@@ -764,7 +836,15 @@ function SavingsAllocatorContent() {
   // Proposed Plan = engine allocation of that budget + any overrides; when user changes savings amount elsewhere, that shows as Proposed until they Apply, then it becomes Current here.
   // SavingsPlanSnapshot.match401k$ = EMPLOYER match (for deepEqualPlans). no_match: current has 401k=0, match=0.
   const currentPlan = useMemo((): SavingsPlanSnapshot | null => {
-    if (!baselineSavingsData) return null;
+    if (!baselineSavingsData) {
+      console.log('[Savings Allocator] currentPlan: No baselineSavingsData');
+      return null;
+    }
+    console.log('[Savings Allocator] currentPlan: Building from baselineSavingsData:', {
+      baselineSavingsData,
+      customSavingsAllocation: baselineState.safetyStrategy?.customSavingsAllocation,
+      allocatorScenario,
+    });
     const employee401k = allocatorScenario === 'no_match' ? 0 : baselineSavingsData.match401k$;
     const employerMatch =
       allocatorScenario === 'no_match'
@@ -1004,18 +1084,30 @@ function SavingsAllocatorContent() {
   }, [proposedPlanSnapshot, initialEnginePlan, effectivePreTax.k401Employee, preTaxSavings.employerMatch.monthly, preTaxSavings.hsa.monthly]);
 
   // Baseline (current/saved) plan for chat — so Ribbit can explain current vs proposed
+  // first_time: use engineSnapshot (Ribbit Proposal) as baseline since there's no current plan
   // no_match: use effectiveCurrentPlan so steps show 401k=0, match=0, unallocated→brokerage
   const baselinePlanForChat = useMemo(() => {
     if (!baselineSavingsData || !baselinePlanData) return null;
-    const current = effectiveCurrentPlan ?? {
-      ef$: 0,
-      debt$: 0,
-      match401k$: 0,
-      hsa$: 0,
-      retirementTaxAdv$: 0,
-      brokerage$: 0,
-      monthlySavings: 0,
-    };
+    // CRITICAL: In first_time scenario, use engineSnapshot (Ribbit Proposal) as baseline, not zeros
+    const current = allocatorScenario === 'first_time' 
+      ? (engineSnapshot ?? {
+          ef$: 0,
+          debt$: 0,
+          match401k$: 0,
+          hsa$: 0,
+          retirementTaxAdv$: 0,
+          brokerage$: 0,
+          monthlySavings: 0,
+        })
+      : (effectiveCurrentPlan ?? {
+          ef$: 0,
+          debt$: 0,
+          match401k$: 0,
+          hsa$: 0,
+          retirementTaxAdv$: 0,
+          brokerage$: 0,
+          monthlySavings: 0,
+        });
     const steps: Array<{ id: string; type: string; label: string; amountMonthly?: number }> = [];
     const employee401k =
       allocatorScenario === 'no_match' ? 0 : baselineSavingsData.match401k$ ?? preTaxSavings.traditional401k.monthly;
@@ -1063,6 +1155,7 @@ function SavingsAllocatorContent() {
     baselinePlanData,
     effectiveCurrentPlan,
     allocatorScenario,
+    engineSnapshot,
     preTaxSavings.traditional401k.monthly,
     grossIncomeMonthly,
     baselineState.payrollContributions,
@@ -1195,16 +1288,27 @@ function SavingsAllocatorContent() {
     };
   }, [proposedPlanSnapshot, budgetForProposedPlan]);
 
+  // Column 1 = Current Plan (saved plan) in my_data mode, Ribbit Proposal (engine recommendation) in first_time mode
+  // Column 2 = Proposed Plan (working copy with user modifications)
   const allocationComparison = useMemo(() => {
     if (!proposedPlanSnapshot || !baselineSavingsData) return null;
-    const currentPlanForCompare = effectiveCurrentPlan ?? {
-      ef$: 0, debt$: 0, match401k$: 0, hsa$: 0, retirementTaxAdv$: 0, brokerage$: 0, monthlySavings: 0,
-    } as SavingsPlanSnapshot;
-    // No Match scenario: show current 401k/match as 0 so "Proposed" is the recommendation to start contributing
+    const zeros = { ef$: 0, debt$: 0, match401k$: 0, hsa$: 0, retirementTaxAdv$: 0, brokerage$: 0, monthlySavings: 0 } as SavingsPlanSnapshot;
+    
+    // CRITICAL: In my_data mode, baseline = Current Plan (saved plan from store)
+    // In first_time mode, baseline = Ribbit Proposal (engine recommendation)
+    const isMyDataMode = allocatorScenario === 'my_data';
+    const currentPlanForCompare = isMyDataMode 
+      ? (effectiveCurrentPlan ?? zeros)  // Use saved plan in my_data mode
+      : (engineSnapshot ?? zeros);      // Use engine recommendation in first_time mode
+    
+    // Baseline 401K: Use saved plan in my_data mode, engine recommendation in first_time mode
     const current401kEmployee = allocatorScenario === 'no_match'
       ? 0
-      : (effectiveCurrentPlan ? (baselineSavingsData.match401k$ ?? preTaxSavings.traditional401k.monthly) : 0);
+      : (isMyDataMode 
+          ? (baselineSavingsData.match401k$ ?? preTaxSavings.traditional401k.monthly)  // Saved plan
+          : (engineAllocationForScenario?.preTax401k$ ?? preTaxSavings.traditional401k.monthly));  // Engine recommendation
     const proposed401kEmployee = effectivePreTax.k401Employee;
+    // Baseline match: Calculate from baseline 401K to ensure consistency
     const currentEmployerMatch = allocatorScenario === 'no_match'
       ? 0
       : calculateEmployerMatch(
@@ -1230,8 +1334,13 @@ function SavingsAllocatorContent() {
         updated: proposedEmployerMatch,
       });
     }
-    // No HSA scenario: show current HSA as 0 so "Proposed" is the recommendation to start contributing
-    const currentHsa$ = allocatorScenario === 'no_hsa' ? 0 : (currentPlanForCompare.hsa$ ?? 0);
+    // Baseline HSA: Use saved plan in my_data mode, engine recommendation in first_time mode
+    // Note: baselineSavingsData doesn't have hsa$, so use effectiveCurrentPlan or preTaxSavings
+    const currentHsa$ = allocatorScenario === 'no_hsa' 
+      ? 0 
+      : (isMyDataMode
+          ? (effectiveCurrentPlan?.hsa$ ?? preTaxSavings.hsa.monthly)  // Saved plan
+          : (engineAllocationForScenario?.hsa$ ?? preTaxSavings.hsa.monthly));  // Engine recommendation
     if (currentHsa$ > 0.01 || (proposedPlanSnapshot.hsa$ ?? 0) > 0.01) {
       rows.push({
         label: 'HSA',
@@ -1240,34 +1349,48 @@ function SavingsAllocatorContent() {
         updated: proposedPlanSnapshot.hsa$ ?? 0,
       });
     }
+    // Baseline post-tax values: Use saved plan in my_data mode, engine recommendation in first_time mode
+    const baselineEf$ = isMyDataMode 
+      ? (currentPlanForCompare.ef$ ?? 0)  // Saved plan
+      : (engineAllocationForScenario?.ef$ ?? (engineSnapshot?.ef$ ?? 0));  // Engine recommendation
+    const baselineDebt$ = isMyDataMode
+      ? (currentPlanForCompare.debt$ ?? 0)  // Saved plan
+      : (engineAllocationForScenario?.highAprDebt$ ?? (engineSnapshot?.debt$ ?? 0));  // Engine recommendation
+    const baselineRetirement$ = isMyDataMode
+      ? (currentPlanForCompare.retirementTaxAdv$ ?? 0)  // Saved plan
+      : (engineAllocationForScenario?.retirementTaxAdv$ ?? (engineSnapshot?.retirementTaxAdv$ ?? 0));  // Engine recommendation
+    const baselineBrokerage$ = isMyDataMode
+      ? (currentPlanForCompare.brokerage$ ?? 0)  // Saved plan
+      : (engineAllocationForScenario?.brokerage$ ?? (engineSnapshot?.brokerage$ ?? 0));  // Engine recommendation
+    
     return [
       ...rows,
       {
         label: 'Emergency Fund',
         id: 'EMERGENCY_FUND',
-        current: currentPlanForCompare.ef$,
+        current: baselineEf$,
         updated: proposedPlanSnapshot.ef$,
       },
       {
         label: 'High-APR Debt',
         id: 'HIGH_APR_DEBT',
-        current: currentPlanForCompare.debt$,
+        current: baselineDebt$,
         updated: proposedPlanSnapshot.debt$,
       },
       {
         label: 'Roth IRA / Taxable Retirement',
         id: 'RETIREMENT',
-        current: currentPlanForCompare.retirementTaxAdv$,
+        current: baselineRetirement$,
         updated: proposedPlanSnapshot.retirementTaxAdv$,
       },
       {
         label: 'Brokerage',
         id: 'BROKERAGE',
-        current: currentPlanForCompare.brokerage$,
+        current: baselineBrokerage$,
         updated: proposedPlanSnapshot.brokerage$,
       },
     ];
-  }, [effectiveCurrentPlan, proposedPlanSnapshot, baselineSavingsData, preTaxSavings.traditional401k.monthly, effectivePreTax.k401Employee, baselineState.payrollContributions, grossIncomeMonthly, allocatorScenario]);
+  }, [engineSnapshot, engineAllocationForScenario, effectiveCurrentPlan, proposedPlanSnapshot, baselineSavingsData, preTaxSavings.traditional401k.monthly, effectivePreTax.k401Employee, baselineState.payrollContributions, grossIncomeMonthly, allocatorScenario]);
 
   // Build delta for chat panel: current vs proposed. In VALIDATED mode, isNoChange=true.
   const posttaxSum = useMemo(() =>
@@ -1445,8 +1568,10 @@ function SavingsAllocatorContent() {
       const netWorth6m = simulation.netWorth[5] ?? simulation.netWorth[0] ?? openingNetWorth;
       const netWorth12m = simulation.netWorth[11] ?? simulation.netWorth[0] ?? openingNetWorth;
       const netWorth24m = simulation.netWorth[23] ?? simulation.netWorth[simulation.netWorth.length - 1] ?? openingNetWorth;
+      const MONTHS_20Y = 240;
+      const netWorthAt20Y = simulation.netWorth[MONTHS_20Y - 1] ?? simulation.netWorth[simulation.netWorth.length - 1] ?? openingNetWorth;
 
-      const modifiedPlan: FinalPlanData = {
+      const modifiedPlan: FinalPlanData & { netWorthAt20Y?: number } = {
         ...baselinePlanData,
         netWorthChartData: {
           labels: chartLabels,
@@ -1459,7 +1584,9 @@ function SavingsAllocatorContent() {
           { label: '6 Months', months: 6, value: netWorth6m },
           { label: '12 Months', months: 12, value: netWorth12m },
           { label: '24 Months', months: 24, value: netWorth24m },
+          { label: '20 Years', months: 240, value: netWorthAt20Y },
         ],
+        netWorthAt20Y,
       };
       
       console.log('[Savings Allocator] Scenario net worth calculated', {
@@ -1484,6 +1611,127 @@ function SavingsAllocatorContent() {
       return baselinePlanData ?? null;
     }
       }, [allocationForScenario, baselinePlanData, baselineState, mode, paychecksPerMonth, preTaxSavings]);
+
+  /**
+   * Ribbit Proposal net worth calculation (ONLY for first_time scenario):
+   * - In first_time mode: This represents the engine's recommendation (frozen baseline = "Ribbit Proposal")
+   * - In my_data mode: This is NOT used; baseline = Current Plan (saved plan from baselinePlanData)
+   * 
+   * CRITICAL: ribbitProposalPlanData must ALWAYS include "20 Years" projection for net worth impact calculation
+   * baselinePlanData doesn't have "20 Years", so we must recalculate from engine allocation
+   */
+  const ribbitProposalPlanData = useMemo<FinalPlanData | null>(() => {
+    // ONLY calculate in first_time mode - in my_data mode, use baselinePlanData (Current Plan) directly
+    if (allocatorScenario !== 'first_time') return null;
+    
+    if (!engineAllocationForScenario || !baselinePlanData || !baselineState) return null;
+    
+    try {
+      // In first_time mode, use engine allocation (Ribbit Proposal)
+      const alloc = engineAllocationForScenario;
+      
+      console.log('[Savings Allocator] ribbitProposalPlanData calculation (first_time only):', {
+        allocatorScenario,
+        allocEf$: alloc.ef$,
+        engineAllocationEf$: engineAllocationForScenario?.ef$,
+      });
+      const incomePeriod$ = baselineState.income?.netIncome$ || baselineState.income?.grossIncome$ || 0;
+      const essentialsCategories = baselinePlanData.paycheckCategories.filter(c => c.key === 'essentials');
+      const debtMinimumCategories = baselinePlanData.paycheckCategories.filter(c => c.key === 'debt_minimums');
+      const wantsCategories = baselinePlanData.paycheckCategories.filter(c => c.key === 'fun_flexible');
+      const monthlyEssentials = essentialsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
+      const monthlyDebtMinimums = debtMinimumCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
+      const monthlyNeeds = monthlyEssentials + monthlyDebtMinimums;
+      const monthlyWants = wantsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
+      const assets = baselineState.assets || [];
+      const debts = baselineState.debts || [];
+      const efBalance$ = baselineState.safetyStrategy?.efBalance$ || assets.filter(a => a.type === 'cash').reduce((sum, a) => sum + a.value$, 0);
+      const monthlyBasics = baselineState.fixedExpenses.filter(e => e.category === 'needs').reduce((sum, e) => sum + e.amount$, 0);
+      const efTargetMonths = baselineState.safetyStrategy?.efTargetMonths || 3;
+      const efTarget$ = monthlyBasics > 0 ? monthlyBasics * efTargetMonths : incomePeriod$ * 2.17 * 0.3 * efTargetMonths;
+      const openingBalances = {
+        cash: efBalance$,
+        brokerage: assets.filter(a => a.type === 'brokerage').reduce((sum, a) => sum + a.value$, 0),
+        retirement: assets.filter(a => a.type === 'retirement').reduce((sum, a) => sum + a.value$, 0),
+        hsa: assets.find(a => a.type === 'hsa')?.value$,
+        otherAssets: assets.filter(a => a.type === 'other').reduce((sum, a) => sum + a.value$, 0),
+        liabilities: debts.map(d => ({
+          name: d.name,
+          balance: d.balance$,
+          aprPct: d.aprPct,
+          minPayment: d.minPayment$,
+          extraPayment: d.isHighApr ? alloc.highAprDebt$ : undefined,
+        })),
+      };
+      const scenarioPreTax401k$ = ('preTax401k$' in alloc && (alloc as { preTax401k$?: number }).preTax401k$ != null) ? (alloc as { preTax401k$: number }).preTax401k$ : preTaxSavings.traditional401k.monthly;
+      const scenarioMatch401k$ = ('match401k$' in alloc && (alloc as { match401k$?: number }).match401k$ != null) ? (alloc as { match401k$: number }).match401k$ : preTaxSavings.employerMatch.monthly;
+      const scenarioHsa$ = ('hsa$' in alloc && (alloc as { hsa$?: number }).hsa$ != null) ? (alloc as { hsa$: number }).hsa$ : preTaxSavings.hsa.monthly;
+      const scenarioEmployerHsa$ = preTaxSavings.employerHSA?.monthly ?? 0;
+      const monthlyPlan: SimMonthlyPlan = {
+        monthIndex: 0,
+        incomeNet: incomePeriod$ * paychecksPerMonth,
+        needs$: Math.max(0, monthlyNeeds),
+        wants$: monthlyWants,
+        ef$: alloc.ef$,
+        highAprDebt$: alloc.highAprDebt$,
+        preTax401k$: scenarioPreTax401k$,
+        match401k$: scenarioMatch401k$,
+        hsa$: scenarioHsa$,
+        employerHsa$: scenarioEmployerHsa$,
+        retirementTaxAdv$: alloc.retirementTaxAdv$,
+        brokerage$: alloc.brokerage$,
+      };
+      const horizonMonths = 480;
+      const monthlyPlans: SimMonthlyPlan[] = Array.from({ length: horizonMonths }, (_, i) => ({ ...monthlyPlan, monthIndex: i }));
+      const riskConstraints = baselineState.riskConstraints;
+      const scenarioInput: ScenarioInput = {
+        startDate: new Date().toISOString().split('T')[0],
+        horizonMonths,
+        inflationRatePct: riskConstraints?.assumptions?.inflationRatePct || 2.5,
+        nominalReturnPct: riskConstraints?.assumptions?.nominalReturnPct || 9.0,
+        cashYieldPct: riskConstraints?.assumptions?.cashYieldPct || 4.0,
+        taxDragBrokeragePct: 0.5,
+        openingBalances,
+        monthlyPlan: monthlyPlans,
+        goals: { efTarget$ },
+      };
+      const simulation = simulateScenario(scenarioInput);
+      const chartLabels: string[] = [];
+      const chartNetWorth: number[] = [];
+      const chartAssets: number[] = [];
+      const chartLiabilities: number[] = [];
+      for (let i = 0; i < simulation.netWorth.length; i += 3) {
+        const month = i + 1;
+        const year = Math.floor(month / 12);
+        const monthInYear = (month % 12) || 12;
+        chartLabels.push(`${monthInYear}/${year}`);
+        chartNetWorth.push(simulation.netWorth[i] || 0);
+        chartAssets.push(simulation.assets[i] || 0);
+        chartLiabilities.push(simulation.liabilities[i] || 0);
+      }
+      const totalLiabilities = openingBalances.liabilities.reduce((s, d) => s + d.balance, 0);
+      const openingNetWorth = Math.round((openingBalances.cash + openingBalances.brokerage + openingBalances.retirement + (openingBalances.hsa ?? 0) + openingBalances.otherAssets - totalLiabilities) * 100) / 100;
+      const netWorth6m = simulation.netWorth[5] ?? simulation.netWorth[0] ?? openingNetWorth;
+      const netWorth12m = simulation.netWorth[11] ?? simulation.netWorth[0] ?? openingNetWorth;
+      const netWorth24m = simulation.netWorth[23] ?? simulation.netWorth[simulation.netWorth.length - 1] ?? openingNetWorth;
+      const netWorth20y = simulation.netWorth[239] ?? simulation.netWorth[simulation.netWorth.length - 1] ?? openingNetWorth;
+      const modifiedPlan: FinalPlanData = {
+        ...baselinePlanData,
+        netWorthChartData: { labels: chartLabels, netWorth: chartNetWorth, assets: chartAssets, liabilities: chartLiabilities },
+        netWorthProjection: [
+          { label: 'Today', months: 0, value: openingNetWorth },
+          { label: '6 Months', months: 6, value: netWorth6m },
+          { label: '12 Months', months: 12, value: netWorth12m },
+          { label: '24 Months', months: 24, value: netWorth24m },
+          { label: '20 Years', months: 240, value: netWorth20y },
+        ],
+      };
+      return modifiedPlan;
+    } catch (err) {
+      console.error('[Savings Allocator] Error calculating ribbitProposalPlanData:', err);
+      return null;
+    }
+  }, [engineAllocationForScenario, baselinePlanData, baselineState, allocatorScenario, paychecksPerMonth, preTaxSavings]);
 
   // Use baseline plan's net worth chart data, but resample to match scenario format (every 3 months)
   // The baselinePlanData has full 480-month simulation, but scenario samples every 3 months
@@ -1749,6 +1997,31 @@ function SavingsAllocatorContent() {
                     </ul>
                   </CardContent>
                 </Card>
+                {/* Updated plan — always visible so user sees the numbers when Ribbit says "Here's the updated plan" */}
+                {proposedPlan && proposedPlan.steps.some((s) => (s.amountMonthly ?? 0) > 0) && (
+                  <Card className="border-slate-200 dark:border-slate-700">
+                    <CardContent className="p-4">
+                      <h3 className="text-sm font-medium text-slate-900 dark:text-white mb-2">Updated allocation</h3>
+                      <div className="space-y-2 text-sm">
+                        {proposedPlan.steps
+                          .filter((s) => (s.amountMonthly ?? 0) > 0)
+                          .map((s, i) => (
+                            <div key={i} className="flex justify-between">
+                              <span className="text-slate-700 dark:text-slate-300">{s.label}</span>
+                              <span className="font-medium text-slate-900 dark:text-white">
+                                ${Math.round(s.amountMonthly ?? 0).toLocaleString()}/mo
+                              </span>
+                            </div>
+                          ))}
+                      </div>
+                      {proposedPlan.keyMetric?.value && (
+                        <p className="mt-2 text-xs font-medium text-slate-600 dark:text-slate-400">
+                          {proposedPlan.keyMetric.label}: {proposedPlan.keyMetric.value}
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
                 {/* CTA row: primary Apply, secondary See details first */}
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                   <Button
@@ -1811,12 +2084,104 @@ function SavingsAllocatorContent() {
               efBalance$,
               totalMonthlySavingsCurrent: totalMonthlySavingsForChat?.totalCurrent,
               totalMonthlySavingsProposed: totalMonthlySavingsForChat?.totalProposed,
+              // CRITICAL: Always include 20-year net worth impact for chat to mention
+              netWorthImpact20Y: (() => {
+                if (!scenarioPlanData) {
+                  console.log('[Savings Allocator] netWorthImpact20Y: No scenarioPlanData');
+                  return undefined;
+                }
+                
+                // CRITICAL: In my_data mode, baseline = Current Plan (saved plan from baselinePlanData)
+                // In first_time mode, baseline = Ribbit Proposal (engine recommendation from ribbitProposalPlanData)
+                const isMyDataMode = allocatorScenario === 'my_data';
+                
+                let baseline20Y = 0;
+                
+                if (isMyDataMode) {
+                  // my_data mode: Use Current Plan (baselinePlanData) as baseline
+                  // If baselinePlanData doesn't have "20 Years", recalculate from netWorthScenarioInput
+                  baseline20Y = baselinePlanData?.netWorthProjection?.find((p) => p.label === '20 Years')?.value ?? 0;
+                  
+                  if (baseline20Y === 0 && baselinePlanData?.netWorthScenarioInput) {
+                    // Recalculate "20 Years" from saved plan's scenario input
+                    try {
+                      const baselineSim = simulateScenario(baselinePlanData.netWorthScenarioInput);
+                      baseline20Y = baselineSim.netWorth[239] ?? baselineSim.netWorth[baselineSim.netWorth.length - 1] ?? 0;
+                      console.log('[Savings Allocator] netWorthImpact20Y: Recalculated Current Plan 20Y from netWorthScenarioInput:', baseline20Y);
+                    } catch (err) {
+                      console.error('[Savings Allocator] Error recalculating Current Plan 20Y:', err);
+                    }
+                  }
+                  
+                  if (baseline20Y === 0) {
+                    console.log('[Savings Allocator] netWorthImpact20Y: Cannot get Current Plan 20Y in my_data mode', {
+                      hasBaselinePlanData: !!baselinePlanData,
+                      hasNetWorthScenarioInput: !!baselinePlanData?.netWorthScenarioInput,
+                      baselineProjectionLabels: baselinePlanData?.netWorthProjection?.map(p => p.label),
+                    });
+                    return undefined;
+                  }
+                } else {
+                  // first_time mode: Use Ribbit Proposal (ribbitProposalPlanData) as baseline
+                  if (!ribbitProposalPlanData) {
+                    console.log('[Savings Allocator] netWorthImpact20Y: No ribbitProposalPlanData in first_time mode');
+                    return undefined;
+                  }
+                  baseline20Y = ribbitProposalPlanData.netWorthProjection?.find((p) => p.label === '20 Years')?.value ?? 0;
+                  
+                  if (baseline20Y === 0) {
+                    console.log('[Savings Allocator] netWorthImpact20Y: Ribbit Proposal missing 20Y', {
+                      ribbitProjectionLabels: ribbitProposalPlanData.netWorthProjection?.map(p => p.label),
+                    });
+                    return undefined;
+                  }
+                }
+                
+                // Proposed 20-year net worth - scenarioPlanData already has it calculated correctly
+                const proposed20Y = scenarioPlanData.netWorthProjection?.find((p) => p.label === '20 Years')?.value ?? 0;
+                
+                console.log('[Savings Allocator] netWorthImpact20Y: Raw values', {
+                  allocatorScenario,
+                  isMyDataMode,
+                  baseline20Y,
+                  proposed20Y,
+                  baselineSource: isMyDataMode ? 'baselinePlanData (Current Plan)' : 'ribbitProposalPlanData (Ribbit Proposal)',
+                  hasBaselinePlanData: !!baselinePlanData,
+                  hasRibbitProposalPlanData: !!ribbitProposalPlanData,
+                  baselineProjectionLabels: isMyDataMode 
+                    ? baselinePlanData?.netWorthProjection?.map(p => p.label)
+                    : ribbitProposalPlanData?.netWorthProjection?.map(p => p.label),
+                  hasScenarioProjection: !!scenarioPlanData.netWorthProjection,
+                  scenarioProjectionLabels: scenarioPlanData.netWorthProjection?.map(p => p.label),
+                });
+                
+                // If either is missing, we can't calculate delta
+                if (baseline20Y === 0 || proposed20Y === 0) {
+                  console.log('[Savings Allocator] netWorthImpact20Y: Missing 20-year values', {
+                    baseline20Y,
+                    proposed20Y,
+                  });
+                  return undefined;
+                }
+                
+                const delta = proposed20Y - baseline20Y;
+                const result = Math.abs(delta) > 1 ? { deltaAt20Y: delta, ribbit20Y: baseline20Y, proposed20Y } : undefined;
+                console.log('[Savings Allocator] netWorthImpact20Y calculated', {
+                  baseline20Y,
+                  proposed20Y,
+                  delta,
+                  result: result ? 'included' : 'excluded (delta too small)',
+                });
+                return result;
+              })(),
             }}
             baselinePlanForChat={baselinePlanForChat}
             currentContextForChat={{ source, leapId, leapType }}
             currentPlanDataForChat={currentPlanDataForChat}
             pendingUpdateMessage={isFirstTimeSetup ? null : pendingUpdateMessage}
             deltaOverride={deltaOverride}
+            currentPreTax401k$={effectivePreTax.k401Employee}
+            currentHsa$={effectivePreTax.hsa}
             onUserRequestedPlanChange={
               proposedPlanSnapshot
                 ? ({ category, delta }) => {
@@ -1838,7 +2203,12 @@ function SavingsAllocatorContent() {
                     };
                     const label = CATEGORY_LABELS[category] ?? category;
                     if (delta < 0 && (category === 'ef' || category === 'debt' || category === 'retirementExtra' || category === 'brokerage')) {
-                      return `Got it. That frees up $${absDelta}/month.\n\nBy default, I'll redirect it to your investment account so you keep building wealth.\n\nIf you'd rather use it for spending, we can adjust your income plan instead.\n\nHere's the updated plan — want me to apply it?`;
+                      return `Got it. That frees up $${absDelta}/month.\n\n**Where should it go?** By default I'll put it toward your investment account so you keep building wealth. Or say "emergency fund," "debt," or "spending" and I'll apply that instead.\n\nHere's the updated plan — want me to apply it (with the default), or tell me where to move the funds?`;
+                    }
+                    if (delta < 0 && (category === '401k' || category === 'hsa')) {
+                      const preTaxFreed = absDelta;
+                      const postTaxFreed = Math.round(preTaxFreed * (1 - ESTIMATED_MARGINAL_TAX_RATE));
+                      return `Got it. I've reduced ${label} by $${absDelta}/month. That frees up **$${preTaxFreed}/month pre-tax**.\n\n**Where should it go?**\n- If you move it to a **post-tax bucket** (emergency fund, debt, investment account, retirement): you'll have **~$${postTaxFreed}/month** after taxes (~25% marginal rate).\n- If you keep it **pre-tax** (move to HSA): you can use the full **$${preTaxFreed}/month**.\n\nSay "emergency fund," "debt," "investment," "retirement," or "HSA" and I'll calculate and apply the correct amount — or say "apply" to put it toward investment by default.\n\nHere's the updated plan.`;
                     }
                     if (delta < 0) {
                       return `Got it. I've reduced ${label} by $${absDelta}/month. Here's the updated plan — want me to apply it?`;
@@ -1872,68 +2242,182 @@ function SavingsAllocatorContent() {
                 )}
               </div>
             )}
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              {scenarioPlanData.netWorthProjection.map((projection) => {
-                // "Today" is the same for both — it's the opening net worth. Never show delta for Today.
-                const isToday = projection.label === 'Today';
-                const baselineValue = isToday ? projection.value : (baselinePlanData.netWorthProjection.find(p => p.label === projection.label)?.value || 0);
-                const scenarioValue = projection.value;
-                const delta = scenarioValue - baselineValue;
-                const showDelta = !isToday && Math.abs(delta) > 1;
-                return (
+            {/* first_time: show Ribbit Proposal vs Proposed (two columns). my_data and others: show only Proposed. */}
+            {allocatorScenario === 'first_time' ? (
+              // first_time mode: Show two columns (Ribbit Proposal vs Proposed)
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-2">
+                <div className="space-y-3">
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Ribbit Proposal
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {scenarioPlanData.netWorthProjection.map((projection) => {
+                      // first_time mode: Use baselinePlanData for short-term, ribbitProposalPlanData for 20 Years
+                      let leftValue: number | undefined = undefined;
+                      if (projection.label === 'Today') {
+                        leftValue = baselinePlanData?.netWorthProjection?.find((p: { label: string }) => p.label === 'Today')?.value;
+                      } else if (projection.label === '6 Months') {
+                        leftValue = baselinePlanData?.netWorthProjection?.find((p: { label: string }) => p.label === '6 Months')?.value ?? 
+                                   baselinePlanData?.netWorthChartData?.netWorth?.[5];
+                      } else if (projection.label === '12 Months') {
+                        leftValue = baselinePlanData?.netWorthProjection?.find((p: { label: string }) => p.label === '12 Months')?.value ?? 
+                                   baselinePlanData?.netWorthChartData?.netWorth?.[11];
+                      } else if (projection.label === '24 Months') {
+                        leftValue = baselinePlanData?.netWorthProjection?.find((p: { label: string }) => p.label === '24 Months')?.value ?? 
+                                   baselinePlanData?.netWorthChartData?.netWorth?.[23];
+                      } else if (projection.label === '20 Years') {
+                        // first_time: Ribbit Proposal (engine recommendation)
+                        leftValue = ribbitProposalPlanData?.netWorthProjection?.find((p: { label: string }) => p.label === '20 Years')?.value;
+                      }
+                      return (
+                        <div
+                          key={projection.label}
+                          className="rounded-lg border bg-white p-3 text-center dark:bg-slate-800 dark:border-slate-700"
+                        >
+                          <p className="mb-1 text-xs font-medium text-slate-600 dark:text-slate-400">{projection.label}</p>
+                          <p className={`text-lg font-bold ${
+                            (leftValue ?? 0) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                          }`}>
+                            {leftValue != null ? `$${Number(leftValue).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : '—'}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Proposed</p>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {scenarioPlanData.netWorthProjection.map((projection) => {
+                      const isToday = projection.label === 'Today';
+                      // CRITICAL: Calculate baseline value from chart data if projection doesn't have it
+                      let ribbitValue = 0;
+                      if (projection.label === 'Today') {
+                        ribbitValue = baselinePlanData?.netWorthProjection?.find((p: { label: string }) => p.label === 'Today')?.value ?? 0;
+                      } else if (projection.label === '6 Months') {
+                        ribbitValue = baselinePlanData?.netWorthProjection?.find((p: { label: string }) => p.label === '6 Months')?.value ?? 
+                                     baselinePlanData?.netWorthChartData?.netWorth?.[5] ?? 0;
+                      } else if (projection.label === '12 Months') {
+                        ribbitValue = baselinePlanData?.netWorthProjection?.find((p: { label: string }) => p.label === '12 Months')?.value ?? 
+                                     baselinePlanData?.netWorthChartData?.netWorth?.[11] ?? 0;
+                      } else if (projection.label === '24 Months') {
+                        ribbitValue = baselinePlanData?.netWorthProjection?.find((p: { label: string }) => p.label === '24 Months')?.value ?? 
+                                     baselinePlanData?.netWorthChartData?.netWorth?.[23] ?? 0;
+                      } else if (projection.label === '20 Years') {
+                        // first_time mode: Use Ribbit Proposal (engine recommendation) as baseline
+                        ribbitValue = ribbitProposalPlanData?.netWorthProjection?.find((p: { label: string }) => p.label === '20 Years')?.value ?? 0;
+                        // Fallback: Recalculate from scenario input if ribbitProposalPlanData doesn't have it
+                        if (ribbitValue === 0 && baselinePlanData?.netWorthScenarioInput) {
+                          try {
+                            const baselineSim = simulateScenario(baselinePlanData.netWorthScenarioInput);
+                            ribbitValue = baselineSim.netWorth[239] ?? baselineSim.netWorth[baselineSim.netWorth.length - 1] ?? 0;
+                          } catch (err) {
+                            console.error('[Savings Allocator] Error recalculating Ribbit Proposal 20Y:', err);
+                          }
+                        }
+                        // Final fallback: use chart[80] which is closest (month 241)
+                        if (ribbitValue === 0) {
+                          const chart = baselinePlanData?.netWorthChartData?.netWorth;
+                          ribbitValue = chart && chart.length > 80 ? (chart[80] ?? chart[chart.length - 1] ?? 0) : (chart?.[chart.length - 1] ?? 0);
+                        }
+                      }
+                      const modifiedValue = projection.value;
+                      const delta = modifiedValue - ribbitValue;
+                      // Always show delta for non-Today projections when there's a meaningful change (>$1)
+                      const showDelta = !isToday && Math.abs(delta) > 1;
+                      // Debug logging for 20 Years projection
+                      if (projection.label === '20 Years') {
+                        console.log('[Savings Allocator] Net worth delta calculation', {
+                          label: projection.label,
+                          ribbitValue,
+                          modifiedValue,
+                          delta,
+                          showDelta,
+                          hasRibbitData: !!ribbitProposalPlanData,
+                          hasBaselineData: !!baselinePlanData,
+                          baselineHasProjection: !!baselinePlanData?.netWorthProjection,
+                          baseline20Y: baselinePlanData?.netWorthProjection?.find(p => p.label === '20 Years')?.value,
+                        });
+                      }
+                      return (
+                        <div
+                          key={projection.label}
+                          className="rounded-lg border bg-white p-3 text-center dark:bg-slate-800 dark:border-slate-700"
+                        >
+                          <p className="mb-1 text-xs font-medium text-slate-600 dark:text-slate-400">{projection.label}</p>
+                          <p className={`text-lg font-bold ${
+                            modifiedValue >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                          }`}>
+                            ${modifiedValue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                          </p>
+                          {/* Always show delta for non-Today projections when there's a meaningful change */}
+                          {!isToday && Math.abs(delta) > 1 && (
+                            <p className={`mt-1 text-xs font-semibold ${
+                              delta >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                            }`}>
+                              {delta >= 0 ? '+' : ''}${delta.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} vs Ribbit
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              // my_data and other modes: Show only Proposed (single column)
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {scenarioPlanData.netWorthProjection.map((projection) => (
                   <div
                     key={projection.label}
-                    className="rounded-lg border bg-white p-4 text-center dark:bg-slate-800 dark:border-slate-700"
+                    className="rounded-lg border bg-white p-3 text-center dark:bg-slate-800 dark:border-slate-700"
                   >
-                    <p className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-400">
-                      {projection.label}
-                    </p>
-                    <p className={`text-2xl font-bold ${
-                      scenarioValue >= 0
-                        ? 'text-green-600 dark:text-green-400'
-                        : 'text-red-600 dark:text-red-400'
+                    <p className="mb-1 text-xs font-medium text-slate-600 dark:text-slate-400">{projection.label}</p>
+                    <p className={`text-lg font-bold ${
+                      projection.value >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
                     }`}>
-                      ${scenarioValue.toLocaleString('en-US', {
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 0,
-                      })}
+                      ${projection.value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                     </p>
-                    {showDelta && (
-                      <p className={`mt-1 text-xs font-medium ${
-                        delta >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-                      }`}>
-                        {delta >= 0 ? '+' : ''}${delta.toLocaleString('en-US', {
-                          minimumFractionDigits: 0,
-                          maximumFractionDigits: 0,
-                        })} vs Current
-                      </p>
-                    )}
                   </div>
-                );
-              })}
-            </div>
+                ))}
+              </div>
+            )}
             <div className="overflow-x-auto rounded-lg border bg-white p-4 dark:bg-slate-800 dark:border-slate-700">
               <NetWorthChart
-                key={`savings-allocator-nw-${proposedPlanSnapshot?.ef$ ?? 0}-${proposedPlanSnapshot?.debt$ ?? 0}-${proposedPlanSnapshot?.retirementTaxAdv$ ?? 0}-${proposedPlanSnapshot?.brokerage$ ?? 0}-${scenarioPlanData.netWorthChartData.netWorth.length}-${scenarioPlanData.netWorthChartData.netWorth[0] ?? 0}-${scenarioPlanData.netWorthChartData.netWorth[scenarioPlanData.netWorthChartData.netWorth.length - 1] ?? 0}`}
+                key={`savings-allocator-nw-${proposedPlanSnapshot?.ef$ ?? 0}-${proposedPlanSnapshot?.debt$ ?? 0}-${proposedPlanSnapshot?.retirementTaxAdv$ ?? 0}-${proposedPlanSnapshot?.brokerage$ ?? 0}-${effectivePreTax.k401Employee ?? 0}-${effectivePreTax.derivedMatch ?? 0}-${effectivePreTax.hsa ?? 0}-${scenarioPlanData.netWorthChartData.netWorth.length}-${scenarioPlanData.netWorthChartData.netWorth[0] ?? 0}-${scenarioPlanData.netWorthChartData.netWorth[scenarioPlanData.netWorthChartData.netWorth.length - 1] ?? 0}`}
                 labels={scenarioPlanData.netWorthChartData.labels}
                 netWorth={scenarioPlanData.netWorthChartData.netWorth}
                 assets={scenarioPlanData.netWorthChartData.assets}
                 liabilities={scenarioPlanData.netWorthChartData.liabilities}
-                baselineNetWorth={(() => {
+                baselineNetWorth={isFirstTimeSetup ? undefined : (() => {
                   const scenarioLen = scenarioPlanData.netWorthChartData.netWorth.length;
-                  const snapshot = currentPlanNetWorthSnapshotRef.current;
-                  if (snapshot && snapshot.length === scenarioLen) {
-                    return [...snapshot];
+                  // In my_data mode, use baselinePlanData (Current Plan) as baseline
+                  // In first_time mode, use ribbitProposalPlanData (Ribbit Proposal) as baseline
+                  const isMyDataMode = allocatorScenario === 'my_data';
+                  if (isMyDataMode && baselineNetWorthChartData?.netWorth?.length === scenarioLen) {
+                    return [...baselineNetWorthChartData.netWorth];
                   }
-                  if (baselineNetWorthChartData && baselineNetWorthChartData.netWorth.length === scenarioLen) {
+                  if (!isMyDataMode && ribbitProposalPlanData?.netWorthChartData?.netWorth?.length === scenarioLen) {
+                    return [...ribbitProposalPlanData.netWorthChartData.netWorth];
+                  }
+                  const snapshot = currentPlanNetWorthSnapshotRef.current;
+                  if (snapshot && snapshot.length === scenarioLen) return [...snapshot];
+                  if (baselineNetWorthChartData?.netWorth?.length === scenarioLen) {
                     return [...baselineNetWorthChartData.netWorth];
                   }
                   return undefined;
                 })()}
+                seriesLabels={isFirstTimeSetup
+                  ? { primary: 'Proposed' }
+                  : (ribbitProposalPlanData
+                    ? { primary: 'Proposed', baseline: allocatorScenario === 'my_data' ? 'Current Plan' : 'Ribbit Proposal' }
+                    : { primary: 'Proposed', baseline: 'Current plan' })}
                 height={400}
               />
               <p className="mt-2 text-xs text-center text-slate-500 dark:text-slate-400">
-                Chart reflects your total wealth moves (pre-tax + post-tax + employer 401K match + employer HSA).
+                {isFirstTimeSetup
+                  ? 'Chart: Proposed plan. Reflects total wealth moves (pre-tax + post-tax + employer 401K match + employer HSA).'
+                  : `Chart: Proposed vs ${allocatorScenario === 'my_data' ? 'Current Plan' : 'Ribbit Proposal'}. Reflects total wealth moves (pre-tax + post-tax + employer 401K match + employer HSA).`}
               </p>
             </div>
           </div>
