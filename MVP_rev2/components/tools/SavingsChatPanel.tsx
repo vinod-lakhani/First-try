@@ -25,7 +25,16 @@ import { Send } from 'lucide-react';
 import { ChatMarkdown } from '@/components/chat/ChatMarkdown';
 import { ChatLoadingDots } from '@/components/chat/ChatLoadingDots';
 import { sendChatMessageStreaming } from '@/lib/chat/chatService';
-import type { PlanChangesFromChat } from '@/lib/chat/chatService';
+
+/** Structured plan changes from chat (savings-allocator). Absolute values for pre-tax; deltas for post-tax. */
+type PlanChangesFromChat = {
+  preTax401k?: number;
+  hsa?: number;
+  efDelta?: number;
+  debtDelta?: number;
+  retirementExtraDelta?: number;
+  brokerageDelta?: number;
+};
 import { CHAT_INPUT_PLACEHOLDER } from '@/lib/chat/chatPrompts';
 import type { ChatCurrentPlanData } from '@/lib/chat/buildChatPlanData';
 import type { ProposedPlan } from '@/lib/tools/savings/types';
