@@ -622,16 +622,23 @@ export function IncomePlanContent(props?: IncomePlanContentProps) {
     }
     if (confirmMode === 'first_time' || confirmMode === 'oversaved' || confirmMode === 'undersaved') {
       const amountToApply = proposedPlannedSavingsFromChat ?? rec.plannedSavings;
-      // Do not persist here — current plan only updates when user accepts in savings-allocator.
       baselineState.setProposedSavingsFromHelper?.(amountToApply);
-      setConfirmModalStep('go_to_allocator');
       setPendingAction(null);
       setUiMode('DEFAULT');
       setLastInjectedMessageKey(null);
       setProposedPlannedSavingsFromChat(null);
-      setToastMessage('Target saved — accept in Savings Allocator to apply.');
-      setTimeout(() => setToastMessage(null), 3000);
-      // Keep modal open; content switches to "go to Savings Allocator" step
+      if (onContinueToNextStep) {
+        // Onboarding: skip "Next: update your savings allocation" modal and go straight to next step
+        setShowConfirmModal(false);
+        setConfirmMode(null);
+        setConfirmModalStep('confirm');
+        onContinueToNextStep();
+      } else {
+        // App (savings-helper): show modal with "Go to Savings Allocator"
+        setConfirmModalStep('go_to_allocator');
+        setToastMessage('Target saved — accept in Savings Allocator to apply.');
+        setTimeout(() => setToastMessage(null), 3000);
+      }
     }
   };
 

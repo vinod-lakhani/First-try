@@ -13,6 +13,8 @@ import { usePlanData } from '@/lib/onboarding/usePlanData';
 import { getPaychecksPerMonth } from '@/lib/onboarding/usePlanData';
 import MonthlyPlanCurrent from '@/components/monthly-plan/MonthlyPlanCurrent';
 import type { MonthlyBucket } from '@/components/monthly-plan/MonthlyPlanCurrent';
+import { SidekickProvider } from '@/app/app/context/SidekickContext';
+import { FinancialSidekick } from '@/app/app/components/FinancialSidekick';
 
 export default function MonthlyPlanCurrentPage() {
   const router = useRouter();
@@ -131,13 +133,16 @@ export default function MonthlyPlanCurrentPage() {
   }
 
   return (
-    <MonthlyPlanCurrent
-      income={monthlyIncome}
-      needs={needs}
-      wants={wants}
-      savingsAmount={savingsAmount}
-      onContinue={handleContinue}
-    />
+    <SidekickProvider>
+      <MonthlyPlanCurrent
+        income={monthlyIncome}
+        needs={needs}
+        wants={wants}
+        savingsAmount={savingsAmount}
+        onContinue={handleContinue}
+      />
+      <FinancialSidekick />
+    </SidekickProvider>
   );
 }
 

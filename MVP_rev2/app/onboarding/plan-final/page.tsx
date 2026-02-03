@@ -24,8 +24,8 @@ import {
 } from 'lucide-react';
 import { NetWorthChart } from '@/components/charts/NetWorthChart';
 import { IncomeDistributionChart } from '@/components/charts/IncomeDistributionChart';
-import { OnboardingChat } from '@/components/onboarding/OnboardingChat';
 import { OnboardingProgress } from '@/components/onboarding/OnboardingProgress';
+import { FinancialSidekick } from '@/app/app/components/FinancialSidekick';
 import { calculateSavingsBreakdown } from '@/lib/utils/savingsCalculations';
 
 // Helper to get paychecks per month
@@ -480,8 +480,7 @@ export default function PlanFinalPage() {
         </CardContent>
       </Card>
 
-      {/* Floating Ribbit Chat Button */}
-      <OnboardingChat context="plan-final" />
+      <FinancialSidekick />
 
       {/* Dev Debug Section */}
       {process.env.NODE_ENV === 'development' && (

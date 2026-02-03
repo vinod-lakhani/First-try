@@ -13,7 +13,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Slider } from '@/components/ui/slider';
 import { useOnboardingStore } from '@/lib/onboarding/store';
 import { OnboardingProgress } from '@/components/onboarding/OnboardingProgress';
-import { OnboardingChat } from '@/components/onboarding/OnboardingChat';
+import { SidekickProvider } from '@/app/app/context/SidekickContext';
+import { FinancialSidekick } from '@/app/app/components/FinancialSidekick';
 import { ChevronDown, ChevronUp, HelpCircle } from 'lucide-react';
 import type { PayrollContributions } from '@/lib/onboarding/types';
 import { useMemo } from 'react';
@@ -994,10 +995,8 @@ function PayrollContributionsPageContent() {
             </p>
           </div>
         </CardContent>
-
-        {/* Floating Ribbit Chat Button */}
-        <OnboardingChat context="payroll-contributions" />
       </Card>
+      <FinancialSidekick />
     </>
   );
 }
