@@ -94,63 +94,64 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
     { href: '/app/profile', label: 'Profile', icon: User },
   ];
 
+  const hideFloatingSidekick =
+    pathname?.includes('/app/tools/savings-allocator') || pathname?.includes('/app/tools/savings-helper');
+
   return (
-    <SidekickProvider>
-      <div className="flex min-h-screen flex-col">
-        {/* Top Bar - Just WeLeap Logo */}
-        <header className="sticky top-0 z-10 border-b bg-background">
-          <div className="container mx-auto flex h-14 items-center justify-center px-4">
-            <h1 className="text-lg font-semibold">WeLeap</h1>
-          </div>
-        </header>
-
-        {/* Tabs Navigation - Same on all pages */}
-        <div className="border-b bg-background px-4 py-3">
-          <nav className="mx-auto flex max-w-lg items-center justify-center gap-1">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = pathname === tab.href;
-              return (
-                <Link
-                  key={tab.href}
-                  href={tab.href}
-                  className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                    isActive
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100'
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  <span>{tab.label}</span>
-                </Link>
-              );
-            })}
-          </nav>
+    <div className="flex min-h-screen flex-col">
+      {/* Top Bar - Just WeLeap Logo */}
+      <header className="sticky top-0 z-10 shrink-0 border-b bg-background">
+        <div className="container mx-auto flex h-14 items-center justify-center px-4">
+          <h1 className="text-lg font-semibold">WeLeap</h1>
         </div>
+      </header>
 
-        {/* Main Content */}
-        <main className="flex-1 overflow-y-auto pb-24">
-          {children}
-        </main>
-
-        {/* Financial Sidekick - Floating at bottom of screen. Hidden on savings-allocator and savings-helper (have embedded chat) */}
-        {!pathname?.includes('/app/tools/savings-allocator') && !pathname?.includes('/app/tools/savings-helper') && (
-          <FinancialSidekick />
-        )}
+      {/* Tabs Navigation */}
+      <div className="shrink-0 border-b bg-background px-4 py-3">
+        <nav className="mx-auto flex max-w-lg items-center justify-center gap-1">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = pathname === tab.href;
+            return (
+              <Link
+                key={tab.href}
+                href={tab.href}
+                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100'
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                <span>{tab.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
       </div>
-    </SidekickProvider>
+
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto pb-24 min-h-0">
+        {children}
+      </main>
+
+      {/* Financial Sidekick - floating button, opens as modal. Hidden on savings-allocator and savings-helper (embedded chat there). */}
+      {!hideFloatingSidekick && <FinancialSidekick />}
+    </div>
   );
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <Suspense fallback={
-      <div className="flex min-h-screen items-center justify-center p-4">
-        <p className="text-slate-600 dark:text-slate-400">Loading...</p>
-      </div>
-    }>
-      <AppLayoutInner>{children}</AppLayoutInner>
-    </Suspense>
+    <SidekickProvider>
+      <Suspense fallback={
+        <div className="flex min-h-screen items-center justify-center p-4">
+          <p className="text-slate-600 dark:text-slate-400">Loading...</p>
+        </div>
+      }>
+        <AppLayoutInner>{children}</AppLayoutInner>
+      </Suspense>
+    </SidekickProvider>
   );
 }
 

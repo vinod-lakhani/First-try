@@ -73,13 +73,18 @@ const quickActions = [
 
 interface FinancialSidekickProps {
   inline?: boolean;
+  /** 'modal' = floating button + overlay when open (default). 'split' = side-by-side panel. 'below' = open as a panel below main content when user clicks. */
+  variant?: 'modal' | 'split' | 'below';
 }
 
-export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
+export function FinancialSidekick({ inline = false, variant = 'modal' }: FinancialSidekickProps) {
   const sidekickContext = useSidekick();
   const [internalOpen, setInternalOpen] = useState(false);
-  const isOpen = sidekickContext ? sidekickContext.isOpen : internalOpen;
+  const isOpen = variant === 'split' ? true : (sidekickContext ? sidekickContext.isOpen : internalOpen);
   const setIsOpen = sidekickContext ? (open: boolean) => (open ? sidekickContext.openSidekick() : sidekickContext.closeSidekick()) : setInternalOpen;
+  const isEmbedded = variant === 'split';
+  const isBelow = variant === 'below';
+  const showCloseButton = variant !== 'split';
   const [chatInput, setChatInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -122,22 +127,22 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
     return { nowISO: new Date().toISOString(), cashRisk: false, surplusCash: false };
   }, [planData, store.income, store.assets, store.plaidConnected]);
 
+  // Same logic as Feed: generate leaps, filter suppressed (e.g. EF on-track) and dismissed, use same order as Feed (generation order), then take top 1–3
   const leapsWithPreview = useMemo(() => {
     const raw = generateCandidateLeaps(effectiveState, effectiveSignals);
-    const sorted = [...raw].sort((a, b) => (b.priorityScore ?? 0) - (a.priorityScore ?? 0));
-    return sorted
-      .filter((leap) => !dismissedLeapIds.has(leap.leapId))
-      .map((leap) => {
-        const payload =
-          leap.leapType === 'EMPLOYER_MATCH_NOT_MET' && effectiveState.employerMatchGapMonthly != null
-            ? { ...leap.payload, employerMatchGap: effectiveState.employerMatchGapMonthly, employerMatchGapMonthly: effectiveState.employerMatchGapMonthly }
-            : leap.payload;
-        return {
-          ...leap,
-          payload,
-          previewMetric: computePreviewMetric(leap.leapType, effectiveState, effectiveSignals, payload),
-        };
-      });
+    const unsuppressed = raw.filter((leap) => !leap.suppressed);
+    const notDismissed = unsuppressed.filter((leap) => !dismissedLeapIds.has(leap.leapId));
+    return notDismissed.map((leap) => {
+      const payload =
+        leap.leapType === 'EMPLOYER_MATCH_NOT_MET' && effectiveState.employerMatchGapMonthly != null
+          ? { ...leap.payload, employerMatchGap: effectiveState.employerMatchGapMonthly, employerMatchGapMonthly: effectiveState.employerMatchGapMonthly }
+          : leap.payload;
+      return {
+        ...leap,
+        payload,
+        previewMetric: computePreviewMetric(leap.leapType, effectiveState, effectiveSignals, payload),
+      };
+    });
   }, [effectiveState, effectiveSignals, dismissedLeapIds]);
 
   const topLeap = leapsWithPreview[0] ?? null;
@@ -691,33 +696,34 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
     }
   };
 
-  if (!isOpen) {
+  // Closed: show trigger (floating button for modal/below; split is always open)
+  if (!isOpen && !isEmbedded) {
     return (
       <div className="fixed bottom-4 left-0 right-0 z-30 px-4">
         <div className="mx-auto w-full max-w-lg">
-        <button
-          onClick={() => setIsOpen(true)}
-          className="w-full rounded-full border border-slate-300 bg-white px-4 py-3 shadow-sm transition-all hover:border-slate-400 hover:shadow-md dark:border-slate-600 dark:bg-slate-800"
-        >
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white dark:bg-slate-700">
-              <img src={withBasePath('images/ribbit.png')} alt="Ribbit" className="h-10 w-10 object-cover" />
+          <button
+            onClick={() => setIsOpen(true)}
+            className="w-full rounded-full border border-slate-300 bg-white px-4 py-3 shadow-sm transition-all hover:border-slate-400 hover:shadow-md dark:border-slate-600 dark:bg-slate-800"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white dark:bg-slate-700">
+                <img src={withBasePath('images/ribbit.png')} alt="Ribbit" className="h-10 w-10 object-cover" />
+              </div>
+              <span className="flex-1 text-left text-sm font-medium text-slate-600 dark:text-slate-400">
+                Click to chat with your sidekick
+              </span>
             </div>
-            <span className="flex-1 text-left text-sm font-medium text-slate-600 dark:text-slate-400">
-              Click to chat with your sidekick
-            </span>
-          </div>
-        </button>
+          </button>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4">
-      <div className="flex h-full w-full sm:max-h-[90vh] sm:max-w-2xl flex-col rounded-none sm:rounded-lg bg-white shadow-xl dark:bg-slate-900 overflow-hidden">
+  const panelContent = (
+    <>
         {/* Header — Ribbit image at top like onboarding */}
         <div className="relative flex flex-col items-center border-b border-slate-200 dark:border-slate-700 px-4 pt-4 pb-3 flex-shrink-0 bg-white dark:bg-slate-900 sticky top-0 z-10">
+          {showCloseButton && (
           <Button
             variant="ghost"
             size="icon"
@@ -727,6 +733,7 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
           >
             <X className="h-5 w-5 text-slate-900 dark:text-white" />
           </Button>
+          )}
           <div className="mx-auto h-20 w-20 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center overflow-hidden p-2">
             <img
               src={withBasePath('images/ribbit.png')}
@@ -739,8 +746,8 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">One smart move at a time.</p>
         </div>
 
-        {/* Main Content */}
-        <div className="flex-1 overflow-y-auto p-4">
+        {/* Main Content — min-h-0 so it scrolls when in split panel */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-4">
           {!showChat ? (
             <>
               {/* Top Recommendation (0 or 1) */}
@@ -892,6 +899,32 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
             </button>
           </div>
         </div>
+    </>
+  );
+
+  // Split: always-visible side panel (side-by-side)
+  if (variant === 'split') {
+    return (
+      <aside className="w-full max-w-md shrink-0 border-l border-slate-200 dark:border-slate-700 flex flex-col bg-white dark:bg-slate-900 h-full min-h-0 overflow-hidden">
+        {panelContent}
+      </aside>
+    );
+  }
+
+  // Below: embedded panel under main content (split screen); fills container so parent controls height
+  if (isBelow) {
+    return (
+      <div className="w-full h-full min-h-0 border-t border-slate-200 dark:border-slate-700 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
+        {panelContent}
+      </div>
+    );
+  }
+
+  // Modal: overlay when open
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4">
+      <div className="flex h-full w-full sm:max-h-[90vh] sm:max-w-2xl flex-col rounded-none sm:rounded-lg bg-white shadow-xl dark:bg-slate-900 overflow-hidden">
+        {panelContent}
       </div>
     </div>
   );
