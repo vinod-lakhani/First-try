@@ -706,7 +706,7 @@ export interface FinalPlanData {
     totalSavingsMTD: number;
   };
   netWorthProjection: Array<{
-    label: 'Today' | '6 Months' | '12 Months' | '24 Months' | '5 Years' | '10 Years';
+    label: 'Today' | '6 Months' | '12 Months' | '24 Months' | '5 Years' | '10 Years' | '20 Years';
     months: number;
     value: number;
   }>;
@@ -1073,6 +1073,15 @@ export function buildFinalPlanData(state: OnboardingState, options?: BuildFinalP
   // The budget matching was too strict and causing custom allocations to be ignored
   let savingsAlloc;
   const customAlloc = safetyStrategy?.customSavingsAllocation;
+  
+  // Debug: Log custom allocation check
+  console.log('[buildFinalPlanData] Checking for customSavingsAllocation:', {
+    hasSafetyStrategy: !!safetyStrategy,
+    hasCustomAlloc: !!customAlloc,
+    customAllocEf$: customAlloc?.ef$,
+    customAllocFull: customAlloc,
+    safetyStrategyKeys: safetyStrategy ? Object.keys(safetyStrategy) : [],
+  });
   const customAllocTotal = customAlloc 
     ? (customAlloc.ef$ + customAlloc.highAprDebt$ + customAlloc.match401k$ + (customAlloc.hsa$ ?? 0) + customAlloc.retirementTaxAdv$ + customAlloc.brokerage$)
     : 0;
@@ -1132,6 +1141,8 @@ export function buildFinalPlanData(state: OnboardingState, options?: BuildFinalP
     console.log('[buildFinalPlanData] Using custom savings allocation (user-set values):', {
       savingsAlloc,
       customAlloc,
+      customAllocEf$: customAlloc.ef$,
+      savingsAllocEf$: savingsAlloc.ef$,
       budgetMatches,
       note: budgetMatches ? 'Budget matches' : 'Using custom allocation despite budget difference',
     });
@@ -1219,6 +1230,11 @@ export function buildFinalPlanData(state: OnboardingState, options?: BuildFinalP
     incomeAllocSavings$: incomeAlloc.savings$,
     totalDebtMinPayments$,
     essentialsAmount: incomeAlloc.needs$ - totalDebtMinPayments$,
+    savingsAllocEf$: savingsAlloc.ef$,
+    savingsAllocPerPaycheckEf$: savingsAllocPerPaycheck.ef$,
+    paychecksPerMonth,
+    customAllocEf$: customAlloc?.ef$,
+    usingCustomAlloc: !!customAlloc,
   });
   
   // Build paycheck categories
