@@ -910,7 +910,7 @@ export const SavingsChatPanel: React.FC<SavingsChatPanelProps> = ({
               prev.map((m) => (m.id === streamingId ? { ...m, text: m.text + text } : m))
             );
           },
-          onDone(meta) {
+          onDone(meta: { proposedPlannedSavings?: number; planChanges?: PlanChangesFromChat }) {
             if (!meta.planChanges || !onUserRequestedPlanChange) return;
             const lastUserMsg = [...messages, userMessage].filter((m) => m.isUser).pop()?.text;
             applyPlanChangesFromChat(meta.planChanges, {
