@@ -446,9 +446,10 @@ export function OnboardingChat({ context, inline = false, onPlanChangesFromChat 
         return [...prev, { id: (Date.now() + 1).toString(), text: fallbackText, isUser: false, timestamp: new Date() }];
       });
     } finally {
+      const currentStreamingId = streamingMessageIdRef.current;
       setMessages((prev) =>
         prev.map((m) =>
-          m.id === streamingId ? { ...m, text: streamingTextRef.current } : m
+          m.id === currentStreamingId ? { ...m, text: streamingTextRef.current } : m
         )
       );
       streamingMessageIdRef.current = null;
