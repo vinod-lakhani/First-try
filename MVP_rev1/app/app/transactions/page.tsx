@@ -101,7 +101,7 @@ export default function TransactionsPage() {
   const searchParams = useSearchParams();
   
   // Get initial filter from URL param
-  const urlKind = searchParams.get('kind') as AccountKind | null;
+  const urlKind = searchParams?.get('kind') as AccountKind | null;
   const [filter, setFilter] = useState<FilterKind>(
     urlKind === 'bank' ? 'bank' : urlKind === 'credit_card' ? 'credit_card' : 'all'
   );

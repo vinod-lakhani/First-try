@@ -1,12 +1,18 @@
 /**
  * Comprehensive LLM Test Suite - Expanded
- * 
+ *
+ * Tests the WeLeap/MVP_rev1 chat API. Run against MVP_rev1:
+ *   cd MVP_rev1 && npm run dev
+ *   API_URL=http://localhost:3000 node scripts/test-comprehensive-expanded.js
+ * (Or from weleap-mockups: API_URL=http://localhost:3000 node scripts/test-comprehensive-expanded.js)
+ *
  * Tests based on:
  * 1. Real user questions from production logs
  * 2. Comprehensive question set covering all scenarios
  * 3. New features (net worth breakdowns, asset-specific questions)
- * 4. Savings-helper context scenarios
- * 5. Formatting and calculation quality
+ * 4. Savings-helper context and modes (first_try, underspend, overspend, on-track)
+ * 5. Data consistency (pre-tax, post-tax, total = pre+match+post)
+ * 6. Formatting and calculation quality
  */
 
 const BASE_URL = process.env.API_URL || 'http://localhost:3000';
@@ -80,23 +86,44 @@ const mockUserPlanData = {
   ],
   debtTotal: 4700,
   monthlyDebtPayments: 130,
+  // Post-tax cash allocation (EF, debt, retirement, brokerage). Match is NOT part of this.
   savingsAllocation: {
-    total: 1432,
     emergencyFund: { amount: 300, percent: 20.9 },
     debtPayoff: { amount: 383, percent: 26.7 },
-    match401k: { amount: 575, percent: 40.1 },
     retirementTaxAdv: { amount: 174, percent: 12.2 },
+    brokerage: { amount: 575, percent: 40.2 },
   },
-  // Updated savings calculations using centralized formula
+  // MVP_rev1 expects savingsBreakdown (pre-tax + match + post-tax = total)
+  savingsBreakdown: {
+    cashSavingsMTD: 2904,
+    payrollSavingsMTD: 677,
+    employerMatchMTD: 339,
+    totalSavingsMTD: 3920,
+  },
+  payrollContributions: {
+    has401k: true,
+    hasEmployerMatch: 'yes',
+    currentlyContributing401k: 'yes',
+    monthly401kContribution: 677,
+    monthlyHSAContribution: 0,
+    monthlyEmployerMatch: 339,
+    employerMatchPct: 50,
+    employerMatchCapPct: 6,
+    hasHSA: false,
+  },
+  monthlyNeeds: 2868,
+  monthlyWants: 2400,
+  monthlySavings: 3412,
+  // Legacy / compatibility
   savingsCalculations: {
-    baseSavingsMonthly: 3412, // Income - Needs - Wants
-    preTaxSavingsTotal: 677, // 401k + HSA
-    taxSavingsMonthly: 169.25, // Pre-tax × 0.25
-    netPreTaxImpact: 507.75, // Pre-tax - Tax savings
-    cashSavingsMTD: 2904.25, // Base - Net pre-tax impact
-    payrollSavingsMTD: 677, // Pre-tax total
-    employerMatchMTD: 339, // Employer match
-    totalSavingsMTD: 3920.25, // Cash + Payroll + Match
+    baseSavingsMonthly: 3412,
+    preTaxSavingsTotal: 677,
+    taxSavingsMonthly: 169.25,
+    netPreTaxImpact: 507.75,
+    cashSavingsMTD: 2904.25,
+    payrollSavingsMTD: 677,
+    employerMatchMTD: 339,
+    totalSavingsMTD: 3920.25,
   },
   safetyStrategy: {
     liquidity: 'Medium',
@@ -152,12 +179,82 @@ const mockUserPlanData = {
       },
     ],
   },
+  // MVP_rev1: past3MonthsAverage, currentPlan, recommendedPlan with pct and amount
   savingsHelperBarGraphs: {
-    actuals3m: { needsPct: 0.60, wantsPct: 0.255, savingsPct: 0.145 },
-    currentPlan: { needsPct: 0.475, wantsPct: 0.36, savingsPct: 0.165 },
-    recommendedPlan: { needsPct: 0.47, wantsPct: 0.33, savingsPct: 0.20 },
+    past3MonthsAverage: {
+      needsPct: 0.33, wantsPct: 0.276, savingsPct: 0.393,
+      needsAmount: 2868, wantsAmount: 2400, savingsAmount: 3412,
+    },
+    currentPlan: {
+      needsPct: 0.33, wantsPct: 0.276, savingsPct: 0.393,
+      needsAmount: 2868, wantsAmount: 2400, savingsAmount: 3412,
+    },
+    recommendedPlan: {
+      needsPct: 0.47, wantsPct: 0.33, savingsPct: 0.20,
+      needsAmount: 4080, wantsAmount: 2864, savingsAmount: 1736,
+    },
   },
 };
+
+// Savings Helper lifecycle payloads for first_try, underspend (overspent), overspend (undersaved), on-track
+function getSavingsHelperPlanData(mode) {
+  const base = {
+    mode: 'income_allocation',
+    netIncomeMonthly: 8680,
+    last3m_avg: { needs: 2868, wants: 2400, totalSpend: 5268 },
+    recommendedPlan: { plannedSavings: 1736, plannedSpend: 6944, plannedNeeds: 4080, plannedWants: 2864 },
+    shiftLimit: { monthlyMaxChange: 347, appliedChange: 0 },
+  };
+  if (mode === 'first_try') {
+    return {
+      ...base,
+      state: 'FIRST_TIME',
+      currentPlan: undefined,
+      lastMonth: undefined,
+      deltas: {},
+      completeSavingsBreakdown: {
+        payroll401kMonthly: 677,
+        hsaMonthly: 0,
+        employerMatchMonthly: 339,
+        employerHSAMonthly: 0,
+        postTaxCashMonthly: 2904,
+        allocation: { emergencyFund: 300, debtPayoff: 383, retirementTaxAdv: 174, brokerage: 575 },
+        totalSavingsMonthly: 3920,
+      },
+    };
+  }
+  if (mode === 'underspend') {
+    // User overspent → savings fell short (savings_vs_plan negative)
+    return {
+      ...base,
+      state: 'CHECK_IN',
+      currentPlan: { plannedSavings: 1432, plannedSpend: 7248 },
+      lastMonth: { needs: 2900, wants: 2600, totalSpend: 5500, savings: 3180 },
+      deltas: { savings_vs_plan: -304, recommended_change: 304 },
+      shiftLimit: { monthlyMaxChange: 347, appliedChange: 304 },
+    };
+  }
+  if (mode === 'overspend') {
+    // User saved more than planned (savings_vs_plan positive) → lock it in
+    return {
+      ...base,
+      state: 'CHECK_IN',
+      currentPlan: { plannedSavings: 1736, plannedSpend: 6944 },
+      lastMonth: { needs: 4000, wants: 2500, totalSpend: 6500, savings: 2180 },
+      deltas: { savings_vs_plan: 444, recommended_change: 0 },
+      shiftLimit: { monthlyMaxChange: 347, appliedChange: 0 },
+    };
+  }
+  // on-track: actuals tracking plan
+  return {
+    ...base,
+    state: 'CHECK_IN',
+    currentPlan: { plannedSavings: 1736, plannedSpend: 6944 },
+    lastMonth: { needs: 4080, wants: 2800, totalSpend: 6880, savings: 1800 },
+    deltas: { savings_vs_plan: 64, recommended_change: 0 },
+    shiftLimit: { monthlyMaxChange: 347, appliedChange: 0 },
+  };
+}
 
 async function testChat(question, userPlanData, context, validations, category) {
   try {
@@ -238,6 +335,9 @@ async function testChat(question, userPlanData, context, validations, category) 
       'feel free to ask',
       'just let me know',
       'i\'m here to help',
+      'how does that sound',
+      'if you need further assistance',
+      'if you\'d like, i can help',
     ];
     
     const foundForbidden = forbiddenPhrases.filter(phrase =>
@@ -1146,7 +1246,239 @@ async function runComprehensiveTests() {
     ));
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
-  
+
+  // ============================================================================
+  // CATEGORY 8b: Data Consistency (pre-tax, post-tax, total = pre+match+post)
+  // ============================================================================
+  console.log('\n' + '#'.repeat(80));
+  console.log('# CATEGORY 8b: Data Consistency (Pre-Tax / Post-Tax / Total Savings)');
+  console.log('#'.repeat(80) + '\n');
+
+  const dataConsistencyQuestions = [
+    {
+      question: 'What makes up my savings?',
+      context: 'financial-sidekick',
+      validations: {
+        'Shows total = pre-tax + match + post-tax': (a) => {
+          const lower = a.toLowerCase();
+          const hasPreTax = /pre-?tax|payroll|401k|hsa/i.test(lower);
+          const hasMatch = /match|employer/i.test(lower);
+          const hasPostTax = /post-?tax|cash/i.test(lower);
+          const hasTotal = /\$3,920|\$3,904|3920|3904|total.*savings/i.test(lower);
+          return {
+            pass: (hasPreTax || hasMatch) && (hasPostTax || hasMatch) && hasTotal,
+            message: 'Should show Total Savings = Pre-tax + Match + Post-tax Cash with actual numbers',
+          };
+        },
+        'No "I don\'t have access"': (a) => ({
+          pass: !/don't have access|not (explicitly )?provided|can't see your data|if you share/i.test(a),
+          message: 'Must not say data is unavailable when it is in the prompt',
+        }),
+      },
+    },
+    {
+      question: 'Break down my savings',
+      context: 'financial-sidekick',
+      validations: {
+        'Includes all three components': (a) => {
+          const lower = a.toLowerCase();
+          const hasPayrollOrPreTax = /payroll|pre-?tax|401k|677/i.test(lower);
+          const hasMatch = /match|339|employer/i.test(lower);
+          const hasCash = /cash|post-?tax|2,904|2904/i.test(lower);
+          return {
+            pass: hasPayrollOrPreTax && hasMatch && hasCash,
+            message: 'Should show Payroll (pre-tax), Match, and Cash (post-tax) with numbers',
+          };
+        },
+        'Verification or total line': (a) => ({
+          pass: /total.*=.*\$|✓|verification|\+\s*.*\+\s*.*=/i.test(a),
+          message: 'Should verify Pre-tax + Match + Cash = Total',
+        }),
+      },
+    },
+    {
+      question: 'Why is my cash savings different from my base savings?',
+      context: 'savings-plan',
+      validations: {
+        'Explains pre-tax impact': (a) => ({
+          pass: /pre-?tax|401k|tax|take-?home|net impact/i.test(a),
+          message: 'Should explain pre-tax contributions reduce take-home and affect cash savings',
+        }),
+        'Mentions formula': (a) => ({
+          pass: /base.*minus|income.*needs.*wants|formula|calculation/i.test(a),
+          message: 'Should reference base savings - net pre-tax impact = cash savings',
+        }),
+      },
+    },
+    {
+      question: 'Why is my cash savings different on different pages?',
+      context: 'financial-sidekick',
+      validations: {
+        'Explains centralized formula': (a) => ({
+          pass: /same|consistent|centralized|formula|calculation/i.test(a),
+          message: 'Should say all pages use the same calculation',
+        }),
+        'No "I don\'t have access"': (a) => ({
+          pass: !/don't have access|not provided|can't see/i.test(a),
+          message: 'Must not say data is unavailable',
+        }),
+      },
+    },
+    {
+      question: 'What is my total monthly savings and where does it go?',
+      context: 'plan-final',
+      validations: {
+        'Total savings breakdown': (a) => {
+          const lower = a.toLowerCase();
+          return {
+            pass: /total.*savings|pre-?tax|match|post-?tax|cash/i.test(lower) && /\$[\d,]+/.test(a),
+            message: 'Should show total savings = pre-tax + match + post-tax with dollar amounts',
+          };
+        },
+        'Post-tax allocation (EF, debt, retirement, brokerage)': (a) => ({
+          pass: /emergency|debt|retirement|brokerage|allocation/i.test(a),
+          message: 'Should show where post-tax cash is allocated',
+        }),
+      },
+    },
+    {
+      question: 'Walk me through my savings breakdown',
+      context: 'financial-sidekick',
+      validations: {
+        'Shows pre-tax, match, post-tax': (a) => {
+          const lower = a.toLowerCase();
+          return {
+            pass: (/(pre-?tax|payroll|401k)/i.test(lower) || /\$677/.test(a)) &&
+                  (/match|employer|\$339/i.test(lower)) &&
+                  (/(post-?tax|cash|\$2,904|2904)/i.test(lower)),
+            message: 'Should list Payroll (pre-tax), Match, and Cash (post-tax) with amounts',
+          };
+        },
+        'No "not explicitly provided"': (a) => ({
+          pass: !/not (explicitly )?provided|not available|don't have/i.test(a),
+          message: 'Must not claim data is missing',
+        }),
+      },
+    },
+  ];
+
+  for (const test of dataConsistencyQuestions) {
+    allResults.push(await testChat(
+      test.question,
+      mockUserPlanData,
+      test.context,
+      test.validations,
+      'Data Consistency'
+    ));
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+
+  // ============================================================================
+  // CATEGORY 8c: Savings Helper Modes (first_try, underspend, overspend, on-track)
+  // ============================================================================
+  console.log('\n' + '#'.repeat(80));
+  console.log('# CATEGORY 8c: Savings Helper Modes');
+  console.log('#'.repeat(80) + '\n');
+
+  const savingsHelperModeTests = [
+    {
+      name: 'first_try (FIRST_TIME)',
+      question: 'How much can I save?',
+      context: 'savings-helper',
+      userPlanData: () => ({ ...mockUserPlanData, incomeAllocationLifecycle: getSavingsHelperPlanData('first_try') }),
+      validations: {
+        'Based on last three months': (a) => ({
+          pass: /last three months|3-?month|three month|based on.*actual/i.test(a),
+          message: 'Should say recommendation is based on last three months',
+        }),
+        'States savings amount or percent': (a) => ({
+          pass: /\$[\d,]+|%\s*(of|savings)|20%|target/i.test(a),
+          message: 'Should state safely save amount or savings percentage',
+        }),
+        '20% target phrasing': (a) => ({
+          pass: /20%|target threshold|above|below.*target/i.test(a),
+          message: 'Should say above/at/below 20% target',
+        }),
+      },
+    },
+    {
+      name: 'underspend (overspent — savings fell short)',
+      question: 'Why?',
+      context: 'savings-helper',
+      userPlanData: () => ({ ...mockUserPlanData, incomeAllocationLifecycle: getSavingsHelperPlanData('underspend') }),
+      validations: {
+        'Explains overspent or shortfall': (a) => ({
+          pass: /overspent|fell short|savings came up short|short of|below target/i.test(a),
+          message: 'Should explain user overspent / savings fell short',
+        }),
+        'Proposes adjustment': (a) => ({
+          pass: /propos|suggest|reduce|4%|shift|next month/i.test(a),
+          message: 'Should propose adjustment (e.g. reduce spending by 4%)',
+        }),
+        'Uses numbers': (a) => ({
+          pass: /\$[\d,]+/.test(a),
+          message: 'Should use actual dollar amounts from context',
+        }),
+      },
+    },
+    {
+      name: 'overspend (saved more — lock it in)',
+      question: 'Why?',
+      context: 'savings-helper',
+      userPlanData: () => ({ ...mockUserPlanData, incomeAllocationLifecycle: getSavingsHelperPlanData('overspend') }),
+      validations: {
+        'Explains saved more or extra': (a) => ({
+          pass: /saved more|extra|above|lock it in|room to lock|surplus/i.test(a),
+          message: 'Should explain user saved more than planned',
+        }),
+        'Uses numbers': (a) => ({
+          pass: /\$[\d,]+/.test(a),
+          message: 'Should use actual amounts',
+        }),
+      },
+    },
+    {
+      name: 'on-track',
+      question: 'Am I on track?',
+      context: 'savings-helper',
+      userPlanData: () => ({ ...mockUserPlanData, incomeAllocationLifecycle: getSavingsHelperPlanData('on_track') }),
+      validations: {
+        'References plan or actuals': (a) => ({
+          pass: /on track|tracking|plan|actual|spending/i.test(a),
+          message: 'Should reference being on track or tracking plan',
+        }),
+      },
+    },
+    {
+      name: 'savings-helper bars (no lifecycle)',
+      question: 'What do the three bars mean?',
+      context: 'savings-helper',
+      userPlanData: () => ({ ...mockUserPlanData, incomeAllocationLifecycle: undefined }),
+      validations: {
+        'Distinguishes Past 3M, Current, Recommended': (a) => ({
+          pass: /past 3|three month|current|recommended|plan|actual/i.test(a),
+          message: 'Should distinguish Past 3 Months, Current month, Recommended plan',
+        }),
+        'Actuals vs Plan language': (a) => ({
+          pass: /actual|plan|spending|recommended/i.test(a),
+          message: 'Should use Actuals vs Plan (not "current plan" for spending)',
+        }),
+      },
+    },
+  ];
+
+  for (const test of savingsHelperModeTests) {
+    const planData = typeof test.userPlanData === 'function' ? test.userPlanData() : test.userPlanData;
+    allResults.push(await testChat(
+      test.question,
+      planData,
+      test.context,
+      test.validations,
+      `Savings Helper (${test.name})`
+    ));
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+
   // ============================================================================
   // CATEGORY 9: Onboarding & UI Context Questions
   // ============================================================================

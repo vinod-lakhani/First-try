@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 // Detect deployment platform
 // Vercel sets VERCEL=1 during builds - this is the primary check
@@ -29,17 +30,18 @@ const basePath = shouldUseStaticExport && process.env.NODE_ENV === 'production'
   ? (process.env.NEXT_PUBLIC_BASE_PATH || '/First-try')
   : '';
 
-// Build Next.js config - explicitly handle static export
+// Force Next.js to use this directory as project root (fixes ENOENT/missing .next/server when parent has lockfile)
+const projectRoot = path.join(__dirname);
+
 const nextConfig: NextConfig = {
+  outputFileTracingRoot: projectRoot,
+
   // CRITICAL: Only enable static export for GitHub Pages
-  // On Vercel, we MUST NOT use static export - it breaks everything
-  // The spread operator conditionally adds output: 'export' only if shouldUseStaticExport is true
-  // If shouldUseStaticExport is false (like on Vercel), this property is NOT added
   ...(shouldUseStaticExport ? { output: 'export' as const } : {}),
-  
+
   // Set base path only for GitHub Pages (Vercel doesn't need it)
   ...(basePath ? { basePath } : {}),
-  
+
   // Disable image optimization only for static export (GitHub Pages)
   images: {
     unoptimized: shouldUseStaticExport,

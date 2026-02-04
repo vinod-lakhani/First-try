@@ -181,6 +181,8 @@ export interface SafetyStrategy {
     retirementTaxAdv$: number;
     brokerage$: number;
   };
+  /** Total savings target (cash + payroll + match + HSA) for display. Set from plan-final on "Save this plan" so hero/savings-helper show correct current target. */
+  totalSavingsTargetForDisplay?: number;
 }
 
 /**

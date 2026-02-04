@@ -2,32 +2,43 @@
 
 ## Overview
 
-This expanded test suite includes **all 45 questions** organized into 7 categories, covering:
+This expanded test suite exercises the **WeLeap/MVP_rev1 chat API** (Ribbit). It includes questions organized into **11 categories**:
 
 1. **Income Allocation Questions** (10 questions)
-2. **Savings Allocation Questions** (10 questions)  
-3. **Goal-Based & Scenario Questions** (5 questions)
+2. **Savings Allocation Questions** (10 questions)
+3. **Goal-Based & Scenario Questions** (6 questions)
 4. **Tax & Income Sensitivity Questions** (6 questions)
 5. **Long-Term vs Short-Term Adjustment Questions** (4 questions)
 6. **General Financial Literacy & Behavioral Questions** (6 questions)
 7. **Out-of-Scope Questions** (4 questions)
+8. **Accuracy Validation** (production-style questions)
+9. **Data Consistency** (pre-tax, post-tax, total = pre+match+post) — *new*
+10. **Savings Helper Modes** (first_try, underspend, overspend, on-track, bars) — *new*
+11. **Onboarding & UI Context Questions** (many screens)
 
-Plus the original tests:
-- Real user questions from production
-- Net worth breakdown tests
-- Growth-aware calculations
-- Formatting quality checks
+Plus: real user questions from production, net worth breakdown tests, growth-aware calculations, formatting and forbidden-phrase checks.
 
 ## Running the Tests
+
+### Against MVP_rev1 (local)
+
+Start the MVP_rev1 app, then run the script (default `API_URL=http://localhost:3000`):
+
+```bash
+# Terminal 1: start MVP_rev1
+cd MVP_rev1 && npm run dev
+
+# Terminal 2: run tests (from MVP_rev1 or weleap-mockups)
+cd MVP_rev1 && node scripts/test-comprehensive-expanded.js
+# Or from weleap-mockups:
+API_URL=http://localhost:3000 node scripts/test-comprehensive-expanded.js
+```
+
+**Note:** Full run is ~100+ requests with 1s delay between each; allow **~15–20 minutes** or run with a longer timeout.
 
 ### Quick Test (Original - 7 tests)
 ```bash
 node scripts/test-comprehensive.js
-```
-
-### Full Expanded Test (45+ questions - takes ~10-15 minutes)
-```bash
-node scripts/test-comprehensive-expanded.js
 ```
 
 ### Test Against Production
@@ -58,6 +69,21 @@ Tests savings priority stack understanding:
 - Employer match
 - Roth vs 401(k)
 - IDR plan considerations
+
+### 8b. Data Consistency (Pre-Tax / Post-Tax / Total Savings)
+- **What makes up my savings?** — Must show Total = Pre-tax + Match + Post-tax Cash; no "I don't have access".
+- **Break down my savings** — All three components with numbers; verification line.
+- **Why is my cash savings different from base savings?** — Pre-tax impact and formula.
+- **Why is my cash savings different on different pages?** — Centralized formula; no "unavailable".
+- **What is my total monthly savings and where does it go?** (plan-final) — Total breakdown + post-tax allocation.
+- **Walk me through my savings breakdown** — Pre-tax, match, post-tax; no "not explicitly provided".
+
+### 8c. Savings Helper Modes
+- **first_try (FIRST_TIME)** — "How much can I save?"; based on last three months; 20% target phrasing.
+- **underspend (overspent)** — "Why?"; explains overspent / savings fell short; proposes 4% adjustment.
+- **overspend (saved more)** — "Why?"; explains saved more; lock it in.
+- **on-track** — "Am I on track?"; references plan/actuals.
+- **savings-helper bars (no lifecycle)** — "What do the three bars mean?"; Past 3M, Current, Recommended; Actuals vs Plan.
 - Retirement vs brokerage split
 - IRA contribution limits
 - Monthly budget examples

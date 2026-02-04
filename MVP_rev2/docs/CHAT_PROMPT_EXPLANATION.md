@@ -1,9 +1,11 @@
 # Chat Prompt Explanation (Ribbit / WeLeap)
 
-This document explains how the **Ribbit chat system prompt** is built and what each part does. Use it to onboard teammates, debug behavior, or change the prompt safely.
+This document explains how the **Ribbit chat system prompt** is built and how **plan-update-via-chat** works in MVP_rev2. Use it to onboard teammates, debug behavior, or change the prompt safely.
 
-**Where the prompt lives:** `MVP_rev1/app/api/chat/route.ts`  
-**Entry point:** `buildSystemPrompt(context, userPlanData)` → `buildSystemPromptInternal(...)`
+**Where the prompt lives:** `MVP_rev2/app/api/chat/route.ts`  
+**Entry point:** `buildSystemPrompt(context, userPlanData)` → `buildSystemPromptInternal(...)`  
+**Intent module (plan updates):** `MVP_rev2/lib/chat/savingsAllocationIntent.ts`  
+**Chat plan data (single source of truth):** `MVP_rev2/lib/chat/buildChatPlanData.ts`
 
 ---
 
@@ -11,7 +13,7 @@ This document explains how the **Ribbit chat system prompt** is built and what e
 
 Every chat request sends:
 
-- **`context`** – Which screen the user is on (e.g. `financial-sidekick`, `savings-helper`, `savings-allocator`).
+- **`context`** – Which screen the user is on (e.g. `financial-sidekick`, `savings-helper`, `savings-allocator`, `savings-plan`).
 - **`userPlanData`** – The user’s financial snapshot (income, expenses, savings breakdown, net worth, etc.).
 
 The system prompt is **assembled in layers**:
@@ -23,6 +25,8 @@ The system prompt is **assembled in layers**:
 5. **Final instructions** – Universal answer principles and question-type rules.
 
 If `buildSystemPrompt` throws, a **fallback prompt** is used (short Ribbit identity + basic guidelines).
+
+**Streaming:** For `savings-allocator` and `savings-plan`, the API **always uses non-streaming** so the full response is available to parse `PLAN_CHANGES` and avoid the response overwriting or disappearing in the embedded chat UI. All other contexts may stream when requested.
 
 ---
 
@@ -117,12 +121,12 @@ A **context string** selects a **screen description** that is appended after the
 
 | Context | Purpose |
 |--------|---------|
-| `financial-sidekick` | Main app chat; full data; distinguish Savings Breakdown vs Savings Allocation. |
-| `savings-helper` | Chat‑first income allocation; three bars (Past 3M, Current month projected, Recommended plan); Actuals vs Plan; PROPOSED_SAVINGS output. |
-| `savings-allocator` | Fine‑tune savings across EF, debt, retirement, brokerage; +/- buttons; total wealth moves; optional tool-output block (see below). |
+| `financial-sidekick` | Main app chat; full data; distinguish Savings Breakdown vs Savings Allocation; CURRENT_LEAPS when provided. |
+| `savings-helper` | Chat‑first income allocation; three bars (Past 3M, Current month projected, Recommended plan); Actuals vs Plan; PROPOSED_SAVINGS output; net worth impact when user proposes new savings amount. |
+| `savings-allocator` | Fine‑tune savings across EF, debt, retirement, brokerage; +/- buttons; total wealth moves; PLAN_CHANGES at end of response when applying a change; optional tool-output block. |
 | `savings-optimizer` | Needs/Wants sliders; impact on savings and net worth. |
 | `plan-final` | Final plan summary; savings breakdown (Cash + Payroll + Match); net worth chart; milestones. |
-| `savings-plan` | Onboarding allocate‑savings; pre‑tax vs post‑tax; 401k match awareness; +/- controls. |
+| `savings-plan` | Onboarding allocate‑savings; pre‑tax vs post‑tax; 401k match awareness; +/- controls; PLAN_CHANGES when applying a change. |
 | `payroll-contributions` | 401k, HSA, EF target, retirement preference; no math/jargon. |
 | `monthly-plan-design` | Income, Needs, Wants sliders; savings = Income − (Needs + Wants). |
 | `monthly-plan-current` | Income & expense profile; 3‑month actuals; “Allocate my Income” CTA. |
@@ -130,6 +134,8 @@ A **context string** selects a **screen description** that is appended after the
 | `mvp-simulator` | Internal verification; inputs/outputs from engines; explain how numbers were calculated. |
 
 For onboarding screens (`monthly-plan`, `monthly-plan-design`, `monthly-plan-current`, `payroll-contributions`, `savings-plan`, `plan-final`), an **onboarding flow** blurb is added (stages 1–7 and current stage).
+
+When the user is **not** on `savings-allocator` or `savings-plan` and asks to change their savings plan, the prompt instructs Ribbit to direct them to **Tools → Savings Allocation** (or the savings recommendation in the Feed) instead of applying changes in that chat.
 
 ---
 
@@ -240,19 +246,50 @@ A final **ANSWER INSTRUCTIONS** section is appended. It restates:
 
 Ribbit must show **both** when users ask for “savings breakdown” or “what makes up my savings.”
 
-### 6.2 Data Source of Truth
+### 6.2 Data Source of Truth for Chat
 
-- Numbers come from **userPlanData** (and for Savings Allocator from USER_STATE / BASELINE_PLAN / PROPOSED_PLAN / TOOL_OUTPUT_EXPLAIN).
+- **Plan data for chat:** All chat contexts (FinancialSidekick, SavingsChatPanel, IncomePlanChatCard) MUST use **`lib/chat/buildChatPlanData.ts`** for current/baseline data. It builds net worth and savings allocation from `FinalPlanData` (usePlanData hook), so values are consistent across every chat window.
+- **Numbers in the prompt:** Come from **userPlanData** (and for Savings Allocator from USER_STATE / BASELINE_PLAN / PROPOSED_PLAN / TOOL_OUTPUT_EXPLAIN).
 - Ribbit must **never** say “I don’t have access to your data” when that data is in the prompt.
 - If `savingsBreakdown` has zeros but `payrollContributions` has values, the code can use a payroll fallback; the prompt instructs to use the values provided in the “TOTAL MONTHLY SAVINGS BREAKDOWN” (or payroll) section.
 
-### 6.3 Special Outputs
+### 6.3 Intent-Based Plan Updates (rev2 Architecture)
+
+Plan-update-via-chat follows an **intent-first** design so “to $X” vs “by $X” and single-category changes are handled consistently everywhere.
+
+**Philosophy:** The chat parses the user’s message into a **semantic intent** (what they want). The **tool** applies that intent. The API’s `PLAN_CHANGES` line is a **fallback** when no intent is parsed (e.g. explain-only or model-only flow).
+
+**Intent module** (`lib/chat/savingsAllocationIntent.ts`):
+
+- **`parseSavingsAllocationIntent(text, context)`** – Parses user (or assistant) text into a single intent: `reset`, `set_target` (to $X), `delta` (by $X), or `eliminate` (401k/HSA to zero). Uses current balances so “to $1000” → correct delta.
+- **`intentToDelta(intent, context)`** – Converts intent to `{ category, delta }` (category: ef, debt, retirementExtra, brokerage, 401k, hsa).
+- **`intentToPlanChanges(intent, context)`** – Converts intent to the same shape as `PlanChangesFromChat` (absolute for preTax401k/hsa, deltas for efDelta, debtDelta, etc.) so the client can merge over API `planChanges`.
+- **`intentIsSingleCategoryChange(intent)`** – True when the intent is a single-category change that should override API-provided deltas for other categories.
+
+**Where intent is used:**
+
+| Chat surface | Role |
+|--------------|------|
+| **SavingsChatPanel** (savings-allocator, savings-helper) | Applies plan changes: **intent first** (from last user message), then API `planChanges` as fallback. For single-category intents (e.g. “reduce EF to $1000”), only that category’s delta is applied; other API deltas for post‑tax categories are ignored so rebalance logic handles freed funds. |
+| **OnboardingChat** (savings-plan) | When API returns `planChanges`, builds intent from last user message and current plan. If a **single-category intent** is parsed, corrects `planChanges` with `intentToPlanChanges` and passes the merged object to `onPlanChangesFromChat`. |
+| **AdjustPlanChatPanel** (embedded “Ribbit — Adjustments”) | Uses `parseSavingsAllocationIntent` + `intentToDelta` for all edits (reset, “to $X”, “by $X”) so wording is consistent with the rest of the app. |
+| **FinancialSidekick** | Does **not** apply plan changes. Plan updates happen on the tool pages (savings-allocator, etc.); the sidekick only chats and routes to tools. |
+
+**PLAN_CHANGES format (API output):**
+
+- One line at the end of the response: `PLAN_CHANGES: {"key": value, ...}`.
+- **Pre‑tax (absolute monthly):** `preTax401k`, `hsa` – e.g. `0` to eliminate, or target value when user says “set 401k to $100”.
+- **Post‑tax (monthly deltas in $):** `efDelta`, `debtDelta`, `retirementExtraDelta`, `brokerageDelta` – positive = add, negative = reduce.
+- **“to $X” vs “by $X”** is specified in the system prompt for savings-allocator and savings-plan so the model outputs correct deltas (e.g. “reduce EF to $1000” → `efDelta = 1000 - currentEF`, not −1000). The client still corrects with intent when it parses a single-category change, so mis-parsed API output does not override user meaning.
+
+### 6.4 Special Outputs
 
 - **Savings Helper:** When proposing a new monthly savings amount, the model must output **`PROPOSED_SAVINGS: <number>`** on its own line at the end. The app parses this and shows the adjust-plan tile (Apply, Ask a question, Keep my plan) in chat.
-- **Savings Helper — net worth impact:** When the user types a specific new savings amount (e.g. “I want to save $2,500”), the client sends **`userPlanData.netWorthImpact`** with `baselineNetWorthAt20Y`, `proposedMonthlySavings`, `proposedNetWorthAt20Y`, and `deltaAt20Y`. The system prompt then instructs the model to lead with “The impact of this change would [increase|reduce] your net worth by $X in 20 years.” and to keep the reply short (2–4 sentences). The net worth chart above the chat updates in real time to the proposed amount.
+- **Savings Allocator / Savings Plan:** When applying a change the user requested, the model must output **`PLAN_CHANGES: {"preTax401k":…,"hsa":…,"efDelta":…,…}`** at the very end. The API parses this and returns it in the response (non-streaming for these contexts). The client may **override** these values using the intent module when a single-category intent is detected from the last user message.
+- **Savings Helper — net worth impact:** When the user types a specific new savings amount (e.g. “I want to save $2,500”), the client sends **`userPlanData.netWorthImpact`** with `baselineNetWorthAt20Y`, `proposedMonthlySavings`, `proposedNetWorthAt20Y`, and `deltaAt20Y`. The system prompt instructs the model to lead with “The impact of this change would [increase|reduce] your net worth by $X in 20 years.” and to keep the reply short (2–4 sentences). The net worth chart above the chat updates in real time to the proposed amount.
 - **Apply in Savings Helper:** Clicking **Apply** does not persist the plan globally. It stores the new target in `proposedSavingsFromHelper` (and sessionStorage) and shows a modal directing the user to Savings Allocator to “see the breakdown and accept the plan.” The Feed shows a “Pending savings plan change” banner when `proposedSavingsFromHelper` is set. The plan is only committed when the user clicks **Confirm & Apply** in Savings Allocator.
 
-### 6.4 Proceed / Skip / Confirm & Apply
+### 6.5 Proceed / Skip / Confirm & Apply
 
 - In **Savings Allocator**, **Current Plan** is the last locked plan; **Proposed Plan** can be the new target set in Savings Helper (when the user clicked Apply there but has not yet accepted in the allocator). After reviewing, the user clicks “Confirm & Apply” to lock in the plan; that clears `proposedSavingsFromHelper` and updates the store so Income tab, Monthly Pulse, and Savings Helper all show the new plan.
 - In **Savings Allocator**, after an allocation change Ribbit ends with Proceed vs Skip. On Proceed, the UI updates the plan and shows a confirmation; Ribbit does not generate that confirmation message. Final lock‑in is “Confirm & Apply” in the UI.
@@ -265,34 +302,38 @@ Ribbit must show **both** when users ask for “savings breakdown” or “what 
 - **`proposedSavingsFromHelper`:** Stored in the onboarding store (`lib/onboarding/store.ts`) and persisted in sessionStorage (`weleap_proposedSavingsFromHelper`) so the pending target survives reloads and navigation. Set when the user clicks **Apply** in Savings Helper; cleared when the user clicks **Confirm & Apply** in Savings Allocator or "Keep my plan" in Savings Helper.
 - **Feed:** When `proposedSavingsFromHelper` is set, the Feed page shows a "Pending savings plan change" card with a link to Savings Allocator so the user can review the breakdown and accept the plan.
 - **Savings Allocator:** Reads `proposedSavingsFromHelper` on load (and hydrates from sessionStorage if needed). When set, **Proposed Plan** uses that amount; **Current Plan** stays the last locked plan until the user confirms in the allocator.
+- **Onboarding vs post-onboarding:** We distinguish the two with the allocator scenario and URL `source`. **Onboarding:** `source=onboarding` and scenario `first_time` — no current plan; we show "Ribbit Plan" (engine proposal) vs "Proposed" (user edits). **Post-onboarding:** When the user opens the allocator from Savings Helper after clicking Apply (or when `proposedSavingsFromHelper` is set), we use scenario `my_data` and `source=sidekick` so **Current Plan** = last locked plan and **Proposed Plan** = new target from helper; the stored plan is **not** updated until the user clicks **Confirm & Apply** in the allocator.
 - **Chat bullet formatting:** Bullet lists in chat render with no line space between bullet and text (inline). Enforced in `components/tools/IncomePlanChatCard.tsx` and `components/chat/ChatMarkdown.tsx`.
 
 ---
 
 ## 8. Quick Reference: Where to Change What
 
-| Goal | Where in `route.ts` |
-|------|----------------------|
-| Change Ribbit’s tone or identity | Start of `buildSystemPromptInternal` (first paragraph). |
+| Goal | Where |
+|------|--------|
+| Change Ribbit’s tone or identity | `app/api/chat/route.ts` – start of `buildSystemPromptInternal` (first paragraph). |
 | Change income allocation rules (e.g. shift limit, 50/30/20) | Base prompt block “INCOME ALLOCATION LOGIC”. |
 | Change savings priority order or caps | Base prompt block “SAVINGS ALLOCATION PRIORITY STACK”. |
 | Change growth assumptions or net worth rules | Base prompt “NET WORTH PROJECTION AND GROWTH CALCULATIONS”. |
 | Change Roth/Traditional or IDR rules | Base prompt “TAX AND ACCOUNT TYPE DECISIONS”. |
-| Add or edit a screen description | Object `contextDescriptions` (e.g. `'savings-helper': \`...\``). |
+| Add or edit a screen description | `app/api/chat/route.ts` – object `contextDescriptions` (e.g. `'savings-helper': \`...\``). |
 | Change what data we send for a screen | Conditional blocks after “if (userPlanData)” (income, expenses, savings breakdown, net worth, etc.). |
 | Change Savings Helper net worth impact (20-year lead sentence) | Savings-helper block "When the user proposes a specific new savings amount" and "NET WORTH IMPACT"; client sends `userPlanData.netWorthImpact`. |
-| Change Savings Allocator breakdown (bold category headers, "Explain the breakdown") | Block "Proposed Allocation Breakdown — MANDATORY"; UI button label in `SavingsChatPanel.tsx`. |
+| Change Savings Allocator breakdown (bold category headers, "Explain the breakdown") | Block "Proposed Allocation Breakdown — MANDATORY"; UI button label in `components/tools/SavingsChatPanel.tsx`. |
 | Change Savings Allocator behavior (confirmations, deviation flow) | Block “Phase 2A: Savings Allocation tool” (ROLE, ARCHITECTURE RULES, 7-step deviation flow, DATA). |
+| Change PLAN_CHANGES / “to $X” vs “by $X” instructions | `contextDescriptions['savings-allocator']` and `contextDescriptions['savings-plan']` – “Plan updates via chat” paragraph. |
+| Change how plan updates are applied from chat (intent vs API) | `lib/chat/savingsAllocationIntent.ts` (parser + intentToDelta / intentToPlanChanges); `components/tools/SavingsChatPanel.tsx` (applyPlanChangesFromChat); `components/onboarding/OnboardingChat.tsx` (onDone correction); `components/tools/AdjustPlanChatPanel.tsx` (parseIntent). |
 | Change mandatory answer rules (e.g. 3‑month average, no closing phrase) | Base prompt “CRITICAL RULE - ENDING RESPONSES” and final “ANSWER INSTRUCTIONS”. |
 
 ---
 
 ## 9. Flow Summary
 
-1. Client sends `messages`, `context`, `userPlanData`, optional `stream`. For savings-helper when the user proposes a new savings amount, `userPlanData.netWorthImpact` is included (baseline/proposed 20-year net worth, delta).
+1. Client sends `messages`, `context`, `userPlanData`, optional `stream`. For savings-allocator and savings-plan, the API **ignores** `stream` and uses **non-streaming** so the full response can be parsed for `PLAN_CHANGES`. For savings-helper when the user proposes a new savings amount, `userPlanData.netWorthImpact` is included.
 2. `buildSystemPrompt(context, userPlanData)` builds one big system prompt string.
-3. OpenAI request = `[{ role: 'system', content: systemPrompt }, ...messages]`.
-4. Response is post‑processed: round dollars, strip PROPOSED_SAVINGS for savings-helper and return it separately if present.
-5. Questions/responses can be logged (see `logQuestion`).
+3. OpenAI request = `[{ role: 'system', content: systemPrompt }, ...messages]`. For savings-allocator/savings-plan, `max_tokens` is higher (e.g. 3200) to allow for PLAN_CHANGES at the end.
+4. Response is post‑processed: round dollars; for savings-helper strip PROPOSED_SAVINGS and return it separately if present; for savings-allocator/savings-plan parse `PLAN_CHANGES` from the end of the response and attach to the JSON/SSE `done` payload.
+5. **Client:** For savings-allocator (SavingsChatPanel) and savings-plan (OnboardingChat), the client may **correct** the received `planChanges` using the intent module: parse the last user message with `parseSavingsAllocationIntent`; if a single-category intent is found, compute the correct change with `intentToDelta` / `intentToPlanChanges` and apply that (or merge over API planChanges) so “to $X” and “by $X” behave correctly even if the API mis-parsed.
+6. Questions/responses can be logged (see `logQuestion`).
 
-This structure keeps **domain logic and formulas** in one place (the base prompt), **screen behavior** in context blocks, and **user-specific answers** driven by injected data and the final instruction block.
+This structure keeps **domain logic and formulas** in the base prompt, **screen behavior** in context blocks, **plan updates** intent-first with API PLAN_CHANGES as fallback, and **user-specific answers** driven by injected data and the final instruction block.

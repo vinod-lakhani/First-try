@@ -23,11 +23,21 @@ interface ChatRequest {
   stream?: boolean;
 }
 
-export type ChatResult = string | { response: string; proposedPlannedSavings: number };
+export type ChatResult = string | { response: string; proposedPlannedSavings?: number; planChanges?: PlanChangesFromChat };
+
+/** Structured plan changes from chat (savings-allocator). Absolute values for pre-tax; deltas for post-tax. */
+export type PlanChangesFromChat = {
+  preTax401k?: number;
+  hsa?: number;
+  efDelta?: number;
+  debtDelta?: number;
+  retirementExtraDelta?: number;
+  brokerageDelta?: number;
+};
 
 export interface StreamChatCallbacks {
   onChunk: (text: string) => void;
-  onDone?: (meta: { proposedPlannedSavings?: number }) => void;
+  onDone?: (meta: { proposedPlannedSavings?: number; planChanges?: PlanChangesFromChat }) => void;
 }
 
 /**
@@ -166,10 +176,13 @@ export async function sendChatMessage(request: ChatRequest): Promise<ChatResult>
     if (data.error) {
       throw new Error(data.error);
     }
-    // Savings-helper may return { response, proposedPlannedSavings }; other contexts return { response }
+    // Savings-helper may return { response, proposedPlannedSavings }; savings-allocator may return { response, planChanges }; others return { response }
     const text = data.response || 'I apologize, I could not generate a response.';
-    if (data.proposedPlannedSavings != null && typeof data.proposedPlannedSavings === 'number') {
-      return { response: text, proposedPlannedSavings: data.proposedPlannedSavings };
+    if (typeof data.response === 'string' && (data.proposedPlannedSavings != null || data.planChanges != null)) {
+      const result: { response: string; proposedPlannedSavings?: number; planChanges?: PlanChangesFromChat } = { response: text };
+      if (data.proposedPlannedSavings != null && typeof data.proposedPlannedSavings === 'number') result.proposedPlannedSavings = data.proposedPlannedSavings;
+      if (data.planChanges != null && typeof data.planChanges === 'object') result.planChanges = data.planChanges as PlanChangesFromChat;
+      return result;
     }
     return text;
   } catch (error) {
@@ -237,7 +250,8 @@ export async function sendChatMessageStreaming(
     const text = data.response || '';
     if (text) callbacks.onChunk(text);
     const proposedPlannedSavings = data.proposedPlannedSavings;
-    callbacks.onDone?.({ proposedPlannedSavings });
+    const planChanges = data.planChanges;
+    callbacks.onDone?.({ proposedPlannedSavings, planChanges });
     return { proposedPlannedSavings };
   }
 
@@ -245,6 +259,7 @@ export async function sendChatMessageStreaming(
   const decoder = new TextDecoder();
   let buffer = '';
   let proposedPlannedSavings: number | undefined;
+  let planChanges: PlanChangesFromChat | undefined;
 
   try {
     while (true) {
@@ -266,6 +281,9 @@ export async function sendChatMessageStreaming(
             if (data.proposedPlannedSavings != null && typeof data.proposedPlannedSavings === 'number') {
               proposedPlannedSavings = data.proposedPlannedSavings;
             }
+            if (data.planChanges != null && typeof data.planChanges === 'object') {
+              planChanges = data.planChanges as PlanChangesFromChat;
+            }
           }
         } catch (_) {
           // ignore non-JSON lines
@@ -277,8 +295,9 @@ export async function sendChatMessageStreaming(
     if (line) {
       try {
         const data = JSON.parse(line.slice(6).trim());
-        if (data.done === true && data.proposedPlannedSavings != null) {
-          proposedPlannedSavings = data.proposedPlannedSavings;
+        if (data.done === true) {
+          if (data.proposedPlannedSavings != null) proposedPlannedSavings = data.proposedPlannedSavings;
+          if (data.planChanges != null) planChanges = data.planChanges as PlanChangesFromChat;
         }
       } catch (_) {}
     }
@@ -286,7 +305,7 @@ export async function sendChatMessageStreaming(
     reader.releaseLock();
   }
 
-  callbacks.onDone?.({ proposedPlannedSavings });
+  callbacks.onDone?.({ proposedPlannedSavings, planChanges });
   return { proposedPlannedSavings };
 }
 

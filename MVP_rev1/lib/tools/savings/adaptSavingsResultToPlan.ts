@@ -72,7 +72,7 @@ export function adaptSavingsResultToPlan(savingsResult: SavingsAllocation, optio
     steps.push({
       id: 'retirement',
       type: 'retirement',
-      label: 'Retirement (tax-advantaged)',
+      label: 'Roth IRA (tax-advantaged)',
       amountMonthly: savingsResult.retirementTaxAdv$,
     });
   }
@@ -90,12 +90,12 @@ export function adaptSavingsResultToPlan(savingsResult: SavingsAllocation, optio
     savingsResult.highAprDebt$ +
     savingsResult.retirementTaxAdv$ +
     savingsResult.brokerage$;
+  // Total = user allocation (post-tax + 401k + HSA) + employer match (so "Total savings" includes match)
   const totalMonthly =
     postTaxTotal +
     (options?.preTax401kMonthlyEst ?? employee401k) +
-    (options?.hsaMonthlyEst ?? 0) +
-    employerMatch +
-    savingsResult.hsa$;
+    (options?.hsaMonthlyEst ?? savingsResult.hsa$) +
+    employerMatch;
 
   const keyMetricValue = totalMonthly > 0 ? formatMoney(totalMonthly) + '/mo' : '—';
   return {
@@ -143,7 +143,7 @@ export function adaptUIAllocationToPlan(ui: {
     steps.push({ id: 'debt', type: 'debt', label: 'High-APR debt', amountMonthly: ui.highAprDebt$ });
   }
   if (ui.retirementTaxAdv$ > 0) {
-    steps.push({ id: 'retirement', type: 'retirement', label: 'Retirement', amountMonthly: ui.retirementTaxAdv$ });
+    steps.push({ id: 'retirement', type: 'retirement', label: 'Roth IRA (tax-advantaged)', amountMonthly: ui.retirementTaxAdv$ });
   }
   if (ui.brokerage$ > 0) {
     steps.push({ id: 'brokerage', type: 'brokerage', label: 'Brokerage', amountMonthly: ui.brokerage$ });

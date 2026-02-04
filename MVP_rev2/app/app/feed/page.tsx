@@ -37,6 +37,8 @@ import Link from 'next/link';
 import { SIDEKICK_INSIGHTS } from '@/lib/feed/sidekickInsights';
 import { SidekickInsightItem } from '@/components/feed/SidekickInsightItem';
 import { LeapCard, type FeedDisplayMode } from '@/components/feed/LeapCard';
+import { TransactionsSection } from '@/components/feed/TransactionsSection';
+import type { FeedTransaction, TransactionsSection as TransactionsSectionData } from '@/lib/feed/types';
 
 function toolRoute(tool: Leap['originatingTool']): string {
   switch (tool) {
@@ -228,6 +230,26 @@ export default function FeedPage() {
   const topLeap = leaps[0] ?? null;
   const clarityItems = useMemo(() => buildClarityNotifications(effectiveState), [effectiveState]);
 
+  // Recent transactions for Feed (mock until Plaid/API); same shape as transactions page
+  const transactionsSectionData = useMemo((): TransactionsSectionData => {
+    const now = new Date();
+    const bank: FeedTransaction[] = [
+      { id: 'feed-bank-1', accountKind: 'bank', accountName: 'Chase Checking', merchant: 'Amazon', amount$: -125.50, date: new Date(now.getTime() - 0 * 86400000).toISOString(), category: 'Shopping' },
+      { id: 'feed-bank-2', accountKind: 'bank', accountName: 'Chase Checking', merchant: 'Starbucks', amount$: -8.75, date: new Date(now.getTime() - 1 * 86400000).toISOString(), category: 'Food & Drink' },
+      { id: 'feed-bank-3', accountKind: 'bank', accountName: 'Wells Fargo Savings', merchant: 'Whole Foods', amount$: -89.32, date: new Date(now.getTime() - 2 * 86400000).toISOString(), category: 'Groceries' },
+      { id: 'feed-bank-4', accountKind: 'bank', accountName: 'Chase Checking', merchant: 'Uber', amount$: -24.50, date: new Date(now.getTime() - 3 * 86400000).toISOString(), category: 'Transportation' },
+      { id: 'feed-bank-5', accountKind: 'bank', accountName: 'Wells Fargo Savings', merchant: 'Netflix', amount$: -15.99, date: new Date(now.getTime() - 4 * 86400000).toISOString(), category: 'Entertainment' },
+    ];
+    const creditCard: FeedTransaction[] = [
+      { id: 'feed-cc-1', accountKind: 'credit_card', accountName: 'Chase Sapphire', merchant: 'Restaurant', amount$: -85.20, date: new Date(now.getTime() - 0 * 86400000).toISOString(), category: 'Dining' },
+      { id: 'feed-cc-2', accountKind: 'credit_card', accountName: 'Amex Gold', merchant: 'Airbnb', amount$: -325.00, date: new Date(now.getTime() - 1 * 86400000).toISOString(), category: 'Travel' },
+      { id: 'feed-cc-3', accountKind: 'credit_card', accountName: 'Chase Sapphire', merchant: 'Best Buy', amount$: -199.99, date: new Date(now.getTime() - 2 * 86400000).toISOString(), category: 'Electronics' },
+      { id: 'feed-cc-4', accountKind: 'credit_card', accountName: 'Amex Gold', merchant: 'Costco', amount$: -145.50, date: new Date(now.getTime() - 3 * 86400000).toISOString(), category: 'Wholesale' },
+      { id: 'feed-cc-5', accountKind: 'credit_card', accountName: 'Chase Sapphire', merchant: 'Nordstrom', amount$: -156.75, date: new Date(now.getTime() - 4 * 86400000).toISOString(), category: 'Fashion' },
+    ];
+    return { bankTransactions: bank, creditCardTransactions: creditCard };
+  }, []);
+
   const handleScenarioChange = useCallback((id: string) => {
     setScenarioId(id);
     const s = getScenarioById(id);
@@ -407,7 +429,10 @@ export default function FeedPage() {
                     <p className="text-sm text-amber-800 dark:text-amber-200 mt-0.5">
                       You have a new target (${Math.round(store.proposedSavingsFromHelper).toLocaleString()}/mo). Review the breakdown and accept the plan in Savings Allocator.
                     </p>
-                    <Link href="/app/tools/savings-allocator">
+                    <Link href={typeof store.proposedSavingsFromHelper === 'number' && store.proposedSavingsFromHelper > 0
+                      ? `/app/tools/savings-allocator?source=sidekick&target=${Math.round(store.proposedSavingsFromHelper)}`
+                      : '/app/tools/savings-allocator?source=sidekick'
+                    }>
                       <Button size="sm" className="mt-3 bg-amber-600 hover:bg-amber-700 text-white">
                         Open Savings Allocator
                       </Button>
@@ -542,6 +567,9 @@ export default function FeedPage() {
               </div>
             )}
           </section>
+
+          {/* Recent transactions — at bottom of Feed */}
+          <TransactionsSection data={transactionsSectionData} />
         </div>
       </div>
     </div>

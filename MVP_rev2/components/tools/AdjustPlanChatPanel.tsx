@@ -11,6 +11,11 @@ import { Send } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { sendChatMessageStreaming } from '@/lib/chat/chatService';
 import { CHAT_HELPER_TEXT } from '@/lib/chat/chatPrompts';
+import {
+  parseSavingsAllocationIntent,
+  intentToDelta,
+  type SavingsAllocationIntentContext,
+} from '@/lib/chat/savingsAllocationIntent';
 
 export interface AdjustPlanChatContext {
   currentPlanSummary: Record<string, number>;
@@ -44,31 +49,36 @@ const QUICK_PROMPTS = [
   'Reset to recommended',
 ];
 
-/** Parse user message for intent commands. Returns edit to apply or 'reset'. */
-function parseIntent(text: string): { action: 'reset' } | { action: 'edit'; type: 'ef' | 'debt' | 'retirementExtra' | 'brokerage' | '401k' | 'hsa'; delta: number } | null {
-  const t = text.toLowerCase().trim();
-  const numMatch = t.match(/\$?(\d+)/);
-  const amount = numMatch ? parseInt(numMatch[1], 10) : 0;
+/** Build intent context from AdjustPlanChatPanel context (currentPlanSummary keys: ef$, debt$, etc.). */
+function buildIntentContext(summary: Record<string, number>): SavingsAllocationIntentContext {
+  return {
+    preTax401k$: summary.preTax401k$ ?? summary['401k'] ?? 0,
+    hsa$: summary.hsa$ ?? 0,
+    ef$: summary.ef$ ?? 0,
+    debt$: summary.debt$ ?? 0,
+    retirementExtra$: summary.retirementTaxAdv$ ?? summary.retirementExtra$ ?? 0,
+    brokerage$: summary.brokerage$ ?? 0,
+  };
+}
 
-  if (/reset|revert|undo|go back to recommended/i.test(t)) {
-    return { action: 'reset' };
-  }
+/** Parse user message via shared intent module; returns adjust-panel edit or reset. */
+function parseIntent(
+  text: string,
+  currentPlanSummary: Record<string, number>
+): { action: 'reset' } | { action: 'edit'; type: 'ef' | 'debt' | 'retirementExtra' | 'brokerage' | '401k' | 'hsa'; delta: number } | null {
+  const context = buildIntentContext(currentPlanSummary);
+  const intent = parseSavingsAllocationIntent(text, context);
+  if (!intent) return null;
 
-  if (amount <= 0) return null;
+  if (intent.kind === 'reset') return { action: 'reset' };
 
-  const increase = /increase|add|boost|raise|more/i.test(t);
-  const decrease = /decrease|reduce|lower|less|cut/i.test(t);
-  const delta = increase ? amount : decrease ? -amount : 0;
-  if (delta === 0) return null;
-
-  if (/(?:emergency\s*fund|ef)\b/i.test(t)) return { action: 'edit', type: 'ef', delta };
-  if (/(?:debt|high\s*[- ]?apr)/i.test(t)) return { action: 'edit', type: 'debt', delta };
-  if (/(?:retirement|roth|ira)/i.test(t)) return { action: 'edit', type: 'retirementExtra', delta };
-  if (/(?:brokerage|investing)/i.test(t)) return { action: 'edit', type: 'brokerage', delta };
-  if (/(?:401\s*k|401k)/i.test(t)) return { action: 'edit', type: '401k', delta };
-  if (/\bhsa\b/i.test(t)) return { action: 'edit', type: 'hsa', delta };
-
-  return null;
+  const deltaResult = intentToDelta(intent, context);
+  if (!deltaResult) return null;
+  return {
+    action: 'edit',
+    type: deltaResult.category,
+    delta: deltaResult.delta,
+  };
 }
 
 export function AdjustPlanChatPanel({ context, onReset, onApplyEdit }: AdjustPlanChatPanelProps) {
@@ -76,10 +86,13 @@ export function AdjustPlanChatPanel({ context, onReset, onApplyEdit }: AdjustPla
   const [chatInput, setChatInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
+  const streamingTextRef = useRef('');
+  const streamingMessageIdRef = useRef<string | null>(null);
+  const [streamingTick, setStreamingTick] = useState(0);
 
   useEffect(() => {
     if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
-  }, [messages]);
+  }, [messages, streamingTick]);
 
   const handleSend = async (overrideText?: string) => {
     const text = (overrideText ?? chatInput).trim();
@@ -90,7 +103,7 @@ export function AdjustPlanChatPanel({ context, onReset, onApplyEdit }: AdjustPla
     if (!overrideText) setChatInput('');
     setIsLoading(true);
 
-    const intent = parseIntent(text);
+    const intent = parseIntent(text, context.currentPlanSummary);
     if (intent) {
       if (intent.action === 'reset') {
         onReset();
@@ -99,11 +112,13 @@ export function AdjustPlanChatPanel({ context, onReset, onApplyEdit }: AdjustPla
         return;
       }
       if (intent.action === 'edit') {
-        onApplyEdit(intent);
+        onApplyEdit({ type: intent.type, delta: intent.delta });
       }
     }
 
     const streamingId = (Date.now() + 1).toString();
+    streamingTextRef.current = '';
+    streamingMessageIdRef.current = streamingId;
     setMessages(prev => [...prev, { id: streamingId, text: '', isUser: false, timestamp: new Date() }]);
 
     try {
@@ -131,9 +146,8 @@ export function AdjustPlanChatPanel({ context, onReset, onApplyEdit }: AdjustPla
         },
         {
           onChunk(text) {
-            setMessages(prev =>
-              prev.map(m => (m.id === streamingId ? { ...m, text: m.text + text } : m))
-            );
+            streamingTextRef.current += text;
+            setStreamingTick((t) => t + 1);
           },
         }
       );
@@ -143,6 +157,10 @@ export function AdjustPlanChatPanel({ context, onReset, onApplyEdit }: AdjustPla
         prev.map(m => (m.id === streamingId ? { ...m, text: `I couldn't complete that: ${errMsg}` } : m))
       );
     } finally {
+      setMessages(prev =>
+        prev.map(m => (m.id === streamingId ? { ...m, text: streamingTextRef.current } : m))
+      );
+      streamingMessageIdRef.current = null;
       setIsLoading(false);
     }
   };
@@ -167,13 +185,17 @@ export function AdjustPlanChatPanel({ context, onReset, onApplyEdit }: AdjustPla
       </div>
 
       <div ref={threadRef} className="space-y-2 max-h-32 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg p-2 bg-slate-50 dark:bg-slate-800/50">
-        {messages.map((m) => (
+        {messages.map((m) => {
+          const isStreamingThis = m.id === streamingMessageIdRef.current && isLoading;
+          const displayText = isStreamingThis ? streamingTextRef.current : (m.text ?? '');
+          return (
           <div key={m.id} className={`flex ${m.isUser ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[90%] rounded-lg px-2.5 py-1.5 text-xs ${m.isUser ? 'bg-green-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-600'}`}>
-              {m.isUser ? <p className="whitespace-pre-wrap">{m.text}</p> : <div className="prose prose-xs dark:prose-invert max-w-none"><ReactMarkdown>{m.text}</ReactMarkdown></div>}
+              {m.isUser ? <p className="whitespace-pre-wrap">{m.text}</p> : <div className="prose prose-xs dark:prose-invert max-w-none"><ReactMarkdown>{displayText}</ReactMarkdown></div>}
             </div>
           </div>
-        ))}
+          );
+        })}
         {isLoading && <div className="text-xs text-slate-500">Thinking…</div>}
       </div>
 

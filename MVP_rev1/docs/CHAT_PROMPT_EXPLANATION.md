@@ -44,6 +44,7 @@ This is a long static block that defines **who Ribbit is** and **how to reason**
 - Whole dollars only, no cents; comma separators (**$1,365**).
 - No LaTeX; use plain English and bold numbers for calculations.
 - Lead with the main point; put details in a scannable list.
+- **Bullet lists in chat:** No line space between the bullet and the text (bullet and text stay on one line). The UI (IncomePlanChatCard, ChatMarkdown) enforces this so responses render inline.
 
 ### 2.3 Income Allocation Logic
 
@@ -140,22 +141,33 @@ For onboarding screens (`monthly-plan`, `monthly-plan-design`, `monthly-plan-cur
 - Ribbit must only recommend from this list for “what should I do?” / “what’s next?” and offer to open the relevant tool.
 - Up to 3 leaps are serialized (leapId, leapType, reasonCode, payload, etc.).
 
-### 4.2 Savings Adjustments (`savings-adjustments` + `adjustmentsContext`)
+### 4.2 Savings Adjustments (`savings-helper` + user-proposed amount + `netWorthImpact`)
 
-- Role: help user adjust savings inside “Adjust plan details”.
-- Rules: use only numbers from `adjustmentsContext`; explain tradeoffs (match forfeiture, EF risk, debt interest); for reset/decrease/increase, acknowledge — UI applies.
-- Short responses; bullets.
+- **Role:** Help user adjust savings inside Savings Helper; net worth chart above chat updates in real time when they propose a new monthly savings amount.
+- **When the user proposes a specific new savings amount** (e.g. “I want to save $2,500” or “save $4,000”) and `userPlanData.netWorthImpact` is provided:
+  - The model must give a **short reply (2–4 sentences)**. Do **not** use the usual 4-part structure (Current situation / What that results in / Proposed plan / Why).
+  - **Lead with the 20-year net worth impact:** “The impact of this change would [increase|reduce] your net worth by $X in 20 years.” (X = absolute value of `deltaAt20Y` from `netWorthImpact`.)
+  - Then one brief close (e.g. “Click **Apply** above to lock this in, or ask if you have questions.”).
+  - No section headers, no bullet lists, no long breakdown — the user already sees the numbers in the chart.
+  - Do **not** use generic flexibility phrases like “We’re suggesting you adjust your savings…” or “This means your new allocation would allow for more flexibility…”.
+- **Apply flow:** When the user clicks **Apply** in Savings Helper, the new target is saved and the app shows: “Your new target is saved. Go to Savings Allocator to see the breakdown and accept the plan.” The plan is **not** updated globally until the user opens Savings Allocator and clicks **Confirm & Apply** there.
+- Rules: use only numbers from context; explain tradeoffs when relevant; short responses when `netWorthImpact` is present.
 
 ### 4.3 Savings Allocator Tool Output (`savings-allocator` + `toolOutput`)
 
 When context is `savings-allocator` and `userPlanData.toolOutput` exists:
 
 - **Architecture:** Feed decides recommendations; Savings Allocation logic provides numbers; Ribbit must **never invent numbers** — only use USER_STATE, BASELINE_PLAN, PROPOSED_PLAN, and optionally TOOL_OUTPUT_EXPLAIN.
+- **Current Plan vs Proposed Plan:** **Current Plan** = last locked plan (baseline). **Proposed Plan** = when the user has applied a new target in Savings Helper but not yet accepted in Savings Allocator, this is the new amount; otherwise it matches the effective savings budget. The allocator shows both so the user can compare before clicking **Confirm & Apply**.
+- **Intro / first message:** When monthly savings has changed (e.g. user came from Savings Helper with a new target), the UI states the change (e.g. “Monthly savings changed from $X to $Y”) and asks “Want an explanation of how we allocated it?” The button label is **“Explain the breakdown”** (not “Why these changes?”).
+- **Proposed Allocation Breakdown — MANDATORY:** When explaining current vs proposed allocation (e.g. user clicks “Explain the breakdown”), the model **must** use a **bold category header** before **each** category’s bullets. Never list Current/Proposed/Reason without the category name first. Use exact labels: **Emergency Fund:**, **High-APR Debt Payoff:**, **Roth IRA / Taxable Retirement:** (or **Retirement Contributions:**), **Brokerage:**, **401(k) Employer Match:**, **HSA:**. Format every category like this:
+  - **Category name:** on its own line, then bullets for Current, Proposed, Reason. Do **not** output a block of bullets without category headers.
 - **Job:** Explain the recommended plan; compare baseline vs proposed; one main reason; ask for confirmation before apply.
 - **Confirmation:** If plan differs from last confirmation, show “Here’s what changed” and ask to apply.
 - **Proceed/Skip:** For any allocation change, end with “Use **Proceed** to see the updated plan, or **Skip** to keep your current plan.”
 - **Stack deviation:** 7‑step flow when user proposes a change that deviates from the priority stack (education → tradeoffs → Proceed → confirmation message → net worth impact → final confirm → “Confirm & Apply”).
 - **Data blocks:** CURRENT_CONTEXT, USER_STATE, BASELINE_PLAN, PROPOSED_PLAN, and optionally TOOL_OUTPUT_EXPLAIN (match, HSA, EF, etc.).
+- **Net worth impact (20 years):** When the client sends `userPlanData.netWorthImpact` (baselineAt20Y, proposedAt20Y, deltaAt20Y), the model **must** state the 20-year impact in the reply: “This change would [increase|reduce] your net worth by $X in 20 years.” The page shows a 20-year projection card and chart; the chat must reflect the same impact. This is a general rule for any allocation change in savings-allocator (and savings-helper).
 - **Output format:** Bold labels, whole dollars, current vs proposed by category; Total Monthly Savings from USER_STATE (Pre‑tax + Employer + Post‑tax).
 
 ### 4.4 MVP Simulator (`mvp-simulator` + `inputs` / `outputs`)
@@ -188,6 +200,8 @@ When `userPlanData` exists and context is not `mvp-simulator`, a large **user da
 
 - If `incomeAllocationLifecycle` exists: 4‑state lifecycle, FIRST_TIME vs not, response structure (situation → result → proposal → why), PROPOSED_SAVINGS line at end of response, context packet (mode, state, netIncomeMonthly, last3m_avg, recommendedPlan, deltas, shiftLimit, completeSavingsBreakdown).
 - If `savingsHelperBarGraphs` exists (and no lifecycle): Three bars (Past 3 Months Average, Current Month projected, Recommended Plan); “Actuals vs Plan” language; never “current plan” for Bar 2.
+- **Net worth impact:** When the user types a specific new savings amount in chat (e.g. “I want to save $2,500”), the client sends `userPlanData.netWorthImpact` with `baselineNetWorthAt20Y`, `proposedMonthlySavings`, `proposedNetWorthAt20Y`, and `deltaAt20Y`. The net worth chart in Savings Helper updates live to the proposed amount. The model must lead with the 20-year impact sentence and keep the reply to 2–4 sentences (see §4.2).
+- **Apply flow:** Clicking **Apply** in Savings Helper saves the new target and shows a modal: “Your new target is saved. Go to Savings Allocator to see the breakdown and accept the plan.” The plan is only written to the rest of the app (Income tab, Monthly Pulse, etc.) when the user opens Savings Allocator and clicks **Confirm & Apply** there.
 
 ---
 
@@ -235,16 +249,28 @@ Ribbit must show **both** when users ask for “savings breakdown” or “what 
 
 ### 6.3 Special Outputs
 
-- **Savings Helper:** When proposing a new monthly savings amount, the model must output **`PROPOSED_SAVINGS: <number>`** on its own line at the end. The app parses this and can show it in the UI (e.g. “Explore options” / “Apply”).
+- **Savings Helper:** When proposing a new monthly savings amount, the model must output **`PROPOSED_SAVINGS: <number>`** on its own line at the end. The app parses this and shows the adjust-plan tile (Apply, Ask a question, Keep my plan) in chat.
+- **Savings Helper — net worth impact:** When the user types a specific new savings amount (e.g. “I want to save $2,500”), the client sends **`userPlanData.netWorthImpact`** with `baselineNetWorthAt20Y`, `proposedMonthlySavings`, `proposedNetWorthAt20Y`, and `deltaAt20Y`. The system prompt then instructs the model to lead with “The impact of this change would [increase|reduce] your net worth by $X in 20 years.” and to keep the reply short (2–4 sentences). The net worth chart above the chat updates in real time to the proposed amount.
+- **Apply in Savings Helper:** Clicking **Apply** does not persist the plan globally. It stores the new target in `proposedSavingsFromHelper` (and sessionStorage) and shows a modal directing the user to Savings Allocator to “see the breakdown and accept the plan.” The Feed shows a “Pending savings plan change” banner when `proposedSavingsFromHelper` is set. The plan is only committed when the user clicks **Confirm & Apply** in Savings Allocator.
 
 ### 6.4 Proceed / Skip / Confirm & Apply
 
+- In **Savings Allocator**, **Current Plan** is the last locked plan; **Proposed Plan** can be the new target set in Savings Helper (when the user clicked Apply there but has not yet accepted in the allocator). After reviewing, the user clicks “Confirm & Apply” to lock in the plan; that clears `proposedSavingsFromHelper` and updates the store so Income tab, Monthly Pulse, and Savings Helper all show the new plan.
 - In **Savings Allocator**, after an allocation change Ribbit ends with Proceed vs Skip. On Proceed, the UI updates the plan and shows a confirmation; Ribbit does not generate that confirmation message. Final lock‑in is “Confirm & Apply” in the UI.
-- In **Savings Helper**, user confirms via “Explore options” and the green “Apply” in chat.
+- In **Savings Helper**, the user confirms via the green “Apply” button in the chat tile. That saves the new target and directs them to Savings Allocator to see the breakdown and accept the plan. The plan is only fully applied when they click “Confirm & Apply” in Savings Allocator.
 
 ---
 
-## 7. Quick Reference: Where to Change What
+## 7. Implementation Notes (Store & UI)
+
+- **`proposedSavingsFromHelper`:** Stored in the onboarding store (`lib/onboarding/store.ts`) and persisted in sessionStorage (`weleap_proposedSavingsFromHelper`) so the pending target survives reloads and navigation. Set when the user clicks **Apply** in Savings Helper; cleared when the user clicks **Confirm & Apply** in Savings Allocator or "Keep my plan" in Savings Helper.
+- **Feed:** When `proposedSavingsFromHelper` is set, the Feed page shows a "Pending savings plan change" card with a link to Savings Allocator so the user can review the breakdown and accept the plan.
+- **Savings Allocator:** Reads `proposedSavingsFromHelper` on load (and hydrates from sessionStorage if needed). When set, **Proposed Plan** uses that amount; **Current Plan** stays the last locked plan until the user confirms in the allocator.
+- **Chat bullet formatting:** Bullet lists in chat render with no line space between bullet and text (inline). Enforced in `components/tools/IncomePlanChatCard.tsx` and `components/chat/ChatMarkdown.tsx`.
+
+---
+
+## 8. Quick Reference: Where to Change What
 
 | Goal | Where in `route.ts` |
 |------|----------------------|
@@ -255,14 +281,17 @@ Ribbit must show **both** when users ask for “savings breakdown” or “what 
 | Change Roth/Traditional or IDR rules | Base prompt “TAX AND ACCOUNT TYPE DECISIONS”. |
 | Add or edit a screen description | Object `contextDescriptions` (e.g. `'savings-helper': \`...\``). |
 | Change what data we send for a screen | Conditional blocks after “if (userPlanData)” (income, expenses, savings breakdown, net worth, etc.). |
+| Change Savings Helper net worth impact (20-year lead sentence) | Savings-helper block "When the user proposes a specific new savings amount" and "NET WORTH IMPACT"; client sends `userPlanData.netWorthImpact`. |
+| Change Savings Allocator net worth impact (20-year in chat + graph) | Savings-allocator block STEP 5 and NET_WORTH_IMPACT; client sends `userPlanData.netWorthImpact` (baselineAt20Y, proposedAt20Y, deltaAt20Y). Page computes from scenario vs baseline sim and shows 20 Years card + chart. |
+| Change Savings Allocator breakdown (bold category headers, "Explain the breakdown") | Block "Proposed Allocation Breakdown — MANDATORY"; UI button label in `SavingsChatPanel.tsx`. |
 | Change Savings Allocator behavior (confirmations, deviation flow) | Block “Phase 2A: Savings Allocation tool” (ROLE, ARCHITECTURE RULES, 7-step deviation flow, DATA). |
 | Change mandatory answer rules (e.g. 3‑month average, no closing phrase) | Base prompt “CRITICAL RULE - ENDING RESPONSES” and final “ANSWER INSTRUCTIONS”. |
 
 ---
 
-## 8. Flow Summary
+## 9. Flow Summary
 
-1. Client sends `messages`, `context`, `userPlanData`, optional `stream`.
+1. Client sends `messages`, `context`, `userPlanData`, optional `stream`. For savings-helper when the user proposes a new savings amount, `userPlanData.netWorthImpact` is included (baseline/proposed 20-year net worth, delta).
 2. `buildSystemPrompt(context, userPlanData)` builds one big system prompt string.
 3. OpenAI request = `[{ role: 'system', content: systemPrompt }, ...messages]`.
 4. Response is post‑processed: round dollars, strip PROPOSED_SAVINGS for savings-helper and return it separately if present.

@@ -32,7 +32,8 @@ import {
 import { computePreviewMetric } from '@/lib/feed/previewMetrics';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Bell, ChevronDown, ChevronUp, BookOpen } from 'lucide-react';
+import { Bell, ChevronDown, ChevronUp, BookOpen, PiggyBank } from 'lucide-react';
+import Link from 'next/link';
 import { SIDEKICK_INSIGHTS } from '@/lib/feed/sidekickInsights';
 import { SidekickInsightItem } from '@/components/feed/SidekickInsightItem';
 import { LeapCard, type FeedDisplayMode } from '@/components/feed/LeapCard';
@@ -152,25 +153,34 @@ export default function FeedPage() {
 
   const effectiveState = useMemo(() => {
     if (isLiveScenario && planData) {
-      return buildUserFinancialStateFromPlan(planData, {
-        income: store.income,
-        assets: store.assets,
-        debts: store.debts,
-        payrollContributions: store.payrollContributions,
-        plaidConnected: store.plaidConnected,
-        safetyStrategy: store.safetyStrategy,
-      });
+      try {
+        return buildUserFinancialStateFromPlan(planData, {
+          income: store.income,
+          assets: store.assets,
+          debts: store.debts,
+          payrollContributions: store.payrollContributions,
+          plaidConnected: store.plaidConnected,
+          safetyStrategy: store.safetyStrategy,
+        });
+      } catch (err) {
+        console.error('[Feed] buildUserFinancialStateFromPlan failed:', err);
+        return localState;
+      }
     }
     return localState;
   }, [isLiveScenario, planData, localState, store.income, store.assets, store.debts, store.payrollContributions, store.plaidConnected, store.safetyStrategy]);
 
   const effectiveSignals = useMemo((): TriggerSignals => {
     if (isLiveScenario && planData) {
-      return buildTriggerSignalsFromPlan(planData, {
-        income: store.income,
-        assets: store.assets,
-        plaidConnected: store.plaidConnected,
-      });
+      try {
+        return buildTriggerSignalsFromPlan(planData, {
+          income: store.income,
+          assets: store.assets,
+          plaidConnected: store.plaidConnected,
+        });
+      } catch (err) {
+        console.error('[Feed] buildTriggerSignalsFromPlan failed:', err);
+      }
     }
     const base = scenario?.signals ?? { nowISO: new Date().toISOString(), cashRisk: false, surplusCash: false };
     return { ...base, nowISO: new Date().toISOString() };
@@ -225,16 +235,20 @@ export default function FeedPage() {
       setLocalState({ ...s.state });
     }
     if (id === LIVE_SCENARIO_ID && planData) {
-      setLocalState(
-        buildUserFinancialStateFromPlan(planData, {
-          income: store.income,
-          assets: store.assets,
-          debts: store.debts,
-          payrollContributions: store.payrollContributions,
-          plaidConnected: store.plaidConnected,
-          safetyStrategy: store.safetyStrategy,
-        })
-      );
+      try {
+        setLocalState(
+          buildUserFinancialStateFromPlan(planData, {
+            income: store.income,
+            assets: store.assets,
+            debts: store.debts,
+            payrollContributions: store.payrollContributions,
+            plaidConnected: store.plaidConnected,
+            safetyStrategy: store.safetyStrategy,
+          })
+        );
+      } catch (err) {
+        console.error('[Feed] buildUserFinancialStateFromPlan failed on scenario change:', err);
+      }
     }
     setCompletedLeapIds(new Set());
   }, [planData, store.income, store.assets, store.debts, store.payrollContributions, store.plaidConnected, store.safetyStrategy]);
@@ -379,6 +393,30 @@ export default function FeedPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Pending savings plan change (from savings-helper Apply — accept in savings-allocator) */}
+          {typeof store.proposedSavingsFromHelper === 'number' && (
+            <Card className="border-amber-200 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/30">
+              <CardContent className="pt-4">
+                <div className="flex items-start gap-3">
+                  <PiggyBank className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                      Pending savings plan change
+                    </p>
+                    <p className="text-sm text-amber-800 dark:text-amber-200 mt-0.5">
+                      You have a new target (${Math.round(store.proposedSavingsFromHelper).toLocaleString()}/mo). Review the breakdown and accept the plan in Savings Allocator.
+                    </p>
+                    <Link href="/app/tools/savings-allocator">
+                      <Button size="sm" className="mt-3 bg-amber-600 hover:bg-amber-700 text-white">
+                        Open Savings Allocator
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Top Leap */}
           {topLeap && (

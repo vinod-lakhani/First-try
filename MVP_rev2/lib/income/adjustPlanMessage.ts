@@ -28,17 +28,23 @@ export interface AdjustPlanMessage {
 export function buildAdjustPlanMessage(snapshot: IncomeAllocationSnapshot, proposedSavingsOverride?: number): AdjustPlanMessage {
   const { state, income, actuals, plan, deltas, period } = snapshot;
   const nextMonth = period.nextMonth_label ?? 'next month';
-  const currentPlanSavings = plan.currentPlan?.plannedSavings ?? 0;
-  const recommendedSavings = proposedSavingsOverride != null ? proposedSavingsOverride : plan.recommendedPlan.plannedSavings;
+  // Use total (cash + payroll + match + HSA) when set, so "Current plan" matches Income tab and hero card
+  const currentPlanSavings = plan.totalSavingsTargetForDisplay ?? plan.currentPlan?.plannedSavings ?? 0;
+  const recommendedSavings = proposedSavingsOverride ?? plan.totalRecommendedSavings ?? plan.recommendedPlan.plannedSavings;
   const current = formatCurrency(currentPlanSavings);
   const proposed = formatCurrency(recommendedSavings);
   const delta = recommendedSavings - currentPlanSavings;
   const deltaAbs = formatCurrency(Math.abs(delta));
 
   const lastMonthTotalSpend = actuals.lastMonth?.totalSpend ?? actuals.last3m_avg.totalSpend;
-  const lastMonthSavingsActual = computeLastMonthSavingsActual(income.netIncomeMonthly, lastMonthTotalSpend);
+  // Use the same "actual savings" the hero uses (total when totalSavingsTargetForDisplay is set), not cash-only
+  const lastMonthSavingsActual =
+    actuals.lastMonth?.savings != null && actuals.lastMonth.savings > 0
+      ? actuals.lastMonth.savings
+      : computeLastMonthSavingsActual(income.netIncomeMonthly, lastMonthTotalSpend);
+  // Compare to current target (totalSavingsTargetForDisplay when set) so gap matches tile — e.g. $3,412 actual vs $3,751 target = $339 short
   const savingsVsPlan = plan.currentPlan
-    ? lastMonthSavingsActual - plan.currentPlan.plannedSavings
+    ? lastMonthSavingsActual - currentPlanSavings
     : 0;
 
   const key = `adjust_${state}_${currentPlanSavings}_${recommendedSavings}`;

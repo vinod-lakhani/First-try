@@ -33,7 +33,8 @@ export async function POST(request: NextRequest) {
     const { messages, context: requestContext, userPlanData: requestUserPlanData, stream: requestStream } = requestBody;
     context = requestContext || 'financial-sidekick';
     userPlanData = requestUserPlanData;
-    const wantStream = requestStream === true;
+    // Savings-allocator: always non-streaming to avoid response overwrite/disappear issues.
+    const wantStream = context === 'savings-allocator' ? false : requestStream === true;
     
     // Extract the user's question for logging
     question = extractUserQuestion(messages);
@@ -126,7 +127,7 @@ export async function POST(request: NextRequest) {
       model: 'gpt-4o-mini',
       messages: openAIMessages,
       temperature: 0.7,
-      max_tokens: 500,
+      max_tokens: context === 'savings-allocator' ? 3200 : 500,
     };
     if (wantStream) openAIBody.stream = true;
 
@@ -262,6 +263,29 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Parse [INTENT:{"type":"explain"|"compare"|"allocation_change"|"question",...}] from any chat for robust UI behavior
+    const INTENT_TYPES = new Set(['explain', 'compare', 'allocation_change', 'question']);
+    const ALLOC_CATEGORIES = new Set(['ef', 'debt', 'retirementExtra', 'brokerage', '401k', 'hsa']);
+    let intent: { type: string; category?: string; delta?: number } | undefined = undefined;
+    let allocationChangeIntent: { category: string; delta: number } | undefined = undefined;
+    const intentMatch = aiResponse.match(/\n?\[INTENT:\s*(\{[^]]+\})\]\s*$/im);
+    if (intentMatch) {
+      try {
+        const parsed = JSON.parse(intentMatch[1]) as { type?: string; category?: string; delta?: number };
+        if (typeof parsed.type === 'string' && INTENT_TYPES.has(parsed.type)) {
+          intent = { type: parsed.type };
+          if (parsed.type === 'allocation_change' && typeof parsed.category === 'string' && ALLOC_CATEGORIES.has(parsed.category) && typeof parsed.delta === 'number' && Number.isFinite(parsed.delta)) {
+            intent.category = parsed.category;
+            intent.delta = Math.round(parsed.delta);
+            allocationChangeIntent = { category: parsed.category, delta: Math.round(parsed.delta) };
+          }
+          aiResponse = aiResponse.replace(/\n?\[INTENT:\s*\{[^]]+\}\]\s*$/im, '').trim();
+        }
+      } catch (_) {
+        // invalid JSON — leave aiResponse as is
+      }
+    }
+
     // Log successful question/response
     if (question) {
       await logQuestion({
@@ -281,8 +305,10 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const json: { response: string; proposedPlannedSavings?: number } = { response: aiResponse };
+    const json: { response: string; proposedPlannedSavings?: number; intent?: { type: string; category?: string; delta?: number }; allocationChangeIntent?: { category: string; delta: number } } = { response: aiResponse };
     if (proposedPlannedSavings != null) json.proposedPlannedSavings = proposedPlannedSavings;
+    if (intent) json.intent = intent;
+    if (allocationChangeIntent) json.allocationChangeIntent = allocationChangeIntent;
     return NextResponse.json(json);
   } catch (error) {
     console.error('Chat API error:', error);
@@ -379,7 +405,32 @@ async function streamChatResponse(
                   if (!Number.isNaN(parsed) && parsed >= 0) proposedPlannedSavings = Math.round(parsed);
                 }
               }
-              controller.enqueue(encoder.encode('data: ' + JSON.stringify({ done: true, proposedPlannedSavings }) + '\n\n'));
+              const INTENT_TYPES_S = new Set(['explain', 'compare', 'allocation_change', 'question']);
+              const ALLOC_CATEGORIES_STREAM = new Set(['ef', 'debt', 'retirementExtra', 'brokerage', '401k', 'hsa']);
+              let streamIntent: { type: string; category?: string; delta?: number } | undefined;
+              let allocationChangeIntent: { category: string; delta: number } | undefined;
+              let responseWithoutIntent = fullContent;
+              const intentMatchS = fullContent.match(/\n?\[INTENT:\s*(\{[^]]+\})\]\s*$/im);
+              if (intentMatchS) {
+                try {
+                  const parsed = JSON.parse(intentMatchS[1]) as { type?: string; category?: string; delta?: number };
+                  if (typeof parsed.type === 'string' && INTENT_TYPES_S.has(parsed.type)) {
+                    streamIntent = { type: parsed.type };
+                    if (parsed.type === 'allocation_change' && typeof parsed.category === 'string' && ALLOC_CATEGORIES_STREAM.has(parsed.category) && typeof parsed.delta === 'number' && Number.isFinite(parsed.delta)) {
+                      streamIntent.category = parsed.category;
+                      streamIntent.delta = Math.round(parsed.delta);
+                      allocationChangeIntent = { category: parsed.category, delta: Math.round(parsed.delta) };
+                    }
+                    responseWithoutIntent = fullContent.replace(/\n?\[INTENT:\s*\{[^]]+\}\]\s*$/im, '').trim();
+                  }
+                } catch (_) {}
+              }
+              const donePayload: { done: boolean; proposedPlannedSavings?: number; intent?: { type: string; category?: string; delta?: number }; allocationChangeIntent?: { category: string; delta: number }; responseWithoutIntent?: string } = { done: true };
+              if (proposedPlannedSavings != null) donePayload.proposedPlannedSavings = proposedPlannedSavings;
+              if (streamIntent) donePayload.intent = streamIntent;
+              if (allocationChangeIntent) donePayload.allocationChangeIntent = allocationChangeIntent;
+              if (streamIntent && responseWithoutIntent !== fullContent) donePayload.responseWithoutIntent = responseWithoutIntent;
+              controller.enqueue(encoder.encode('data: ' + JSON.stringify(donePayload) + '\n\n'));
               if (question) {
                 await logQuestion({
                   timestamp: new Date().toISOString(),
@@ -426,7 +477,32 @@ async function streamChatResponse(
                 if (!Number.isNaN(parsed) && parsed >= 0) proposedPlannedSavings = Math.round(parsed);
               }
             }
-            controller.enqueue(encoder.encode('data: ' + JSON.stringify({ done: true, proposedPlannedSavings }) + '\n\n'));
+            const INTENT_TYPES_S2 = new Set(['explain', 'compare', 'allocation_change', 'question']);
+            const ALLOC_CATEGORIES_STREAM2 = new Set(['ef', 'debt', 'retirementExtra', 'brokerage', '401k', 'hsa']);
+            let streamIntent2: { type: string; category?: string; delta?: number } | undefined;
+            let allocationChangeIntent: { category: string; delta: number } | undefined;
+            let responseWithoutIntent = fullContent;
+            const intentMatchS2 = fullContent.match(/\n?\[INTENT:\s*(\{[^]]+\})\]\s*$/im);
+            if (intentMatchS2) {
+              try {
+                const parsed = JSON.parse(intentMatchS2[1]) as { type?: string; category?: string; delta?: number };
+                if (typeof parsed.type === 'string' && INTENT_TYPES_S2.has(parsed.type)) {
+                  streamIntent2 = { type: parsed.type };
+                  if (parsed.type === 'allocation_change' && typeof parsed.category === 'string' && ALLOC_CATEGORIES_STREAM2.has(parsed.category) && typeof parsed.delta === 'number' && Number.isFinite(parsed.delta)) {
+                    streamIntent2.category = parsed.category;
+                    streamIntent2.delta = Math.round(parsed.delta);
+                    allocationChangeIntent = { category: parsed.category, delta: Math.round(parsed.delta) };
+                  }
+                  responseWithoutIntent = fullContent.replace(/\n?\[INTENT:\s*\{[^]]+\}\]\s*$/im, '').trim();
+                }
+              } catch (_) {}
+            }
+            const donePayload: { done: boolean; proposedPlannedSavings?: number; intent?: { type: string; category?: string; delta?: number }; allocationChangeIntent?: { category: string; delta: number }; responseWithoutIntent?: string } = { done: true };
+            if (proposedPlannedSavings != null) donePayload.proposedPlannedSavings = proposedPlannedSavings;
+            if (streamIntent2) donePayload.intent = streamIntent2;
+            if (allocationChangeIntent) donePayload.allocationChangeIntent = allocationChangeIntent;
+            if (streamIntent2 && responseWithoutIntent !== fullContent) donePayload.responseWithoutIntent = responseWithoutIntent;
+            controller.enqueue(encoder.encode('data: ' + JSON.stringify(donePayload) + '\n\n'));
           }
         }
         if (question) {
@@ -1645,6 +1721,23 @@ CURRENT SCREEN CONTEXT
 
 ${contextDesc}
 
+================================================================================
+INTENT (all contexts — output exactly one line at the end of your reply so the UI can respond correctly)
+================================================================================
+On the very last line of your reply, output EXACTLY one line: [INTENT:{"type":"..."}]
+**type** must be exactly one of:
+- **explain** — User wants an explanation or breakdown (e.g. "explain the breakdown", "walk me through it", "help me understand", "what does this mean", "break it down").
+- **compare** — User wants to understand differences (e.g. "what's different", "current vs proposed", "any changes you're proposing?", "compare the plans"). If there are no changes: reply with ONLY 1–2 short sentences (e.g. "No changes. Your current plan is what we're proposing."). Do NOT list Payroll Savings, 401K Match, Cash Savings, Emergency Fund, or any category/amounts when there are no changes.
+- **allocation_change** — User requested a specific change (e.g. "reduce emergency fund by $200", "change EF from $1365 to $1000", "put more in brokerage"). When type is allocation_change you MUST also include in the same JSON: **category** (one of ef, debt, retirementExtra, brokerage, 401k, hsa) and **delta** (monthly $ change: negative = reduce, positive = increase). Example: [INTENT:{"type":"allocation_change","category":"ef","delta":-365}]
+- **question** — General question, clarification, or other (use when none of the above fit).
+
+Examples:
+- "Explain the breakdown" → [INTENT:{"type":"explain"}]
+- "What changes are you proposing?" → [INTENT:{"type":"compare"}]
+- "Reduce my emergency fund by $200" → [INTENT:{"type":"allocation_change","category":"ef","delta":-200}]
+- "Why match first?" → [INTENT:{"type":"question"}]
+Always output exactly one [INTENT:...] line at the end. The UI uses this to show the right actions (e.g. no Proceed/Skip for explain/compare).
+
 `;
     
     // Add onboarding flow context for onboarding screens
@@ -1771,14 +1864,22 @@ ARCHITECTURE RULES (NON-NEGOTIABLE)
 - If the user asks for a number you do not have, say you don't have it and direct them to the relevant section of the page or ask a clarifying question.
 
 CONTEXT YOU HAVE (USE ALL THREE TO EXPLAIN)
-- USER_STATE: Current user financial context. Includes totalMonthlySavingsCurrent and totalMonthlySavingsProposed — these are the FULL totals (Pre-tax + Employer + Post-tax). Use these when showing "Total Monthly Savings: Current vs Proposed."
-- BASELINE_PLAN / PROPOSED_PLAN: Contain planSteps and totals. Note: totals.postTaxAllocationMonthly is POST-TAX ONLY. For "Total Monthly Savings" (the full picture), use totalMonthlySavingsCurrent and totalMonthlySavingsProposed from USER_STATE — they include Pre-tax + Employer + Post-tax.
+- USER_STATE: Current user financial context. Includes totalMonthlySavingsCurrent and totalMonthlySavingsProposed — these are the FULL totals (Pre-tax + Employer + Post-tax). Use these when showing "Total Monthly Savings: Ribbit Proposal vs Modified Proposal."
+- BASELINE_PLAN = Ribbit Proposal (engine recommendation). PROPOSED_PLAN = Modified Proposal (engine + user changes). The UI shows two columns: "Ribbit Proposal" and "Modified Proposal" (mimics Current Plan vs Proposed Plan after onboarding). When explaining, use "Ribbit Proposal" and "Modified Proposal" so the user can track changes. Note: totals.postTaxAllocationMonthly is POST-TAX ONLY. For "Total Monthly Savings" use totalMonthlySavingsCurrent and totalMonthlySavingsProposed from USER_STATE — they include Pre-tax + Employer + Post-tax.
+
+CRITICAL — "ANY CHANGES?" WHEN THERE ARE NO CHANGES
+When the user asks "any changes you are proposing?" or "what changes are you proposing?" or "any changes to the plan?" (or similar), FIRST check: is BASELINE_PLAN the same as PROPOSED_PLAN? (Same totals, same allocation amounts = no changes.)
+- If NO CHANGES: Your reply MUST be only 1–2 short sentences. Example: "No changes. Your current plan is what we're proposing." Do NOT list Payroll Savings, 401K Match, Cash Savings, Emergency Fund, debt, retirement, brokerage, or any category. Do NOT list amounts or percentages. Do NOT output the full breakdown or PREFORMATTED_BREAKDOWN.
+- WRONG (when no changes): Listing "Payroll Savings: $0/month", "Emergency Fund: $X/month", etc., then ending with "There are no proposed changes." That is forbidden.
+- RIGHT (when no changes): "No changes. Your current plan is what we're proposing." Then [INTENT:{"type":"compare"}].
+- If THERE ARE CHANGES: Then give the full explanation (Total Monthly Savings, Post-Tax Cash Allocation by category with Ribbit vs Modified, and "What's different" summary).
 
 YOUR JOB IN THIS TOOL
 - Explain the recommended savings plan clearly and calmly using USER_STATE, BASELINE_PLAN, and PROPOSED_PLAN.
-- When the user asks "what's different" or "why this plan," compare BASELINE_PLAN to PROPOSED_PLAN and explain in plain language.
+- When the user asks "what's different" or "why this plan" or "explain the breakdown" (and there ARE differences between plans), compare Ribbit Proposal (BASELINE_PLAN) to Modified Proposal (PROPOSED_PLAN) and explain in plain language. **You MUST start each category with a bold header** (e.g. **Emergency Fund:**, **High-APR Debt Payoff:**, **Roth IRA / Taxable Retirement:**, **Brokerage:**) on its own line, then list Ribbit Proposal / Modified Proposal / Reason bullets for that category. Never list values/Reason without the category name first.
+- **EXPLAIN-ONLY REQUESTS** (e.g. "Explain the breakdown", "Why the plan works?", "any changes you are proposing?"): If no changes (BASELINE = PROPOSED), reply with ONLY "No changes. Your current plan is what we're proposing." (or similar 1–2 sentences). Do NOT list any categories or amounts. When there ARE differences, give the FULL explanation. Do NOT end with "Use Proceed..." for explain/compare.
 - Highlight the single most important reason this plan matters right now.
-- Ask for explicit confirmation before any plan is applied or changed.
+- Ask for explicit confirmation before any plan is applied or changed (except for explain-only requests above).
 - If the user wants changes, help them adjust, then present an updated summary and ask for confirmation again.
 
 CONFIRMATION REQUIREMENT
@@ -1786,10 +1887,12 @@ CONFIRMATION REQUIREMENT
 - Use a short "Here's what changed" summary (current vs proposed) and then ask: "Do you want me to apply this updated plan?"
 - Do not proceed until the user confirms.
 
-ALLOCATION CHANGE STANDARD (APPLIES TO ALL CHANGES)
-- Any time the user requests an allocation change (reduce/increase EF, debt, retirement, brokerage, 401k, HSA), you MUST end your response with: "Use **Proceed** to see the updated plan, or **Skip** to keep your current plan."
-- The UI shows Proceed and Skip buttons — the user taps one. Do not ask them to type "yes" or "let me know."
-- When the user taps Proceed, the UI applies the change and the savings allocation logic recomputes the plan (rebalance, next priority bucket, etc.). A confirmation message appears in chat.
+ALLOCATION CHANGE STANDARD (APPLIES ONLY WHEN USER REQUESTS A CHANGE)
+- When the user requests an allocation change (e.g. "reduce emergency fund by $200", "change EF from $1365 to $1000", "put more in brokerage"), you MUST:
+  1. Give your explanation and end with: "Use **Proceed** to see the updated plan, or **Skip** to keep your current plan."
+  2. Use [INTENT:{"type":"allocation_change","category":"ef","delta":-200}] at the end so the UI can show Proceed/Skip with the right numbers (see INTENT section above).
+- When the user is only asking for an explanation or comparison, use [INTENT:{"type":"explain"}] or [INTENT:{"type":"compare"}] — do NOT include the Proceed/Skip line.
+- The UI shows Proceed and Skip buttons only when you output type allocation_change. Do not ask them to type "yes" or "let me know."
 
 STACK DEVIATION GUARDRAIL (CANONICAL FLOW)
 WeLeap uses a recommended savings priority stack: employer match → HSA → emergency fund → high-APR debt → retirement/brokerage.
@@ -1841,8 +1944,10 @@ STEP 5: REFERENCE THE UPDATED NET WORTH IMPACT
 ═══════════════════════════════════════════════════════════════════════════════
 Always reference the Net Worth card/chart:
 - "The chart above shows before vs after."
-- "You'll see the delta over 6 / 12 / 24 months."
+- "You'll see the delta over 6 / 12 / 24 months and 20 years."
 - "This is what you gain / give up with this choice."
+
+When NET_WORTH_IMPACT is provided below, your reply MUST include the 20-year net worth impact: state "This change would [increase|reduce] your net worth by $X in 20 years." (X = absolute value of deltaAt20Y). This is a general rule for any allocation change — the user must see the long-term consequence in the chat as well as on the graph.
 
 This is where WeLeap feels smart — the user sees long-term consequences, not just monthly numbers.
 
@@ -1888,32 +1993,75 @@ ${currentContextJson}
 USER_STATE (current user financial context)
 ${userStateJson}
 
-BASELINE_PLAN (current/saved plan — what is in effect now)
+BASELINE_PLAN (Ribbit Proposal — engine recommendation; shown as "Ribbit Proposal" in UI)
 ${baselinePlanJson}
 
-PROPOSED_PLAN (recommended plan — what will apply if user confirms)
+PROPOSED_PLAN (Modified Proposal — engine + user changes; shown as "Modified Proposal" in UI)
 ${proposedPlanJson}
+${((): string => {
+  const nwImpact = userPlanData.netWorthImpact as { baselineAt20Y?: number; proposedAt20Y?: number; deltaAt20Y?: number } | undefined;
+  if (!nwImpact || typeof nwImpact.deltaAt20Y !== 'number') return '';
+  const absDelta = Math.round(Math.abs(nwImpact.deltaAt20Y));
+  const isIncrease = (nwImpact.deltaAt20Y ?? 0) >= 0;
+  const base = Math.round(nwImpact.baselineAt20Y ?? 0).toLocaleString();
+  const prop = Math.round(nwImpact.proposedAt20Y ?? 0).toLocaleString();
+  const dir = isIncrease ? 'increase' : 'reduce';
+  return '\n\nNET_WORTH_IMPACT (20 years) — MANDATORY: Include this in your reply when discussing or confirming a plan change.\n'
+    + '- Baseline (current plan) net worth at 20 years: $' + base + '\n'
+    + '- Proposed plan net worth at 20 years: $' + prop + '\n'
+    + '- Delta at 20 years: $' + absDelta.toLocaleString() + ' (' + (isIncrease ? 'increase' : 'reduction') + ')\n'
+    + 'Your reply MUST state the 20-year impact: "This change would ' + dir + ' your net worth by $' + absDelta.toLocaleString() + ' in 20 years." Then continue with your explanation or confirmation question.\n';
+})()}
 ${(toolOutput.explain && typeof toolOutput.explain === 'object')
-  ? `
+  ? (() => {
+      const explain = toolOutput.explain as { delta?: { rows?: Array<{ label: string; current?: { monthly?: number }; proposed?: { monthly?: number }; currentMonthly?: number; proposedMonthly?: number; whyText?: string }> } };
+      const rows = explain?.delta?.rows ?? [];
+      const preformattedBreakdown = rows.length > 0
+        ? rows.map((r) => {
+            const cur = Math.round(r.current?.monthly ?? r.currentMonthly ?? 0);
+            const prop = Math.round(r.proposed?.monthly ?? r.proposedMonthly ?? 0);
+            const noChange = Math.abs((r.proposed?.monthly ?? r.proposedMonthly ?? 0) - (r.current?.monthly ?? r.currentMonthly ?? 0)) < 0.01;
+            return `**${r.label}:**
+- Ribbit Proposal: $${cur.toLocaleString()}/month
+- Modified Proposal: $${prop.toLocaleString()}/month
+- Reason: ${(r.whyText ?? (noChange ? 'No change.' : 'See above.')).trim()}`;
+          }).join('\n\n')
+        : '';
+      return `
 TOOL_OUTPUT_EXPLAIN (engine-only numbers — use ONLY these when explaining match, HSA, EF, benefits; do not compute or invent)
 ${JSON.stringify(toolOutput.explain, null, 2)}
-
+${preformattedBreakdown ? `
+PREFORMATTED_BREAKDOWN_WITH_CATEGORY_HEADERS (MANDATORY — when user asks "Explain the breakdown" or "Why these changes?", include this block EXACTLY so category headers are not missing):
+${preformattedBreakdown}
+` : ''}
 - When explaining free employer match: use derived.match.matchGapMonthly and derived.match.matchRateEffective (e.g. "Free money unlocked: ~$X/mo (50% match)").
 - When explaining HSA: use outputs.preTaxPlan.employerHsaMonthlyEstimated (e.g. "Tax advantage + employer adds ~$X/mo").
 - When explaining EF: use derived.emergencyFund.currentMonths and derived.emergencyFund.targetMonths (e.g. "You're at ~X months, target is Y").
 - **401(k) employer match vs 401(k) contribution**: These are DIFFERENT. The employer match is ~50% of the employee contribution (e.g. employee $677 → employer match $339). In BASELINE_PLAN and PROPOSED_PLAN, the step labeled "401(k) employer match" or "401k_match" shows the EMPLOYER match amount (~$339), NOT the employee contribution ($677). When comparing "401(k) Employer Match", use the amountMonthly from that step — it is already the employer match.
-- No number in your response may exist unless it is present in TOOL_OUTPUT_EXPLAIN, PROPOSED_PLAN, BASELINE_PLAN, or USER_STATE above.`
+- No number in your response may exist unless it is present in TOOL_OUTPUT_EXPLAIN, PROPOSED_PLAN, BASELINE_PLAN, or USER_STATE above.`;
+    })()
   : ''}
 
 OUTPUT FORMAT GUIDELINES (for clarity and readability)
-- Use **bold** for labels (e.g. **401(k) Employer Match:**, **Current:**, **Proposed:**).
+- Use **bold** for labels (e.g. **401(k) Employer Match:**, **Ribbit Proposal:**, **Modified Proposal:**).
+- Do NOT wrap plan breakdowns or comparisons in code blocks (no \`\`\`). Write markdown directly so the app can render bold and headers correctly.
 - Structure explanations with clear sections. Use line breaks between topics.
 - Use whole dollars only — never show cents. Write $338 or $677, not $338.52 or $677.04.
-- When comparing current vs proposed: cover every category. For items that have NOT changed, explicitly say "No change" and explain why it stays the same.
+- **Proposed Allocation Breakdown — MANDATORY**: When explaining Ribbit Proposal vs Modified Proposal (e.g. "Explain the breakdown", "Why these changes?"), you MUST use a **bold category header** before EACH category's bullets. Never list Ribbit Proposal/Modified Proposal/Reason without the category name first. Use exact labels: **Emergency Fund:**, **High-APR Debt Payoff:**, **Roth IRA / Taxable Retirement:** (or **Retirement Contributions:**), **Brokerage:**, **401(k) Employer Match:**, **HSA:**. Format EVERY category like this:
+  **Emergency Fund:**
+  - Ribbit Proposal: $X/month
+  - Modified Proposal: $Y/month
+  - Reason: One sentence.
+  **High-APR Debt Payoff:**
+  - Ribbit Proposal: $X/month
+  - Modified Proposal: $Y/month
+  - Reason: One sentence.
+  (Repeat for each category.) Do NOT output a block of bullets without category headers — each group of Ribbit Proposal/Modified Proposal/Reason MUST be preceded by **Category Name:** on its own line.
+- When comparing Ribbit Proposal vs Modified Proposal: cover every category. For items that have NOT changed, explicitly say "No change" and explain why it stays the same.
   Example for a change:
   **Category name:**
-  **Current:** $X/mo
-  **Proposed:** $Y/mo
+  **Ribbit Proposal:** $X/mo
+  **Modified Proposal:** $Y/mo
 
   **Reason:** Plain-language explanation here.
 
@@ -1923,8 +2071,8 @@ OUTPUT FORMAT GUIDELINES (for clarity and readability)
 
   **Reason:** Brief explanation for why we're keeping it the same (e.g. "Already at target", "HSA is funded optimally", "Debt payoff on track").
 - Use bullet points (• or -) for lists. Max 5 bullets when presenting a plan.
-- **Total Monthly Savings** = Pre-tax (401k + HSA) + Employer contributions (match + HSA) + Post-tax (EF + debt + retirement + brokerage). When comparing Current vs Proposed, ALWAYS use totalMonthlySavingsCurrent and totalMonthlySavingsProposed from USER_STATE — these are the full totals, NOT post-tax only. Example: "Total Monthly Savings: Current $X/month, Proposed $Y/month (Pre + Employer + Post combined)."
-- When explaining differences, reference "your current plan" (BASELINE_PLAN) and "the proposal" (PROPOSED_PLAN).
+- **Total Monthly Savings** = Pre-tax (401k + HSA) + Employer contributions (match + HSA) + Post-tax (EF + debt + retirement + brokerage). When comparing Ribbit Proposal vs Modified Proposal, ALWAYS use totalMonthlySavingsCurrent and totalMonthlySavingsProposed from USER_STATE — these are the full totals, NOT post-tax only. Example: "Total Monthly Savings: Ribbit Proposal $X/month, Modified Proposal $Y/month (Pre + Employer + Post combined)."
+- When explaining differences, reference "Ribbit Proposal" (BASELINE_PLAN) and "Modified Proposal" (PROPOSED_PLAN) so the user can track changes.
 - Include all categories in your explanation — for unchanged items, state "No change" and give a brief reason why it stays the same.
 - Always end plan summaries with a clear confirmation question.
 
@@ -1935,6 +2083,30 @@ If PROPOSED_PLAN is missing or empty:
 ================================================================================
 
 `;
+    }
+
+    // Any context: when user has savings plan explain data, add preformatted breakdown so all chats use the same format when user asks for the plan
+    const toolOutputAny = userPlanData?.toolOutput;
+    const explainAny = toolOutputAny?.explain && typeof toolOutputAny.explain === 'object' ? toolOutputAny.explain as { delta?: { rows?: Array<{ label: string; current?: { monthly?: number }; proposed?: { monthly?: number }; currentMonthly?: number; proposedMonthly?: number; whyText?: string }> } } : null;
+    if (explainAny && !hasSavingsToolOutput) {
+      const rows = explainAny?.delta?.rows ?? [];
+      const preformattedBreakdownAny = rows.length > 0
+        ? rows.map((r: { label: string; current?: { monthly?: number }; proposed?: { monthly?: number }; currentMonthly?: number; proposedMonthly?: number; whyText?: string }) => {
+            const cur = Math.round(r.current?.monthly ?? r.currentMonthly ?? 0);
+            const prop = Math.round(r.proposed?.monthly ?? r.proposedMonthly ?? 0);
+            const noChange = Math.abs((r.proposed?.monthly ?? r.proposedMonthly ?? 0) - (r.current?.monthly ?? r.currentMonthly ?? 0)) < 0.01;
+            return `**${r.label}:**
+- Ribbit Proposal: $${cur.toLocaleString()}/month
+- Modified Proposal: $${prop.toLocaleString()}/month
+- Reason: ${(r.whyText ?? (noChange ? 'No change.' : 'See above.')).trim()}`;
+          }).join('\n\n')
+        : '';
+      prompt += `\n**SAVINGS PLAN EXPLANATION DATA** (use when user asks for their plan or "explain the breakdown" from any screen):\n`;
+      prompt += `TOOL_OUTPUT_EXPLAIN:\n${JSON.stringify(toolOutputAny.explain, null, 2)}\n`;
+      if (preformattedBreakdownAny) {
+        prompt += `\nPREFORMATTED_BREAKDOWN_WITH_CATEGORY_HEADERS (MANDATORY — when user asks for the plan or "Explain the breakdown", include this block so category headers are not missing):\n${preformattedBreakdownAny}\n`;
+      }
+      prompt += `- When explaining the savings plan, use the PREFORMATTED_BREAKDOWN above with **bold category headers**. Never list Ribbit Proposal/Modified Proposal/Reason without the category name first.\n\n`;
     }
 
     // MVP Simulator: userPlanData has .inputs and .outputs for verification Q&A
@@ -2308,13 +2480,7 @@ If PROPOSED_PLAN is missing or empty:
       };
       prompt += `**SYSTEM PROMPT — INCOME ALLOCATION CHAT**\n`;
       prompt += `You are Ribbit, WeLeap's financial sidekick. You help the user set and adjust their monthly savings target. Write for young adults: simple, clear, no jargon.\n\n`;
-      prompt += `**RESPONSE STRUCTURE (MANDATORY for all explanations):**\n`;
-      prompt += `Structure every explanation in this order:\n`;
-      prompt += `1) **Current situation** — What happened in plain language (e.g. "You overspent by $X last month" or "You saved more than planned")\n`;
-      prompt += `2) **What that results in** — The consequence (e.g. "So your savings fell short of your target" or "You had extra room to lock in")\n`;
-      prompt += `3) **What we're proposing** — The suggestion in one short sentence (e.g. "We're suggesting you cut spending by 4% next month" or "Lock in that extra as savings")\n`;
-      prompt += `4) **Why** — Back it up with numbers (e.g. "That's about $X less in spending, which moves your savings from $Y to $Z toward your target")\n`;
-      prompt += `Lead with the simple message. Use numbers to validate, but keep the main takeaway easy to follow. No corporate speak.\n\n`;
+      prompt += `**RESPONSE STRUCTURE (for most explanations):** Use this order when explaining undersaved/oversaved or "why": (1) Current situation (2) What that results in (3) What we're proposing (4) Why — short, with numbers. Exception: when the user has just proposed a specific new savings amount (e.g. "I want to save $2500") and netWorthImpact is provided below, do NOT use this structure; use the short 2-4 sentence format described in "When the user proposes a specific new savings amount" instead.\n\n`;
       prompt += `**UNDERSAVED case:** When savings_vs_plan is negative: user overspent by that amount → savings fell short. Explain: "You overspent by $X, so your savings came up short. We're suggesting you reduce spending by about 4% (the shift limit) next month — that's roughly $Y less — to move your savings back toward your target. Proposed savings: $Z." Use actual numbers from context.\n\n`;
       prompt += `**OVERSAVED case:** User saved more than planned. Explain simply: they had room → lock it in → here's the number.\n\n`;
       prompt += `Rules:\n`;
@@ -2335,6 +2501,7 @@ If PROPOSED_PLAN is missing or empty:
       prompt += `- "What if I want to save more / less?" -> propose a step-sized change using shift limit and show tradeoff.\n`;
       prompt += `- If user says "yes" or "apply it" -> say: "Sounds good! To confirm: click the green **Apply** button at the top of this chat to finalize this adjustment."\n`;
       prompt += `- If user insists on a larger change -> allow it but warn gently and remind them: click the green Apply button at the top of this chat to finalize.\n\n`;
+      prompt += `**When the user proposes a specific new savings amount (e.g. "I want to save $2500" or "save $4000") and netWorthImpact is provided:** Your reply must be SHORT (2-4 sentences). Do NOT use the 4-part structure (Current situation / What that results in / Proposed plan / Why). Do NOT add section headers, bullet lists, or "breakdown" paragraphs — they already see the numbers above the chat. Lead with the 20-year impact: if delta positive say "The impact of this change would increase your net worth by $X in 20 years." If delta negative say "The impact of this change would reduce your net worth by $X in 20 years." (X = absolute value of deltaAt20Y from netWorthImpact.) Then one short close, e.g. "Click **Apply** above to lock this in, or ask if you have questions."\n\n`;
       prompt += `**PROPOSAL OUTPUT:** When you propose a specific new monthly savings amount (e.g. "save $100 more" = current + 100), you MUST output on a new line at the very end of your response: PROPOSED_SAVINGS: <number> (the exact dollar amount, no commas). Example: PROPOSED_SAVINGS: 3512. This lets the app show that amount when they click Apply.\n\n`;
       prompt += `Always end with a question or next step.\n`;
       if (isFirstTime) {
@@ -2373,6 +2540,14 @@ If PROPOSED_PLAN is missing or empty:
         if (cs.employerHSAMonthly > 0) prompt += `- Employer HSA: $${Math.round(cs.employerHSAMonthly).toLocaleString()}/mo\n`;
         prompt += `- Post-tax cash allocation: $${Math.round(cs.postTaxCashMonthly).toLocaleString()}/mo (Emergency Fund $${Math.round(cs.allocation.emergencyFund).toLocaleString()}, Debt Payoff $${Math.round(cs.allocation.debtPayoff).toLocaleString()}, Retirement Tax-Advantaged $${Math.round(cs.allocation.retirementTaxAdv).toLocaleString()}, Brokerage $${Math.round(cs.allocation.brokerage).toLocaleString()})\n`;
         prompt += `When answering "what is my current savings", list payroll (401k, HSA), match, then post-tax allocation, then state: Total: $${Math.round(cs.totalSavingsMonthly).toLocaleString()}/mo ✓. Do NOT give only post-tax cash as the total.\n`;
+      }
+      const netWorthImpact = userPlanData.netWorthImpact as
+        | { baselineNetWorthAt20Y: number; proposedMonthlySavings: number; proposedNetWorthAt20Y: number; deltaAt20Y: number }
+        | undefined;
+      if (netWorthImpact) {
+        const absDelta = Math.round(Math.abs(netWorthImpact.deltaAt20Y));
+        const isIncrease = netWorthImpact.deltaAt20Y >= 0;
+        prompt += `\n**NET WORTH IMPACT (user proposed $${Math.round(netWorthImpact.proposedMonthlySavings).toLocaleString()}/mo):** Delta at 20 years: $${absDelta.toLocaleString()} (${isIncrease ? 'increase' : 'reduction'}). Your reply: 2-4 sentences only. First sentence MUST be: "The impact of this change would ${isIncrease ? 'increase' : 'reduce'} your net worth by $${absDelta.toLocaleString()} in 20 years." Then a brief close (e.g. "Click **Apply** above to lock this in, or ask if you have questions."). No section headers, no bullets, no long breakdown.\n`;
       }
       prompt += `\n`;
     }
@@ -2842,6 +3017,7 @@ When answering user questions:
    - Always use their actual dollar amounts and percentages in examples
    - Show calculations transparently
    - **CRITICAL**: Follow the Response Formatting Guidelines above - use markdown headers, bold numbers, clear bullet points, and tables for comparisons
+   - **Do NOT wrap your response in a code block** (no \`\`\`). Write markdown directly so the app can render headers and bold correctly
 
 7. **CRITICAL CALCULATION RULES**:
    - Always show your work: Break down calculations step-by-step

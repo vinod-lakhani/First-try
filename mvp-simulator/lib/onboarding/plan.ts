@@ -7,6 +7,7 @@
 import { allocateIncome, type IncomeInputs } from '@/lib/alloc/income';
 import { allocateSavings, type SavingsInputs } from '@/lib/alloc/savings';
 import { simulateScenario, type ScenarioInput, type MonthlyPlan as SimMonthlyPlan } from '@/lib/sim/netWorth';
+import { calculatePreTaxSavings } from '@/lib/utils/savingsCalculations';
 import type { OnboardingState, PaycheckPlan, PrimaryGoal, PayFrequency } from './types';
 
 // Helper to round to 2 decimal places
@@ -595,6 +596,8 @@ export function generateBoostedPlanAndProjection(
     })),
   };
 
+  // Pre-tax payroll amounts (employer match, employer HSA) for net worth sim — keep pre-tax vs post-tax distinct
+  const preTaxSavingsBoost = calculatePreTaxSavings(state.income, state.payrollContributions);
   // Use paychecksPerMonth from savings block; allocator output is monthly
   const monthlyPlan: SimMonthlyPlan = {
     monthIndex: 0,
@@ -603,8 +606,10 @@ export function generateBoostedPlanAndProjection(
     wants$: incomeAlloc.wants$ * paychecksPerMonth,
     ef$: savingsAlloc.ef$,
     highAprDebt$: savingsAlloc.highAprDebt$,
-    match401k$: savingsAlloc.match401k$,
+    match401k$: preTaxSavingsBoost.employerMatch.monthly,
+    preTax401k$: savingsAlloc.match401k$,
     hsa$: savingsAlloc.hsa$ ?? 0,
+    employerHsa$: preTaxSavingsBoost.employerHSA.monthly,
     retirementTaxAdv$: savingsAlloc.retirementTaxAdv$,
     brokerage$: savingsAlloc.brokerage$,
   };
@@ -1141,6 +1146,11 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
     brokerage$: savingsAlloc.brokerage$ / paychecksPerMonth,
   };
 
+  // Pre-tax payroll amounts (employer match, employer HSA) — keep pre-tax vs post-tax distinction
+  const preTaxSavingsForPlan = calculatePreTaxSavings(income, payrollContributions);
+  const employerMatchPerPaycheck = preTaxSavingsForPlan.employerMatch.monthly / paychecksPerMonth;
+  const employerHSAPerPaycheck = preTaxSavingsForPlan.employerHSA.monthly / paychecksPerMonth;
+
   console.log('[buildFinalPlanData] Building paycheck categories', {
     incomeAllocNeeds$: incomeAlloc.needs$,
     incomeAllocWants$: incomeAlloc.wants$,
@@ -1183,48 +1193,71 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
       percent: (savingsAllocPerPaycheck.ef$ / incomePeriod$) * 100,
       why: 'Builds your safety net for unexpected expenses',
     },
-    {
-      id: 'long_term_investing',
-      key: 'long_term_investing' as const,
-      label: 'Long-Term Investing',
-      amount: savingsAllocPerPaycheck.match401k$ + savingsAllocPerPaycheck.hsa$ + savingsAllocPerPaycheck.retirementTaxAdv$ + savingsAllocPerPaycheck.brokerage$,
-      percent: ((savingsAllocPerPaycheck.match401k$ + savingsAllocPerPaycheck.hsa$ + savingsAllocPerPaycheck.retirementTaxAdv$ + savingsAllocPerPaycheck.brokerage$) / incomePeriod$) * 100,
-      why: 'Grows your wealth for retirement and long-term goals (includes 401K match and HSA)',
-      subCategories: [
+    (() => {
+      const preTaxPayroll$ = savingsAllocPerPaycheck.match401k$ + savingsAllocPerPaycheck.hsa$;
+      const employer$ = employerMatchPerPaycheck + employerHSAPerPaycheck;
+      const postTaxInvesting$ = savingsAllocPerPaycheck.retirementTaxAdv$ + savingsAllocPerPaycheck.brokerage$;
+      const longTermTotal$ = preTaxPayroll$ + employer$ + postTaxInvesting$;
+      const subCategories: FinalPlanData['paycheckCategories'][0]['subCategories'] = [
         {
-          id: '401k_match',
-          key: '401k_match' as const,
-          label: '401k Match',
+          id: '401k_employee',
+          key: '401k_employee' as const,
+          label: '401(k) employee (pre-tax)',
           amount: savingsAllocPerPaycheck.match401k$,
           percent: (savingsAllocPerPaycheck.match401k$ / incomePeriod$) * 100,
-          why: 'Employer contribution to your retirement, essentially free money',
+          why: 'Your pre-tax 401(k) contribution from payroll',
         },
+        ...(employerMatchPerPaycheck > 0.01 ? [{
+          id: '401k_employer_match',
+          key: '401k_employer_match' as const,
+          label: 'Employer 401(k) match',
+          amount: employerMatchPerPaycheck,
+          percent: (employerMatchPerPaycheck / incomePeriod$) * 100,
+          why: 'Employer contribution to your retirement, essentially free money',
+        }] : []),
         ...(savingsAllocPerPaycheck.hsa$ > 0.01 ? [{
           id: 'hsa',
           key: 'hsa' as const,
-          label: 'HSA',
+          label: 'HSA (pre-tax)',
           amount: savingsAllocPerPaycheck.hsa$,
           percent: (savingsAllocPerPaycheck.hsa$ / incomePeriod$) * 100,
           why: 'Health Savings Account - triple tax advantage (pre-tax, tax-free growth, tax-free withdrawals for medical)',
         }] : []),
+        ...(employerHSAPerPaycheck > 0.01 ? [{
+          id: 'hsa_employer',
+          key: 'hsa_employer' as const,
+          label: 'Employer HSA',
+          amount: employerHSAPerPaycheck,
+          percent: (employerHSAPerPaycheck / incomePeriod$) * 100,
+          why: 'Employer contribution to your HSA',
+        }] : []),
         {
           id: 'retirement_tax_advantaged',
           key: 'retirement_tax_advantaged' as const,
-          label: 'Retirement Tax-Advantaged',
+          label: 'Retirement (Roth/IRA, post-tax)',
           amount: savingsAllocPerPaycheck.retirementTaxAdv$,
           percent: (savingsAllocPerPaycheck.retirementTaxAdv$ / incomePeriod$) * 100,
-          why: 'Investments in accounts like IRA/401k for tax benefits',
+          why: 'Investments in IRA or Roth for tax benefits (post-tax)',
         },
         {
           id: 'brokerage',
           key: 'brokerage' as const,
-          label: 'Brokerage',
+          label: 'Brokerage (post-tax)',
           amount: savingsAllocPerPaycheck.brokerage$,
           percent: (savingsAllocPerPaycheck.brokerage$ / incomePeriod$) * 100,
           why: 'Flexible investments for long-term goals outside of retirement',
         },
-      ],
-    },
+      ];
+      return {
+        id: 'long_term_investing',
+        key: 'long_term_investing' as const,
+        label: 'Long-Term Investing',
+        amount: longTermTotal$,
+        percent: (longTermTotal$ / incomePeriod$) * 100,
+        why: 'Pre-tax (401k, HSA) + employer match + post-tax (Roth/IRA, brokerage)',
+        subCategories,
+      };
+    })(),
     {
       id: 'fun_flexible',
       key: 'fun_flexible' as const,
@@ -1306,8 +1339,7 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
     })),
   };
 
-  // savingsAlloc is now monthly, so use directly
-  // paychecksPerMonth is already defined above (line 830)
+  // savingsAlloc is now monthly, so use directly; preTaxSavingsForPlan already computed above
   const monthlyPlan: SimMonthlyPlan = {
     monthIndex: 0,
     incomeNet: incomePeriod$ * paychecksPerMonth,
@@ -1315,10 +1347,12 @@ export function buildFinalPlanData(state: OnboardingState): FinalPlanData {
     wants$: incomeAlloc.wants$ * paychecksPerMonth,
     ef$: savingsAlloc.ef$, // Already monthly
     highAprDebt$: savingsAlloc.highAprDebt$, // Already monthly
-    match401k$: savingsAlloc.match401k$, // Already monthly
-    hsa$: savingsAlloc.hsa$ ?? 0, // Already monthly
-    retirementTaxAdv$: savingsAlloc.retirementTaxAdv$, // Already monthly
-    brokerage$: savingsAlloc.brokerage$, // Already monthly
+    match401k$: preTaxSavingsForPlan.employerMatch.monthly,
+    preTax401k$: savingsAlloc.match401k$, // Employee 401k (pre-tax)
+    hsa$: savingsAlloc.hsa$ ?? 0, // Employee HSA (pre-tax)
+    employerHsa$: preTaxSavingsForPlan.employerHSA.monthly,
+    retirementTaxAdv$: savingsAlloc.retirementTaxAdv$, // Roth/IRA post-tax
+    brokerage$: savingsAlloc.brokerage$,
   };
 
   // Use 40 years (480 months) for full projection, but we'll sample for display

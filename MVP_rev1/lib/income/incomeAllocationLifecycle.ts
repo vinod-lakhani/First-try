@@ -39,6 +39,8 @@ export type IncomeAllocationSnapshot = {
       plannedNeeds?: number;
       plannedWants?: number;
     };
+    /** Total savings (cash + payroll + match + HSA) for display only. When set, hero shows this as "Current savings target" to match Income tab. */
+    totalSavingsTargetForDisplay?: number;
   };
   deltas: {
     savings_vs_plan?: number;

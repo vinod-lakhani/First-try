@@ -551,8 +551,8 @@ export default function SavingsPlanPage() {
       ? (brokerageAllocationPct / 100) * postTaxSavingsAvailable
       : savingsAlloc.brokerage$;
     
-    // Save the custom savings allocation so it's used in buildFinalPlanData
-    // This ensures the allocation shown on this page is what gets stored in planData
+    // Save the custom savings allocation so it's used in buildFinalPlanData (and plan-final shows correct total)
+    // Include hsa$ so Total Savings = cash + payroll + match + HSA matches the "Updated allocation" summary
     updateSafetyStrategy({
       match401kPerMonth$: preTaxSavings.employerMatch.monthly,
       efTargetMonths,
@@ -560,6 +560,7 @@ export default function SavingsPlanPage() {
         ef$: efAmountToSave,
         highAprDebt$: debtAmountToSave,
         match401k$: savingsAlloc.match401k$,
+        hsa$: savingsAlloc.hsa$ ?? preTaxSavings.hsa.monthly ?? 0,
         retirementTaxAdv$: retirementAmountToSave,
         brokerage$: brokerageAmountToSave,
       },

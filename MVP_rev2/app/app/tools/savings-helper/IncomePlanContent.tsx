@@ -253,7 +253,8 @@ export function IncomePlanContent(props?: IncomePlanContentProps) {
         baselineState.payrollContributions ?? undefined,
         monthlyNeedsFromPlan,
         monthlyWantsFromPlan,
-        baselinePlanData?.paycheckCategories ?? null
+        baselinePlanData?.paycheckCategories ?? null,
+        baselineState.safetyStrategy?.customSavingsAllocation ?? undefined
       ),
     [
       baselineState.income,
@@ -261,18 +262,38 @@ export function IncomePlanContent(props?: IncomePlanContentProps) {
       monthlyNeedsFromPlan,
       monthlyWantsFromPlan,
       baselinePlanData?.paycheckCategories,
+      baselineState.safetyStrategy?.customSavingsAllocation,
     ]
   );
 
-  // Current plan data for chat — consistent across all chat windows
-  const currentPlanDataForChat = useMemo(
-    () =>
-      buildChatCurrentPlanData(baselinePlanData ?? null, {
-        paychecksPerMonth,
-        savingsBreakdown: displaySavingsBreakdown,
-      }),
-    [baselinePlanData, paychecksPerMonth, displaySavingsBreakdown]
-  );
+  // Authoritative total for tile and chat (Savings Allocator "Apply" sets totalSavingsTargetForDisplay so both show same number)
+  const displayTotalForSavings = baselineState.safetyStrategy?.totalSavingsTargetForDisplay ??
+    displaySavingsBreakdown?.totalSavingsMTD ??
+    baselinePlanData?.monthlySavingsTotal;
+
+  // Current plan data for chat — use normalized breakdown when we have an explicit display total so chat and tile agree
+  const currentPlanDataForChat = useMemo(() => {
+    let breakdownForChat = displaySavingsBreakdown;
+    if (
+      displayTotalForSavings != null &&
+      displayTotalForSavings > 0 &&
+      displaySavingsBreakdown &&
+      Math.abs((displaySavingsBreakdown.totalSavingsMTD ?? 0) - displayTotalForSavings) > 0.01
+    ) {
+      const payroll = displaySavingsBreakdown.payrollSavingsMTD ?? 0;
+      const match = (displaySavingsBreakdown.employerMatchMTD ?? 0) + (displaySavingsBreakdown.employerHSAMTD ?? 0);
+      const cash = Math.max(0, displayTotalForSavings - payroll - match);
+      breakdownForChat = {
+        ...displaySavingsBreakdown,
+        cashSavingsMTD: cash,
+        totalSavingsMTD: displayTotalForSavings,
+      };
+    }
+    return buildChatCurrentPlanData(baselinePlanData ?? null, {
+      paychecksPerMonth,
+      savingsBreakdown: breakdownForChat ?? undefined,
+    });
+  }, [baselinePlanData, paychecksPerMonth, displaySavingsBreakdown, displayTotalForSavings]);
 
   // Onboarding: force no current plan so we always show FIRST_TIME (set your first plan).
   const effectiveCurrentPlan = useMemo(() => {
@@ -321,15 +342,45 @@ export function IncomePlanContent(props?: IncomePlanContentProps) {
     return lastMonth;
   }, [simulateScenario, simulateAmount, effectiveCurrentPlan, lastMonth, last3m_avg, netIncomeMonthly]);
 
-  const snapshot = useMemo(() => buildIncomeAllocationSnapshotFromInputs({
-    netIncomeMonthly,
-    last3m_avg,
-    lastMonth: effectiveLastMonth,
-    currentPlan: effectiveCurrentPlan,
-    netWorthCurrent: baselinePlanData ?? null,
-    netWorthProposed: null,
-    employerMatchMonthly: completeSavingsBreakdown?.employerMatchMonthly ?? 0,
-  }), [netIncomeMonthly, last3m_avg, effectiveLastMonth, effectiveCurrentPlan, baselinePlanData, completeSavingsBreakdown?.employerMatchMonthly]);
+  const snapshot = useMemo(() => {
+    const totalTarget = displayTotalForSavings ?? undefined;
+    const cashActual = effectiveLastMonth ? Math.max(0, netIncomeMonthly - effectiveLastMonth.totalSpend) : 0;
+    const payrollActual = displaySavingsBreakdown?.payrollSavingsMTD ?? 0;
+    // When we have a target, pass total actual (cash + payroll) so hero and chat show same gap vs target (e.g. $3,412 actual vs $3,751 target = $339).
+    const totalActual =
+      totalTarget != null && effectiveLastMonth != null
+        ? Math.max(0, cashActual + payrollActual)
+        : undefined;
+    const base = buildIncomeAllocationSnapshotFromInputs({
+      netIncomeMonthly,
+      last3m_avg,
+      lastMonth: effectiveLastMonth,
+      currentPlan: effectiveCurrentPlan,
+      netWorthCurrent: baselinePlanData ?? null,
+      netWorthProposed: null,
+      employerMatchMonthly: completeSavingsBreakdown?.employerMatchMonthly ?? 0,
+      totalSavingsTargetForDisplay: totalTarget ?? undefined,
+      totalActualSavings: totalActual,
+    });
+    if (totalTarget == null || totalTarget <= 0) return base;
+    // Proposed for next month: use lifecycle's total when set (respects shift limit toward target). Otherwise build from cash + payroll.
+    const payrollMatchHsa =
+      (displaySavingsBreakdown?.payrollSavingsMTD ?? 0) +
+      (displaySavingsBreakdown?.employerMatchMTD ?? 0) +
+      (displaySavingsBreakdown?.employerHSAMTD ?? 0);
+    const totalRecommendedSavings =
+      base.plan.totalRecommendedSavings != null && base.plan.totalRecommendedSavings > 0
+        ? base.plan.totalRecommendedSavings
+        : Math.max(0, (base.plan.recommendedPlan.plannedSavings ?? 0) + payrollMatchHsa);
+    return {
+      ...base,
+      plan: {
+        ...base.plan,
+        totalSavingsTargetForDisplay: totalTarget,
+        totalRecommendedSavings: totalRecommendedSavings > 0 ? totalRecommendedSavings : base.plan.totalRecommendedSavings,
+      },
+    };
+  }, [netIncomeMonthly, last3m_avg, effectiveLastMonth, effectiveCurrentPlan, baselinePlanData, completeSavingsBreakdown?.employerMatchMonthly, displayTotalForSavings, displaySavingsBreakdown]);
 
   // Net worth based on current saving (last 3 months actuals) — always shown as second line
   const currentSavingPlanData = useMemo(() => {
@@ -396,15 +447,31 @@ export function IncomePlanContent(props?: IncomePlanContentProps) {
 
     const amount = Math.max(0, simulateAmount);
 
-    // Prefer "baseline minus $X/month" sim when UNDERSAVED and baseline exposes scenario input — exact delta every month
-    if (simulateScenario === 'UNDERSAVED' && baselinePlanData.netWorthScenarioInput) {
-      const proposed = buildProposedNetWorthFromBaseline(baselinePlanData, -amount);
-      if (proposed) {
-        return {
-          ...baselinePlanData,
-          netWorthProjection: proposed.netWorthProjection,
-          netWorthChartData: proposed.netWorthChartData,
-        };
+    // UNDERSAVED: "Proposed" = save the recommended amount (shift-limited step toward target). Use total recommended so net worth impact is positive vs actuals.
+    if (snapshot.state === 'UNDERSAVED' && snapshot.plan.totalRecommendedSavings != null && snapshot.plan.totalRecommendedSavings > 0) {
+      const proposedSavingsTotal = Math.min(netIncomeMonthly, snapshot.plan.totalRecommendedSavings);
+      const savingsPct = proposedSavingsTotal / netIncomeMonthly;
+      const spendPct = 1 - savingsPct;
+      const needsPct = spendPct * 0.5;
+      const wantsPct = spendPct * 0.5;
+      const pct = { needsPct, wantsPct, savingsPct };
+      const state: OnboardingState = {
+        ...baselineState,
+        riskConstraints: baselineState.riskConstraints
+          ? { ...baselineState.riskConstraints, targets: pct, actuals3m: pct, bypassWantsFloor: true }
+          : { shiftLimitPct: 0.04, targets: pct, actuals3m: pct, bypassWantsFloor: true },
+        initialPaycheckPlan: undefined,
+        safetyStrategy: baselineState.safetyStrategy
+          ? { ...baselineState.safetyStrategy, customSavingsAllocation: undefined }
+          : undefined,
+      };
+      try {
+        return buildFinalPlanData(state, {
+          forSimulationComparison: true,
+          overrideMonthlySavingsBudget: proposedSavingsTotal,
+        });
+      } catch {
+        // fall through to fallback
       }
     }
 
@@ -420,8 +487,9 @@ export function IncomePlanContent(props?: IncomePlanContentProps) {
       proposedSavings = Math.max(0, base - amount);
     } else if ((snapshot.state === 'OVERSAVED' || snapshot.state === 'UNDERSAVED') && snapshot.plan.currentPlan) {
       const rec = snapshot.plan.recommendedPlan;
-      if (Math.abs(rec.plannedSavings - snapshot.plan.currentPlan.plannedSavings) < 1) return null;
-      proposedSavings = rec.plannedSavings;
+      const totalRec = snapshot.plan.totalRecommendedSavings ?? rec.plannedSavings;
+      if (Math.abs(totalRec - (snapshot.plan.totalSavingsTargetForDisplay ?? snapshot.plan.currentPlan.plannedSavings)) < 1) return null;
+      proposedSavings = totalRec;
     } else {
       return null;
     }
@@ -448,7 +516,7 @@ export function IncomePlanContent(props?: IncomePlanContentProps) {
     } catch {
       return null;
     }
-  }, [simulateScenario, simulateAmount, baselineMonthlySavings, effectiveCurrentPlan, snapshot.state, snapshot.plan.recommendedPlan, snapshot.plan.currentPlan, baselineState, baselinePlanData, netIncomeMonthly, proposedPlannedSavingsFromChat]);
+  }, [simulateScenario, simulateAmount, baselineMonthlySavings, effectiveCurrentPlan, snapshot.state, snapshot.plan.recommendedPlan, snapshot.plan.currentPlan, snapshot.plan.totalRecommendedSavings, snapshot.plan.totalSavingsTargetForDisplay, baselineState, baselinePlanData, netIncomeMonthly, proposedPlannedSavingsFromChat]);
 
   // Baseline net worth at 20 years (for chat: "reduce your net worth by $X in 20 years")
   const baselineNetWorthAt20Y = useMemo(() => {
@@ -544,7 +612,7 @@ export function IncomePlanContent(props?: IncomePlanContentProps) {
     setPendingAction('APPLY_RECOMMENDED');
     const rec = snapshot.plan.recommendedPlan;
     const current = snapshot.plan.currentPlan?.plannedSavings ?? 0;
-    const amountToApply = proposedPlannedSavingsFromChat ?? rec.plannedSavings;
+    const amountToApply = proposedPlannedSavingsFromChat ?? snapshot.plan.totalRecommendedSavings ?? rec.plannedSavings;
     const hasProposedChange = proposedPlannedSavingsFromChat != null || Math.abs(rec.plannedSavings - current) > 1;
     const isOnTrackWithChange = snapshot.state === 'ON_TRACK' && hasProposedChange;
     setConfirmMode(
@@ -621,7 +689,7 @@ export function IncomePlanContent(props?: IncomePlanContentProps) {
       return;
     }
     if (confirmMode === 'first_time' || confirmMode === 'oversaved' || confirmMode === 'undersaved') {
-      const amountToApply = proposedPlannedSavingsFromChat ?? rec.plannedSavings;
+      const amountToApply = proposedPlannedSavingsFromChat ?? snapshot.plan.totalRecommendedSavings ?? rec.plannedSavings;
       baselineState.setProposedSavingsFromHelper?.(amountToApply);
       setPendingAction(null);
       setUiMode('DEFAULT');
@@ -654,7 +722,10 @@ export function IncomePlanContent(props?: IncomePlanContentProps) {
 
   const handleOpenSavingsAllocatorFromModal = () => {
     closeConfirmModal();
-    router.push('/app/tools/savings-allocator');
+    const target = useOnboardingStore.getState().proposedSavingsFromHelper;
+    const q = new URLSearchParams({ source: 'sidekick' });
+    if (target != null && target > 0) q.set('target', String(Math.round(target)));
+    router.push(`/app/tools/savings-allocator?${q.toString()}`);
   };
 
   const handleContinueFromModalOnboarding = () => {
@@ -796,14 +867,25 @@ export function IncomePlanContent(props?: IncomePlanContentProps) {
               )}
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                 {(proposedPlanData ?? baselinePlanData).netWorthProjection.map((projection: { label: string; value: number }) => {
-                  const compareData = proposedPlanData ? baselinePlanData : currentSavingPlanData;
+                  // When UNDERSAVED, compare Proposed (recommended) vs actual-saving trajectory so delta is positive
+                  const compareData =
+                    proposedPlanData && snapshot.state === 'UNDERSAVED' && currentSavingPlanData
+                      ? currentSavingPlanData
+                      : proposedPlanData
+                        ? baselinePlanData
+                        : currentSavingPlanData;
                   const compareValue = compareData?.netWorthProjection?.find((p: { label: string }) => p.label === projection.label)?.value;
                   const delta =
                     proposedPlanData && projection.label === 'Today'
                       ? 0
                       : (compareValue != null ? projection.value - compareValue : 0);
                   const showDelta = compareValue != null && (proposedPlanData ? true : Math.abs(delta) > 1);
-                  const deltaLabel = proposedPlanData ? 'vs Current' : 'vs current saving';
+                  const deltaLabel =
+                    proposedPlanData && snapshot.state === 'UNDERSAVED' && currentSavingPlanData
+                      ? 'vs Actual saving'
+                      : proposedPlanData
+                        ? 'vs Current'
+                        : 'vs current saving';
                   return (
                     <div
                       key={projection.label}
@@ -835,9 +917,18 @@ export function IncomePlanContent(props?: IncomePlanContentProps) {
                   netWorth={(proposedPlanData ?? baselinePlanData).netWorthChartData.netWorth}
                   assets={(proposedPlanData ?? baselinePlanData).netWorthChartData.assets}
                   liabilities={(proposedPlanData ?? baselinePlanData).netWorthChartData.liabilities}
-                  baselineNetWorth={proposedPlanData ? baselinePlanData.netWorthChartData.netWorth : currentSavingPlanData?.netWorthChartData?.netWorth}
+                  baselineNetWorth={
+                    proposedPlanData
+                      ? (snapshot.state === 'UNDERSAVED' && currentSavingPlanData
+                          ? currentSavingPlanData.netWorthChartData?.netWorth
+                          : baselinePlanData.netWorthChartData.netWorth)
+                      : currentSavingPlanData?.netWorthChartData?.netWorth
+                  }
                   seriesLabels={proposedPlanData
-                    ? { primary: 'Proposed plan', baseline: 'Planned net worth (current)' }
+                    ? {
+                        primary: 'Proposed plan',
+                        baseline: snapshot.state === 'UNDERSAVED' ? 'Actual saving (last month)' : 'Planned net worth (current)',
+                      }
                     : { primary: 'Planned net worth', baseline: 'Based on current saving' }}
                   height={400}
                 />
@@ -947,10 +1038,10 @@ export function IncomePlanContent(props?: IncomePlanContentProps) {
                 <>
                   <p className="text-sm text-slate-600 dark:text-slate-400">
                     {confirmMode === 'first_time'
-                      ? `This sets your monthly savings target to $${Math.round((proposedPlannedSavingsFromChat ?? snapshot.plan.recommendedPlan.plannedSavings)).toLocaleString()}.`
+                      ? `This sets your monthly savings target to $${Math.round((proposedPlannedSavingsFromChat ?? snapshot.plan.totalRecommendedSavings ?? snapshot.plan.recommendedPlan.plannedSavings)).toLocaleString()}.`
                       : confirmMode === 'on_track'
                         ? 'Your current plan stays in place for next month. No changes will be made.'
-                        : `Monthly savings target: $${Math.round(snapshot.plan.currentPlan?.plannedSavings ?? 0).toLocaleString()} → $${Math.round((proposedPlannedSavingsFromChat ?? snapshot.plan.recommendedPlan.plannedSavings)).toLocaleString()}`
+                        : `Monthly savings target: $${Math.round(snapshot.plan.totalSavingsTargetForDisplay ?? snapshot.plan.currentPlan?.plannedSavings ?? 0).toLocaleString()} → $${Math.round((proposedPlannedSavingsFromChat ?? snapshot.plan.totalRecommendedSavings ?? snapshot.plan.recommendedPlan.plannedSavings)).toLocaleString()}`
                     }
                   </p>
                   <div className="flex gap-3">

@@ -38,6 +38,8 @@ export function usePlanData(options?: UsePlanDataOptions): FinalPlanData | null 
   const riskConstraintsTargets = useOnboardingStore((state) => state.riskConstraints?.targets);
   const riskConstraintsActuals3m = useOnboardingStore((state) => state.riskConstraints?.actuals3m);
   const safetyStrategy = useOnboardingStore((state) => state.safetyStrategy);
+  // CRITICAL: Subscribe specifically to customSavingsAllocation to ensure plan recalculates when it changes
+  const customSavingsAllocation = useOnboardingStore((state) => state.safetyStrategy?.customSavingsAllocation);
   const payrollContributions = useOnboardingStore((state) => state.payrollContributions);
   const initialPaycheckPlan = useOnboardingStore((state) => state.initialPaycheckPlan);
   const plaidConnected = useOnboardingStore((state) => state.plaidConnected);
@@ -46,6 +48,10 @@ export function usePlanData(options?: UsePlanDataOptions): FinalPlanData | null 
   // Serialize targets/actuals3m so plan recalc triggers when savings-helper (or any tool) updates user state
   const riskConstraintsKey = typeof riskConstraints?.targets === 'object' && typeof riskConstraints?.actuals3m === 'object'
     ? JSON.stringify(riskConstraints.targets) + '|' + JSON.stringify(riskConstraints.actuals3m) + '|' + (riskConstraints.bypassWantsFloor ? '1' : '0')
+    : '';
+  // Serialize customSavingsAllocation so plan recalc triggers when it changes
+  const customSavingsAllocationKey = customSavingsAllocation 
+    ? JSON.stringify(customSavingsAllocation)
     : '';
 
   const [planData, setPlanData] = useState<FinalPlanData | null>(null);
@@ -75,6 +81,8 @@ export function usePlanData(options?: UsePlanDataOptions): FinalPlanData | null 
     riskConstraintsKey,
     useCurrentStateActuals,
     safetyStrategy,
+    customSavingsAllocation,
+    customSavingsAllocationKey,
     payrollContributions,
     initialPaycheckPlan,
     plaidConnected,

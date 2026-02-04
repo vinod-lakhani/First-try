@@ -25,7 +25,7 @@ const ESTIMATED_MARGINAL_TAX_RATE = 0.25;
 function PayrollContributionsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const returnTo = searchParams.get('returnTo');
+  const returnTo = searchParams?.get('returnTo');
   const { payrollContributions, setPayrollContributions, setInitialPaycheckPlan, setCurrentStep, updateSafetyStrategy, income } = useOnboardingStore();
 
   // Local state for form fields

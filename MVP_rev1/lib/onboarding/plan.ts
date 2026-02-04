@@ -706,7 +706,7 @@ export interface FinalPlanData {
     totalSavingsMTD: number;
   };
   netWorthProjection: Array<{
-    label: 'Today' | '6 Months' | '12 Months' | '24 Months' | '5 Years' | '10 Years';
+    label: 'Today' | '6 Months' | '12 Months' | '24 Months' | '5 Years' | '10 Years' | '20 Years';
     months: number;
     value: number;
   }>;
@@ -880,13 +880,14 @@ export function buildFinalPlanData(state: OnboardingState, options?: BuildFinalP
 
   // Current plan = user state: derive needs/wants/savings from current expenses only (no 3-month average)
   const useCurrentStateActuals = options?.useCurrentStateActuals === true;
-    
-    // Calculate actuals3m
-  // When useCurrentStateActuals is true, always compute from current expenses (user state), not riskConstraints.actuals3m (3-month average).
-  // Otherwise: if actuals3m is explicitly provided in riskConstraints, use it (e.g., from savings optimizer sliders);
-  // else calculate from expenses (state is source of truth).
-    let actuals3m = useCurrentStateActuals ? undefined : riskConstraints?.actuals3m;
-  if (useCurrentStateActuals) {
+  const bypassWantsFloor = riskConstraints?.bypassWantsFloor || false;
+
+  // Calculate actuals3m
+  // When a tool (e.g. savings-helper) has applied a plan, riskConstraints has bypassWantsFloor and actuals3m set.
+  // Use that as source of truth so savings-allocator and others see the updated amount.
+  // When useCurrentStateActuals is true and no applied plan: derive from current expenses.
+  let actuals3m = riskConstraints?.actuals3m;
+  if (useCurrentStateActuals && !(bypassWantsFloor && actuals3m)) {
     try {
       actuals3m = calculateActualsFromExpenses(fixedExpenses, incomePeriod$, targets, income.payFrequency, debts);
       console.log('[buildFinalPlanData] useCurrentStateActuals=true — actuals from current expenses (user state)', {
@@ -897,12 +898,15 @@ export function buildFinalPlanData(state: OnboardingState, options?: BuildFinalP
       console.warn('Failed to calculate actuals from expenses (user state), using targets:', error);
       actuals3m = targets;
     }
+  } else if (bypassWantsFloor && actuals3m) {
+    console.log('[buildFinalPlanData] Using applied plan from tool (bypassWantsFloor + actuals3m) as source of truth', {
+      actuals3m,
+    });
   }
   
   // Check if actuals3m is valid (sums to ~1.0 or ~100)
   // CRITICAL: If bypassWantsFloor is true, this means actuals3m was explicitly set by a tool
   // and we should NOT recalculate it from expenses, even if the sum is slightly off
-  const bypassWantsFloor = riskConstraints?.bypassWantsFloor || false;
   const hasValidActuals3m = actuals3m && (
     Math.abs(actuals3m.needsPct + actuals3m.wantsPct + actuals3m.savingsPct - 1.0) < 0.1 ||
     Math.abs(actuals3m.needsPct + actuals3m.wantsPct + actuals3m.savingsPct - 100) < 1

@@ -16,7 +16,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { X, Search, Zap, Send } from 'lucide-react';
-import { sendChatMessageStreaming } from '@/lib/chat/chatService';
+import { sendChatMessageStreaming, sendChatMessage } from '@/lib/chat/chatService';
 import { useOnboardingStore } from '@/lib/onboarding/store';
 import { usePlanData } from '@/lib/onboarding/usePlanData';
 import { getPaychecksPerMonth } from '@/lib/onboarding/usePlanData';
@@ -607,57 +607,71 @@ export function FinancialSidekick({ inline = false }: FinancialSidekickProps) {
         originatingTool: leap.originatingTool,
       }));
 
-      // Call ChatGPT API with streaming
-      const streamingId = (Date.now() + 1).toString();
-      setMessages((prev) => [...prev, { id: streamingId, text: '', isUser: false, timestamp: new Date() }]);
-
-      await sendChatMessageStreaming(
-        {
-          messages: [...messages, userMessage],
-          context: currentContext,
-          userPlanData: {
-            monthlyIncome,
-            monthlyExpenses,
-            monthlyNeeds,
-            monthlyWants,
-            monthlySavings,
-            savingsRate,
-            savingsBreakdown,
-            debtTotal: totalDebt,
-            monthlyDebtPayments,
-            expenseBreakdown,
-            debtBreakdown,
-            assetsBreakdown,
-            goalsBreakdown,
-            actualSpending,
-            planData: savingsHelperData?.recommendedPlan ? {
-              planNeeds: savingsHelperData.recommendedPlan.needsAmount,
-              planWants: savingsHelperData.recommendedPlan.wantsAmount,
-              planSavings: savingsHelperData.recommendedPlan.savingsAmount,
-            } : (planDataContext),
-            savingsHelperBarGraphs: savingsHelperData,
-            emergencyFund: emergencyFundInfo,
-            netWorth: netWorthInfo,
-            savingsAllocation,
-            safetyStrategy: store.safetyStrategy ? {
-              emergencyFundTargetMonths: store.safetyStrategy.efTargetMonths,
-              liquidity: store.safetyStrategy.liquidity,
-              retirementFocus: store.safetyStrategy.retirementFocus,
-              match401kPerMonth: store.safetyStrategy.match401kPerMonth$ ? store.safetyStrategy.match401kPerMonth$ * paychecksPerMonth : 0,
-              onIDR: store.safetyStrategy.onIDR || false,
-            } : undefined,
-            payrollContributions: payrollContributionsData,
-            currentLeaps,
-          },
+      const chatPayload = {
+        messages: [...messages, userMessage],
+        context: currentContext,
+        userPlanData: {
+          monthlyIncome,
+          monthlyExpenses,
+          monthlyNeeds,
+          monthlyWants,
+          monthlySavings,
+          savingsRate,
+          savingsBreakdown,
+          debtTotal: totalDebt,
+          monthlyDebtPayments,
+          expenseBreakdown,
+          debtBreakdown,
+          assetsBreakdown,
+          goalsBreakdown,
+          actualSpending,
+          planData: savingsHelperData?.recommendedPlan ? {
+            planNeeds: savingsHelperData.recommendedPlan.needsAmount,
+            planWants: savingsHelperData.recommendedPlan.wantsAmount,
+            planSavings: savingsHelperData.recommendedPlan.savingsAmount,
+          } : (planDataContext),
+          savingsHelperBarGraphs: savingsHelperData,
+          emergencyFund: emergencyFundInfo,
+          netWorth: netWorthInfo,
+          savingsAllocation,
+          safetyStrategy: store.safetyStrategy ? {
+            emergencyFundTargetMonths: store.safetyStrategy.efTargetMonths,
+            liquidity: store.safetyStrategy.liquidity,
+            retirementFocus: store.safetyStrategy.retirementFocus,
+            match401kPerMonth: store.safetyStrategy.match401kPerMonth$ ? store.safetyStrategy.match401kPerMonth$ * paychecksPerMonth : 0,
+            onIDR: store.safetyStrategy.onIDR || false,
+          } : undefined,
+          payrollContributions: payrollContributionsData,
+          currentLeaps,
         },
-        {
+      };
+
+      // Savings-allocator: always non-streaming to avoid response overwrite (same as in-page SavingsChatPanel).
+      if (currentContext === 'savings-allocator') {
+        const result = await sendChatMessage(chatPayload);
+        const responseText = typeof result === 'string' ? result : result.response;
+        setMessages((prev) => [
+          ...prev,
+          { id: (Date.now() + 1).toString(), text: responseText, isUser: false, timestamp: new Date() },
+        ]);
+      } else {
+        const streamingId = (Date.now() + 1).toString();
+        setMessages((prev) => [...prev, { id: streamingId, text: '', isUser: false, timestamp: new Date() }]);
+        await sendChatMessageStreaming(chatPayload, {
           onChunk(text) {
             setMessages((prev) =>
               prev.map((m) => (m.id === streamingId ? { ...m, text: m.text + text } : m))
             );
           },
-        }
-      );
+          onDone(meta) {
+            if (meta.responseWithoutIntent && meta.responseWithoutIntent.trim()) {
+              setMessages((prev) =>
+                prev.map((m) => (m.id === streamingId ? { ...m, text: meta.responseWithoutIntent! } : m))
+              );
+            }
+          },
+        });
+      }
     } catch (error) {
       console.error('Error getting AI response:', error);
       let errorMessage = 'Unknown error';

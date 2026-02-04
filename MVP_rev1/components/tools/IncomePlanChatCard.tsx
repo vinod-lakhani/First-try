@@ -30,6 +30,18 @@ const SUGGESTION_CHIPS = [
   'Why did you choose this amount?',
 ];
 
+/** Parse a monthly savings amount from user message (e.g. "I want to save $2500", "change to $2,500", "reduce to 2500") */
+function parseSavingsAmountFromMessage(text: string): number | null {
+  const normalized = text.replace(/,/g, '').trim();
+  // Match $2500, $2,500, 2500, or 2.5k / 2.5K
+  const withDollar = normalized.match(/\$?\s*([\d]+(?:\.[\d]+)?)\s*(k|K)?/i);
+  if (!withDollar) return null;
+  let num = parseFloat(withDollar[1]);
+  if (Number.isNaN(num) || num < 0) return null;
+  if (withDollar[2]) num *= 1000;
+  return Math.round(num);
+}
+
 export interface IncomePlanChatCardProps {
   snapshot: IncomeAllocationSnapshot;
   uiMode: 'DEFAULT' | 'ADJUST_REVIEW';
@@ -57,6 +69,12 @@ export interface IncomePlanChatCardProps {
   } | null;
   /** Current plan data for chat (net worth, savings breakdown, savings allocation) — ensures consistency across all chat windows */
   currentPlanDataForChat?: ChatCurrentPlanData;
+  /** When user types a specific savings amount (e.g. "I want to save $2500"), parent updates chart and proposal */
+  onUserProposedAmount?: (amount: number) => void;
+  /** Baseline net worth at 20 years (for AI to say "reduce your net worth by $X in 20 years") */
+  baselineNetWorthAt20Y?: number;
+  /** Get projected net worth at 20 years if user saved this much/month */
+  getProposedNetWorthAt20Y?: (monthlySavings: number) => number | null;
 }
 
 export function IncomePlanChatCard({
@@ -70,6 +88,9 @@ export function IncomePlanChatCard({
   onAskQuestion,
   onKeepPlan,
   onProposalFromChat,
+  onUserProposedAmount,
+  baselineNetWorthAt20Y,
+  getProposedNetWorthAt20Y,
   confirmationMessage,
   onConfirmationMessageShown,
   completeSavingsBreakdown,
@@ -149,6 +170,24 @@ export function IncomePlanChatCard({
     ]);
 
     try {
+      const parsedAmount = parseSavingsAmountFromMessage(text);
+      // Only treat as "proposed new total" when it looks like a full monthly target (e.g. $2500), not "$100 more"
+      const isProposedTotal = parsedAmount != null && parsedAmount >= 500;
+      if (isProposedTotal && onUserProposedAmount) onUserProposedAmount(parsedAmount);
+      const netWorthImpact =
+        baselineNetWorthAt20Y != null && getProposedNetWorthAt20Y && isProposedTotal && parsedAmount != null
+          ? (() => {
+              const proposedAt20Y = getProposedNetWorthAt20Y(parsedAmount);
+              if (proposedAt20Y == null) return undefined;
+              return {
+                baselineNetWorthAt20Y: baselineNetWorthAt20Y,
+                proposedMonthlySavings: parsedAmount,
+                proposedNetWorthAt20Y: proposedAt20Y,
+                deltaAt20Y: Math.round((proposedAt20Y - baselineNetWorthAt20Y) * 100) / 100,
+              };
+            })()
+          : undefined;
+
       const meta = await sendChatMessageStreaming(
         {
           messages: [...messages, userMessage].map((m) => ({
@@ -161,6 +200,7 @@ export function IncomePlanChatCard({
           userPlanData: {
             ...currentPlanDataForChat,
             incomeAllocationLifecycle: contextPacket,
+            ...(netWorthImpact && { netWorthImpact }),
           },
         },
         {
@@ -171,14 +211,15 @@ export function IncomePlanChatCard({
               )
             );
           },
-          onDone({ proposedPlannedSavings: proposedSavings }) {
+          onDone(meta) {
+            const { proposedPlannedSavings: proposedSavings, responseWithoutIntent } = meta;
             if (proposedSavings != null && onProposalFromChat) onProposalFromChat(proposedSavings);
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === streamingId
                   ? {
                       ...m,
-                      text: m.text.replace(/\n?PROPOSED_SAVINGS:\s*[\d.]+\s*$/im, '').trim(),
+                      text: (responseWithoutIntent?.trim() ?? m.text).replace(/\n?PROPOSED_SAVINGS:\s*[\d.]+\s*$/im, '').trim(),
                     }
                   : m
               )
@@ -227,7 +268,7 @@ export function IncomePlanChatCard({
               <div className="w-full max-w-[90%] rounded-lg px-4 py-3 bg-slate-100 dark:bg-slate-800">
                 <div className="space-y-3">
                   {latestInjectedMessage.blocks.map((block, idx) => {
-                    if (block.type === 'text') return <p key={idx} className="text-sm text-slate-800 dark:text-slate-200">{block.value}</p>;
+                    if (block.type === 'text') return <div key={idx} className="text-sm text-slate-800 dark:text-slate-200"><ChatMarkdown size="sm">{block.value}</ChatMarkdown></div>;
                     if (block.type === 'compare') {
                       return (
                         <div key={idx} className="text-sm space-y-1">
@@ -242,8 +283,8 @@ export function IncomePlanChatCard({
                         </div>
                       );
                     }
-                    if (block.type === 'bullets') return <ul key={idx} className="text-sm list-disc list-inside space-y-1 text-slate-700 dark:text-slate-300">{block.items.map((i, j) => <li key={j}>{i}</li>)}</ul>;
-                    if (block.type === 'question') return <p key={idx} className="text-sm font-medium text-slate-800 dark:text-slate-200">{block.value}</p>;
+                    if (block.type === 'bullets') return <ul key={idx} className="text-sm list-disc list-inside space-y-1 text-slate-700 dark:text-slate-300 [&_li]:leading-snug [&_li>p]:inline [&_li>p]:m-0 [&_li>p]:leading-snug">{block.items.map((i, j) => <li key={j}><ChatMarkdown size="sm">{i}</ChatMarkdown></li>)}</ul>;
+                    if (block.type === 'question') return <div key={idx} className="text-sm font-medium text-slate-800 dark:text-slate-200"><ChatMarkdown size="sm">{block.value}</ChatMarkdown></div>;
                     if (block.type === 'actions') {
                       return (
                         <div key={idx} className="flex flex-wrap gap-2 pt-2">

@@ -14,7 +14,7 @@ import { IncomeDistributionChart } from '@/components/charts/IncomeDistributionC
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { calculateSavingsBreakdown, calculatePreTaxSavings, calculateEmployerMatch, getGrossIncomeMonthly } from '@/lib/utils/savingsCalculations';
+import { calculateDisplaySavingsBreakdown } from '@/lib/utils/savingsCalculations';
 
 // Helper to get paychecks per month (internal use only)
 function getPaychecksPerMonth(frequency: string | undefined): number {
@@ -259,10 +259,8 @@ export default function IncomePage() {
   const variableExpensesPct = grossIncome ? (totalVariableExpenses / grossIncome) * 100 : 0;
   const savingsPct = grossIncome ? (totalSavingsFromPlan / grossIncome) * 100 : 0;
 
-  // Use centralized savings calculation for consistency
+  // Single source of truth: same function as Monthly Pulse and plan-final
   const payrollContributions = state.payrollContributions;
-  
-  // Calculate monthly needs and wants from plan categories
   const monthlyNeeds = useMemo(() => {
     if (!planData) return 0;
     const needsCategories = planData.paycheckCategories.filter(c => 
@@ -270,53 +268,28 @@ export default function IncomePage() {
     );
     return needsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
   }, [planData, paychecksPerMonth]);
-  
   const monthlyWants = useMemo(() => {
     if (!planData) return 0;
     const wantsCategories = planData.paycheckCategories.filter(c => c.key === 'fun_flexible');
     return wantsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
   }, [planData, paychecksPerMonth]);
-  
-  // Use centralized calculation function
-  const savingsCalc = useMemo(() => {
-    return calculateSavingsBreakdown(income, payrollContributions, monthlyNeeds, monthlyWants);
-  }, [income, payrollContributions, monthlyNeeds, monthlyWants]);
 
-  // When the applied plan has 401K match and HSA in long_term_investing, use those for display
-  // so Income and Monthly Pulse show the same values as the savings allocator after "Confirm & Apply"
-  const preTaxSavings = useMemo(
-    () => calculatePreTaxSavings(income, payrollContributions),
-    [income, payrollContributions]
+  const displaySavings = useMemo(
+    () => calculateDisplaySavingsBreakdown(
+      income,
+      payrollContributions,
+      monthlyNeeds,
+      monthlyWants,
+      planData?.paycheckCategories ?? null,
+      state.safetyStrategy?.customSavingsAllocation ?? undefined
+    ),
+    [income, payrollContributions, monthlyNeeds, monthlyWants, planData?.paycheckCategories, state.safetyStrategy?.customSavingsAllocation]
   );
-  // Plan's 401k_match subcategory stores EMPLOYEE contribution (from customSavingsAllocation), not employer match.
-  // Use centralized calculateEmployerMatch (GROSS income for cap).
-  // Payroll Savings = Employee 401K + Employee HSA (pre-tax).
-  const planBasedPayroll = useMemo(() => {
-    if (!planData) return null;
-    const longTerm = planData.paycheckCategories.find(c => c.key === 'long_term_investing');
-    const subs = longTerm?.subCategories;
-    if (!subs?.length) return null;
-    const matchSub = subs.find(s => s.key === '401k_match');
-    const hsaSub = subs.find(s => s.key === 'hsa');
-    const plan401kEmployeeMonthly = (matchSub?.amount ?? 0) * paychecksPerMonth; // Employee 401K (source: customSavingsAllocation)
-    const planHsaMonthly = (hsaSub?.amount ?? 0) * paychecksPerMonth;
-    const grossIncomeMonthly = getGrossIncomeMonthly(income);
-    const employerMatchMTD = calculateEmployerMatch(plan401kEmployeeMonthly, grossIncomeMonthly, payrollContributions ?? undefined);
-    const payrollSavingsMTD = plan401kEmployeeMonthly + (planHsaMonthly > 0.01 ? planHsaMonthly : preTaxSavings.hsa.monthly); // Employee 401K + HSA
-    if (plan401kEmployeeMonthly < 0.01 && planHsaMonthly < 0.01) return null;
-    return {
-      employerMatchMTD,
-      payrollSavingsMTD,
-    };
-  }, [planData, paychecksPerMonth, preTaxSavings.hsa.monthly, payrollContributions, income]);
-
-  // Plan is source of truth: Cash (post-tax) = EF + Debt + Roth + Brokerage — excludes 401k/HSA
-  const planBasedCashMTD = monthlyDebtExtra + monthlyEmergency + monthlyRetirementTaxAdv + monthlyBrokerage;
-  const observedCashSavingsMTD = planData ? planBasedCashMTD : savingsCalc.cashSavingsMTD;
-  const expectedPayrollSavingsMTD = planBasedPayroll?.payrollSavingsMTD ?? savingsCalc.payrollSavingsMTD;
-  const expectedMatchMTD = planBasedPayroll?.employerMatchMTD ?? savingsCalc.employerMatchMTD;
-  const expectedEmployerHSAMTD = savingsCalc.employerHSAMTD;
-  const totalSavingsMTD = observedCashSavingsMTD + expectedPayrollSavingsMTD + expectedMatchMTD + expectedEmployerHSAMTD;
+  const observedCashSavingsMTD = displaySavings.cashSavingsMTD;
+  const expectedPayrollSavingsMTD = displaySavings.payrollSavingsMTD;
+  const expectedMatchMTD = displaySavings.employerMatchMTD;
+  const expectedEmployerHSAMTD = displaySavings.employerHSAMTD;
+  const totalSavingsMTD = displaySavings.totalSavingsMTD;
 
   if (!planData) {
     return (

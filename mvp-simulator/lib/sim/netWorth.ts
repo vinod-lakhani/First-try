@@ -32,7 +32,11 @@ export interface MonthlyPlan {
   ef$: number;
   highAprDebt$: number;
   match401k$: number;
+  /** Pre-tax 401(k) employee contribution (monthly). */
+  preTax401k$?: number;
   hsa$?: number;
+  /** Employer HSA contribution (monthly). */
+  employerHsa$?: number;
   retirementTaxAdv$: number;
   brokerage$: number;
   unallocated$?: number;
@@ -220,16 +224,19 @@ export function simulateScenario(input: ScenarioInput): ScenarioSeries {
     debtPayoffMonths: new Map<string, number>(), // Track individual debt payoff dates
   };
   
-  const hasHSAInflow = (input.monthlyPlan[0]?.hsa$ ?? 0) > 0;
-  if (hsa > 0 || input.openingBalances.hsa !== undefined || hasHSAInflow) {
+  const hasHsaContributions = (input.monthlyPlan[0]?.hsa$ ?? 0) + (input.monthlyPlan[0]?.employerHsa$ ?? 0) > 0;
+  if (hsa > 0 || input.openingBalances.hsa !== undefined || hasHsaContributions) {
     series.hsa = new Array(months).fill(0);
   }
   
-  // Constants
-  // Match the standalone net-worth-interactive.html defaults:
-  // - 4% for cash (HYSA/EF)
-  // - 9% for investments (retirement, brokerage before tax drag)
-  // - 0.5% tax drag on brokerage
+  // ─── Growth rates (defaults: cashYieldPct 4%, nominalReturnPct 9%, taxDragBrokeragePct 0.5%) ───
+  // | Asset        | Grows at              | Default (approx) | Notes                          |
+  // |--------------|-----------------------|------------------|--------------------------------|
+  // | Cash (EF)    | cashYield             | 4%/yr            | HYSA / emergency fund          |
+  // | Brokerage    | nominalReturn−taxDrag | 8.5%/yr          | Taxable; drag reduces growth   |
+  // | Retirement   | nominalReturn         | 9%/yr            | 401(k), Roth IRA, etc.         |
+  // | HSA          | nominalReturn         | 9%/yr            | Invested like retirement       |
+  // | Liabilities  | debt APR              | per-debt         | Interest accrues each month   |
   const cashYield = (input.cashYieldPct ?? 4.0) / 100 / 12;
   const nominalReturn = (input.nominalReturnPct ?? 9.0) / 100 / 12;
   const taxDrag = (input.taxDragBrokeragePct ?? 0.5) / 100 / 12;
@@ -259,14 +266,15 @@ export function simulateScenario(input: ScenarioInput): ScenarioSeries {
     const hasActiveDebt = activeDebts.length > 0;
     const efTargetReached = efTarget$ !== undefined && cash >= efTarget$;
     
-    // Create adjusted plan for this month
+    // Create adjusted plan for this month.
+    // When EF target is reached or debts are paid off, redirect those dollars to brokerage (investing), NOT cash.
     const adjustedPlan: MonthlyPlan = {
       ...plan,
-      // If no active debt, redirect debt payments to brokerage
+      // If no active debt: stop sending extra debt $ to liabilities; add it to brokerage instead
       highAprDebt$: hasActiveDebt ? plan.highAprDebt$ : 0,
-      // If EF target reached, redirect EF to brokerage
+      // If EF target reached: stop sending EF $ to cash; add it to brokerage instead
       ef$: efTargetReached ? 0 : plan.ef$,
-      // Redirect freed-up allocations to brokerage
+      // Brokerage gets base allocation + redirected EF (when target reached) + redirected extra debt (when no debt)
       brokerage$: plan.brokerage$ + 
         (hasActiveDebt ? 0 : plan.highAprDebt$) + 
         (efTargetReached ? plan.ef$ : 0),
@@ -282,11 +290,18 @@ export function simulateScenario(input: ScenarioInput): ScenarioSeries {
       hsa = round2(hsa * (1 + nominalReturn));
     }
     
-    // 2) Inflows from plan (income pays for needs/wants/debt; EF allocation and unallocated go to cash)
+    // 2) Inflows from plan. Cash only gets income + ef$ + unallocated (ef$ is 0 when EF target reached).
+    // Brokerage gets brokerage$ (which already includes redirected EF and redirected extra-debt when applicable).
     cash = round2(cash + plan.incomeNet + plan.ef$ + (plan.unallocated$ ?? 0));
     brokerage = round2(brokerage + plan.brokerage$);
-    retirement = round2(retirement + plan.match401k$ + plan.retirementTaxAdv$);
-    hsa = round2(hsa + (plan.hsa$ ?? 0));
+    retirement = round2(
+      retirement +
+        plan.match401k$ +
+        (plan.preTax401k$ ?? 0) +
+        plan.retirementTaxAdv$
+    );
+    const hsaInflow = (plan.hsa$ ?? 0) + (plan.employerHsa$ ?? 0);
+    hsa = round2(hsa + hsaInflow);
     
     // 3) Update liabilities (accrue interest, then apply payments)
     let totalMinPayment = 0;
@@ -349,8 +364,7 @@ export function simulateScenario(input: ScenarioInput): ScenarioSeries {
       brokerage = round2(brokerage + redirected);
     }
     
-    // Add redirected minimum payments from previously paid-off debts to brokerage
-    // These represent freed-up cash flow that should be invested, not left in cash
+    // Add redirected minimum payments from previously paid-off debts to brokerage only (not to cash).
     if (redirectedMinPayments$ > 0.01) {
       brokerage = round2(brokerage + redirectedMinPayments$);
     }

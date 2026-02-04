@@ -86,12 +86,15 @@ export function IncomeAllocationChatPanel({
   const [pendingIntent, setPendingIntent] = useState<IncomeProposalIntent | null>(null);
   const chatThreadContainerRef = useRef<HTMLDivElement>(null);
   const internalTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const streamingTextRef = useRef('');
+  const streamingMessageIdRef = useRef<string | null>(null);
+  const [streamingTick, setStreamingTick] = useState(0);
   const textareaRef = externalChatInputRef ?? internalTextareaRef;
 
   useEffect(() => {
     const el = chatThreadContainerRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages]);
+  }, [messages, streamingTick]);
 
   useEffect(() => {
     if (messages.length === 1) {
@@ -135,6 +138,8 @@ export function IncomeAllocationChatPanel({
     };
 
     const streamingId = (Date.now() + 1).toString();
+    streamingTextRef.current = '';
+    streamingMessageIdRef.current = streamingId;
     setMessages((prev) => [...prev, { id: streamingId, text: '', isUser: false, timestamp: new Date() }]);
 
     try {
@@ -151,9 +156,8 @@ export function IncomeAllocationChatPanel({
         },
         {
           onChunk(text) {
-            setMessages((prev) =>
-              prev.map((m) => (m.id === streamingId ? { ...m, text: m.text + text } : m))
-            );
+            streamingTextRef.current += text;
+            setStreamingTick((t) => t + 1);
           },
         }
       );
@@ -165,6 +169,10 @@ export function IncomeAllocationChatPanel({
         )
       );
     } finally {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === streamingId ? { ...m, text: streamingTextRef.current } : m))
+      );
+      streamingMessageIdRef.current = null;
       setIsLoading(false);
     }
   };
@@ -266,7 +274,10 @@ export function IncomeAllocationChatPanel({
         <p className="text-sm text-slate-600 dark:text-slate-400">Ask Ribbit about your spending and plan…</p>
 
         <div ref={chatThreadContainerRef} className="space-y-3 max-h-72 overflow-y-auto border-t border-slate-200 dark:border-slate-700 pt-3">
-          {messages.map((m) => (
+          {messages.map((m) => {
+            const isStreamingThis = m.id === streamingMessageIdRef.current && isLoading;
+            const displayText = isStreamingThis ? streamingTextRef.current : (m.text ?? '');
+            return (
             <div key={m.id} className={`flex ${m.isUser ? 'justify-end' : 'justify-start'}`}>
               <div
                 className={`max-w-[85%] rounded-lg px-4 py-3 ${
@@ -277,12 +288,13 @@ export function IncomeAllocationChatPanel({
                   <p className="whitespace-pre-wrap">{m.text}</p>
                 ) : (
                   <div className="prose prose-base dark:prose-invert max-w-none prose-p:my-2 prose-ul:my-2 prose-li:my-0.5 text-slate-800 dark:text-slate-200 leading-relaxed">
-                    <ReactMarkdown>{m.text}</ReactMarkdown>
+                    <ReactMarkdown>{displayText}</ReactMarkdown>
                   </div>
                 )}
               </div>
             </div>
-          ))}
+            );
+          })}
           {isLoading && (
             <div className="flex justify-start">
               <div className="rounded-lg bg-slate-100 dark:bg-slate-800 px-3 py-2 text-sm text-slate-500">Thinking…</div>

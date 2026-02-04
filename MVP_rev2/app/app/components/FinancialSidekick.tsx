@@ -4,6 +4,10 @@
  * Feed Logic decides WHAT matters (ranked Leaps); Sidekick decides HOW to present (chat + quick actions).
  * On open: pull top 1–3 Leaps from generateCandidateLeaps (same as Feed). No invented recommendations.
  *
+ * Plan updates: This sidekick does not apply PLAN_CHANGES from the API. When the user is on a tool page
+ * (e.g. savings-allocator, savings-helper), plan application is handled by that page’s chat panel using
+ * the shared intent module (parseSavingsAllocationIntent / intentToDelta) so "to $X" vs "by $X" is consistent.
+ *
  * TODO: Persist "Not now" / dismiss and cooldown behavior.
  * TODO: Replace mock state with real user state and triggers.
  * TODO: Sidekick should narrate tool output (not invent numbers).
@@ -99,6 +103,9 @@ export function FinancialSidekick({ inline = false, variant = 'modal' }: Financi
   const [dismissedLeapIds, setDismissedLeapIds] = useState<Set<string>>(new Set()); // Session-only; no persistence
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const streamingTextRef = useRef('');
+  const streamingMessageIdRef = useRef<string | null>(null);
+  const [streamingTick, setStreamingTick] = useState(0);
   const router = useRouter();
   const pathname = usePathname();
   const store = useOnboardingStore();
@@ -228,7 +235,7 @@ export function FinancialSidekick({ inline = false, variant = 'modal' }: Financi
       scrollToBottom();
       inputRef.current?.focus();
     }
-  }, [messages, isOpen, showChat]);
+  }, [messages, isOpen, showChat, streamingTick]);
 
   const handleQuickActionClick = (path: string) => {
     router.push(path);
@@ -255,6 +262,7 @@ export function FinancialSidekick({ inline = false, variant = 'modal' }: Financi
     setChatInput('');
     setIsLoading(true);
 
+    let streamingId: string | undefined;
     try {
       // Calculate comprehensive user plan data for context
       const incomeAmount = store.income?.netIncome$ || store.income?.grossIncome$ || 0;
@@ -613,7 +621,9 @@ export function FinancialSidekick({ inline = false, variant = 'modal' }: Financi
       }));
 
       // Call ChatGPT API with streaming
-      const streamingId = (Date.now() + 1).toString();
+      streamingId = (Date.now() + 1).toString();
+      streamingTextRef.current = '';
+      streamingMessageIdRef.current = streamingId;
       setMessages((prev) => [...prev, { id: streamingId, text: '', isUser: false, timestamp: new Date() }]);
 
       await sendChatMessageStreaming(
@@ -657,9 +667,8 @@ export function FinancialSidekick({ inline = false, variant = 'modal' }: Financi
         },
         {
           onChunk(text) {
-            setMessages((prev) =>
-              prev.map((m) => (m.id === streamingId ? { ...m, text: m.text + text } : m))
-            );
+            streamingTextRef.current += text;
+            setStreamingTick((t) => t + 1);
           },
         }
       );
@@ -692,6 +701,10 @@ export function FinancialSidekick({ inline = false, variant = 'modal' }: Financi
         return [...prev, { id: errStreamingId, text: userMessage, isUser: false, timestamp: new Date() }];
       });
     } finally {
+      setMessages((prev) =>
+        prev.map((m) => (streamingId != null && m.id === streamingId ? { ...m, text: streamingTextRef.current } : m))
+      );
+      streamingMessageIdRef.current = null;
       setIsLoading(false);
     }
   };
@@ -819,7 +832,10 @@ export function FinancialSidekick({ inline = false, variant = 'modal' }: Financi
           ) : (
             /* Chat Messages */
             <div className="space-y-4">
-              {messages.map((message) => (
+              {messages.map((message) => {
+                const isStreamingThis = message.id === streamingMessageIdRef.current && isLoading;
+                const displayText = isStreamingThis ? streamingTextRef.current : (message.text ?? '');
+                return (
                 <div
                   key={message.id}
                   className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
@@ -834,11 +850,12 @@ export function FinancialSidekick({ inline = false, variant = 'modal' }: Financi
                     {message.isUser ? (
                       <p className="text-sm whitespace-pre-wrap">{message.text}</p>
                     ) : (
-                      <ChatMarkdown size="sm">{message.text}</ChatMarkdown>
+                      <ChatMarkdown size="sm">{displayText}</ChatMarkdown>
                     )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
               {isLoading && (
                 <div className="flex justify-start">
                   <div className="max-w-[80%] rounded-lg bg-slate-100 px-4 py-2 dark:bg-slate-800">

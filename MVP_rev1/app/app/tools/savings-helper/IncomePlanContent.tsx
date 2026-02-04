@@ -19,7 +19,7 @@ import { calculateSavingsBreakdown, calculateDisplaySavingsBreakdown, calculateP
 import { buildChatCurrentPlanData } from '@/lib/chat/buildChatPlanData';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { X, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 
 export type SimulateScenario = 'default' | IncomeAllocationState;
 
@@ -145,14 +145,14 @@ export function IncomePlanContent(props?: IncomePlanContentProps) {
 
   // When opening from feed (source=feed), apply URL scenario and simulateAmount once so the right mode is selected.
   useEffect(() => {
-    if (appliedFeedParamsRef.current || searchParams.get('source') !== 'feed') return;
-    const scenario = searchParams.get('scenario');
+    if (appliedFeedParamsRef.current || searchParams?.get('source') !== 'feed') return;
+    const scenario = searchParams?.get('scenario');
     const valid: SimulateScenario[] = ['default', 'FIRST_TIME', 'ON_TRACK', 'OVERSAVED', 'UNDERSAVED'];
     if (scenario && valid.includes(scenario as SimulateScenario)) {
       setSimulateScenario(scenario as SimulateScenario);
       appliedFeedParamsRef.current = true;
     }
-    const amount = searchParams.get('simulateAmount');
+    const amount = searchParams?.get('simulateAmount');
     if (amount != null && amount !== '') {
       const n = Number(amount);
       if (!Number.isNaN(n) && n >= 0) setSimulateAmount(n);
@@ -318,15 +318,29 @@ export function IncomePlanContent(props?: IncomePlanContentProps) {
     return lastMonth;
   }, [simulateScenario, simulateAmount, effectiveCurrentPlan, lastMonth, last3m_avg, netIncomeMonthly]);
 
-  const snapshot = useMemo(() => buildIncomeAllocationSnapshotFromInputs({
-    netIncomeMonthly,
-    last3m_avg,
-    lastMonth: effectiveLastMonth,
-    currentPlan: effectiveCurrentPlan,
-    netWorthCurrent: baselinePlanData ?? null,
-    netWorthProposed: null,
-    employerMatchMonthly: completeSavingsBreakdown?.employerMatchMonthly ?? 0,
-  }), [netIncomeMonthly, last3m_avg, effectiveLastMonth, effectiveCurrentPlan, baselinePlanData, completeSavingsBreakdown?.employerMatchMonthly]);
+  const snapshot = useMemo(() => {
+    const base = buildIncomeAllocationSnapshotFromInputs({
+      netIncomeMonthly,
+      last3m_avg,
+      lastMonth: effectiveLastMonth,
+      currentPlan: effectiveCurrentPlan,
+      netWorthCurrent: baselinePlanData ?? null,
+      netWorthProposed: null,
+      employerMatchMonthly: completeSavingsBreakdown?.employerMatchMonthly ?? 0,
+    });
+    // Prefer total saved from plan-final "Save this plan" so hero shows correct current target
+    const totalForDisplay =
+      baselineState.safetyStrategy?.totalSavingsTargetForDisplay ??
+      displaySavingsBreakdown?.totalSavingsMTD;
+    if (totalForDisplay == null || totalForDisplay <= 0) return base;
+    return {
+      ...base,
+      plan: {
+        ...base.plan,
+        totalSavingsTargetForDisplay: totalForDisplay,
+      },
+    };
+  }, [netIncomeMonthly, last3m_avg, effectiveLastMonth, effectiveCurrentPlan, baselinePlanData, completeSavingsBreakdown?.employerMatchMonthly, displaySavingsBreakdown?.totalSavingsMTD, baselineState.safetyStrategy?.totalSavingsTargetForDisplay]);
 
   // Net worth based on current saving (last 3 months actuals) — always shown as second line
   const currentSavingPlanData = useMemo(() => {
@@ -353,9 +367,44 @@ export function IncomePlanContent(props?: IncomePlanContentProps) {
     }
   }, [baselineState, baselinePlanData, netIncomeMonthly, last3m_avg]);
 
-  // Proposed plan net worth: when UNDERSAVED/OVERSAVED, run baseline sim with exactly $X less (or more) per month so delta is correct (~$1,200 at 6mo for $200/mo undersave).
+  // 20-year net worth index (240 months = 20 years; simulation is 0-based, so index 239)
+  const MONTHS_20Y = 240;
+
+  /** When the user or AI proposes a specific amount in chat, show that in Explore options and update chart (must be declared before proposedPlanData useMemo). */
+  const [proposedPlannedSavingsFromChat, setProposedPlannedSavingsFromChat] = useState<number | null>(null);
+
+  // Proposed plan net worth: when user proposed an amount in chat, or UNDERSAVED/OVERSAVED, run sim with that monthly savings so chart and projection update.
   const proposedPlanData = useMemo(() => {
     if (!baselineState || !baselinePlanData || netIncomeMonthly <= 0) return null;
+
+    // When user proposed a specific savings amount in chat, show proposed plan (chart + projection) for that amount.
+    if (proposedPlannedSavingsFromChat != null) {
+      const proposedSavings = Math.max(0, Math.min(netIncomeMonthly, proposedPlannedSavingsFromChat));
+      const savingsPct = proposedSavings / netIncomeMonthly;
+      const spendPct = 1 - savingsPct;
+      const needsPct = spendPct * 0.5;
+      const wantsPct = spendPct * 0.5;
+      const pct = { needsPct, wantsPct, savingsPct };
+      const state: OnboardingState = {
+        ...baselineState,
+        riskConstraints: baselineState.riskConstraints
+          ? { ...baselineState.riskConstraints, targets: pct, actuals3m: pct, bypassWantsFloor: true }
+          : { shiftLimitPct: 0.04, targets: pct, actuals3m: pct, bypassWantsFloor: true },
+        initialPaycheckPlan: undefined,
+        safetyStrategy: baselineState.safetyStrategy
+          ? { ...baselineState.safetyStrategy, customSavingsAllocation: undefined }
+          : undefined,
+      };
+      try {
+        return buildFinalPlanData(state, {
+          forSimulationComparison: true,
+          overrideMonthlySavingsBudget: proposedSavings,
+        });
+      } catch {
+        return null;
+      }
+    }
+
     const amount = Math.max(0, simulateAmount);
 
     // Prefer "baseline minus $X/month" sim when UNDERSAVED and baseline exposes scenario input — exact delta every month
@@ -410,7 +459,50 @@ export function IncomePlanContent(props?: IncomePlanContentProps) {
     } catch {
       return null;
     }
-  }, [simulateScenario, simulateAmount, baselineMonthlySavings, effectiveCurrentPlan, snapshot.state, snapshot.plan.recommendedPlan, snapshot.plan.currentPlan, baselineState, baselinePlanData, netIncomeMonthly]);
+  }, [simulateScenario, simulateAmount, baselineMonthlySavings, effectiveCurrentPlan, snapshot.state, snapshot.plan.recommendedPlan, snapshot.plan.currentPlan, baselineState, baselinePlanData, netIncomeMonthly, proposedPlannedSavingsFromChat]);
+
+  // Baseline net worth at 20 years (for chat: "reduce your net worth by $X in 20 years")
+  const baselineNetWorthAt20Y = useMemo(() => {
+    const nw = baselinePlanData?.netWorthChartData?.netWorth;
+    if (!nw?.length) return undefined;
+    const idx = Math.min(MONTHS_20Y - 1, nw.length - 1); // 20 years = 240 months, 0-based index 239
+    return Math.round((nw[idx] ?? 0) * 100) / 100;
+  }, [baselinePlanData]);
+
+  /** Compute projected net worth at 20 years if user saved exactly this much per month (for chat impact wording) */
+  const getProposedNetWorthAt20Y = useMemo(() => {
+    if (!baselineState || !baselinePlanData || netIncomeMonthly <= 0) return undefined;
+    return (monthlySavings: number) => {
+      const proposedSavings = Math.max(0, Math.min(netIncomeMonthly, monthlySavings));
+      const savingsPct = proposedSavings / netIncomeMonthly;
+      const spendPct = 1 - savingsPct;
+      const needsPct = spendPct * 0.5;
+      const wantsPct = spendPct * 0.5;
+      const pct = { needsPct, wantsPct, savingsPct };
+      const state: OnboardingState = {
+        ...baselineState,
+        riskConstraints: baselineState.riskConstraints
+          ? { ...baselineState.riskConstraints, targets: pct, actuals3m: pct, bypassWantsFloor: true }
+          : { shiftLimitPct: 0.04, targets: pct, actuals3m: pct, bypassWantsFloor: true },
+        initialPaycheckPlan: undefined,
+        safetyStrategy: baselineState.safetyStrategy
+          ? { ...baselineState.safetyStrategy, customSavingsAllocation: undefined }
+          : undefined,
+      };
+      try {
+        const plan = buildFinalPlanData(state, {
+          forSimulationComparison: true,
+          overrideMonthlySavingsBudget: proposedSavings,
+        });
+        const nw = plan?.netWorthChartData?.netWorth;
+        if (!nw?.length) return null;
+        const idx = Math.min(MONTHS_20Y - 1, nw.length - 1);
+        return Math.round((nw[idx] ?? 0) * 100) / 100;
+      } catch {
+        return null;
+      }
+    };
+  }, [baselineState, baselinePlanData, netIncomeMonthly]);
 
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -423,8 +515,8 @@ export function IncomePlanContent(props?: IncomePlanContentProps) {
   const [chatFocusRequested, setChatFocusRequested] = useState(false);
   const [lastInjectedMessageKey, setLastInjectedMessageKey] = useState<string | null>(null);
   const [confirmationMessage, setConfirmationMessage] = useState<string | null>(null);
-  /** When the AI proposes a specific amount in chat, show that in Explore options and Apply */
-  const [proposedPlannedSavingsFromChat, setProposedPlannedSavingsFromChat] = useState<number | null>(null);
+  /** After user confirms Apply in modal: show "go to Savings Allocator" step inside same modal */
+  const [confirmModalStep, setConfirmModalStep] = useState<'confirm' | 'go_to_allocator'>('confirm');
 
   const nextMonthLabel = snapshot.period.nextMonth_label ?? 'next month';
 
@@ -436,6 +528,7 @@ export function IncomePlanContent(props?: IncomePlanContentProps) {
   const handlePrimaryCta = () => {
     if (snapshot.state === 'FIRST_TIME') {
       setConfirmMode('first_time');
+      setConfirmModalStep('confirm');
       setShowConfirmModal(true);
     } else if (snapshot.state === 'ON_TRACK') {
       setToastMessage('Keeping your plan.');
@@ -458,6 +551,7 @@ export function IncomePlanContent(props?: IncomePlanContentProps) {
   };
 
   const onApplyFromChat = () => {
+    setConfirmModalStep('confirm');
     setPendingAction('APPLY_RECOMMENDED');
     const rec = snapshot.plan.recommendedPlan;
     const current = snapshot.plan.currentPlan?.plannedSavings ?? 0;
@@ -483,12 +577,21 @@ export function IncomePlanContent(props?: IncomePlanContentProps) {
     setUiMode('DEFAULT');
     setLastInjectedMessageKey(null);
     setProposedPlannedSavingsFromChat(null);
+    baselineState.setProposedSavingsFromHelper?.(null);
     setToastMessage('Keeping your plan.');
     setTimeout(() => setToastMessage(null), 2000);
   };
 
   const onProposalFromChat = (plannedSavings: number) => {
     setProposedPlannedSavingsFromChat(plannedSavings);
+    setUiMode('ADJUST_REVIEW');
+    setChatFocusRequested(true);
+  };
+
+  /** When user types a savings amount in chat: update local state and store so savings-allocator can show it as Proposed Plan, and show Apply/Ask/Keep in chat. */
+  const onUserProposedAmount = (amount: number) => {
+    setProposedPlannedSavingsFromChat(amount);
+    baselineState.setProposedSavingsFromHelper?.(amount);
     setUiMode('ADJUST_REVIEW');
     setChatFocusRequested(true);
   };
@@ -519,41 +622,43 @@ export function IncomePlanContent(props?: IncomePlanContentProps) {
   const handleConfirm = () => {
     const rec = snapshot.plan.recommendedPlan;
     if (confirmMode === 'on_track') {
-      setShowConfirmModal(false);
-      setConfirmMode(null);
-      setPendingAction(null);
+      closeConfirmModal();
       setUiMode('DEFAULT');
       setLastInjectedMessageKey(null);
+      setProposedPlannedSavingsFromChat(null);
+      baselineState.setProposedSavingsFromHelper?.(null);
       setToastMessage('Keeping your plan for next month.');
       setTimeout(() => setToastMessage(null), 3000);
       return;
     }
     if (confirmMode === 'first_time' || confirmMode === 'oversaved' || confirmMode === 'undersaved') {
       const amountToApply = proposedPlannedSavingsFromChat ?? rec.plannedSavings;
-      const spendToApply = netIncomeMonthly - amountToApply;
-      persistPlan(amountToApply, spendToApply);
-      if (confirmMode === 'first_time') {
-        baselineState.setComplete(true);
-      }
-      setShowConfirmModal(false);
-      setConfirmMode(null);
+      // Do not persist here — current plan only updates when user accepts in savings-allocator.
+      baselineState.setProposedSavingsFromHelper?.(amountToApply);
+      setConfirmModalStep('go_to_allocator');
       setPendingAction(null);
       setUiMode('DEFAULT');
       setLastInjectedMessageKey(null);
       setProposedPlannedSavingsFromChat(null);
-      setToastMessage(`Plan set for ${nextMonthLabel}`);
+      setToastMessage('Target saved — accept in Savings Allocator to apply.');
       setTimeout(() => setToastMessage(null), 3000);
-      setConfirmationMessage(`Done — your plan for ${nextMonthLabel} is set to save $${Math.round(amountToApply).toLocaleString()}/mo.`);
-      if (onConfirmPlan) {
-        onConfirmPlan();
-      } else {
-        router.push('/app/home');
-      }
+      // Keep modal open; content switches to "go to Savings Allocator" step
     }
   };
 
   const handleConfirmationMessageShown = () => {
     setConfirmationMessage(null);
+  };
+
+  const closeConfirmModal = () => {
+    setShowConfirmModal(false);
+    setConfirmMode(null);
+    setConfirmModalStep('confirm');
+  };
+
+  const handleOpenSavingsAllocatorFromModal = () => {
+    closeConfirmModal();
+    router.push('/app/tools/savings-allocator');
   };
 
   useEffect(() => {
@@ -667,6 +772,9 @@ export function IncomePlanContent(props?: IncomePlanContentProps) {
             onAskQuestion={onAskQuestionFromChat}
             onKeepPlan={onKeepPlanFromChat}
             onProposalFromChat={onProposalFromChat}
+            onUserProposedAmount={onUserProposedAmount}
+            baselineNetWorthAt20Y={baselineNetWorthAt20Y}
+            getProposedNetWorthAt20Y={getProposedNetWorthAt20Y}
             confirmationMessage={confirmationMessage}
             onConfirmationMessageShown={handleConfirmationMessageShown}
             completeSavingsBreakdown={completeSavingsBreakdown}
@@ -799,26 +907,51 @@ export function IncomePlanContent(props?: IncomePlanContentProps) {
           <Card className="w-full max-w-md">
             <CardHeader>
               <CardTitle>
-                {confirmMode === 'first_time' ? 'Set your income plan?' : confirmMode === 'on_track' ? 'Keep plan for next month?' : `Confirm plan for ${nextMonthLabel}`}
+                {confirmModalStep === 'go_to_allocator'
+                  ? 'Next: update your savings allocation'
+                  : confirmMode === 'first_time'
+                    ? 'Set your income plan?'
+                    : confirmMode === 'on_track'
+                      ? 'Keep plan for next month?'
+                      : `Confirm plan for ${nextMonthLabel}`}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-sm text-slate-600 dark:text-slate-400">
-                {confirmMode === 'first_time'
-                  ? `This sets your monthly savings target to $${Math.round((proposedPlannedSavingsFromChat ?? snapshot.plan.recommendedPlan.plannedSavings)).toLocaleString()}.`
-                  : confirmMode === 'on_track'
-                    ? 'Your current plan stays in place for next month. No changes will be made.'
-                    : `Monthly savings target: $${Math.round(snapshot.plan.currentPlan?.plannedSavings ?? 0).toLocaleString()} → $${Math.round((proposedPlannedSavingsFromChat ?? snapshot.plan.recommendedPlan.plannedSavings)).toLocaleString()}`
-                }
-              </p>
-              <div className="flex gap-3">
-                <Button variant="outline" className="flex-1" onClick={() => { setShowConfirmModal(false); setConfirmMode(null); setPendingAction(null); }}>
-                  Cancel
-                </Button>
-                <Button className="flex-1 bg-green-600 hover:bg-green-700" onClick={handleConfirm}>
-                  Confirm
-                </Button>
-              </div>
+              {confirmModalStep === 'go_to_allocator' ? (
+                <>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    Your new target is saved. Go to Savings Allocator to see the breakdown and accept the plan.
+                  </p>
+                  <div className="flex gap-3">
+                    <Button variant="outline" className="flex-1" onClick={closeConfirmModal}>
+                      Close
+                    </Button>
+                    <Button className="flex-1 bg-green-600 hover:bg-green-700 gap-1.5" onClick={handleOpenSavingsAllocatorFromModal}>
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      Open Savings Allocator
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    {confirmMode === 'first_time'
+                      ? `This sets your monthly savings target to $${Math.round((proposedPlannedSavingsFromChat ?? snapshot.plan.recommendedPlan.plannedSavings)).toLocaleString()}.`
+                      : confirmMode === 'on_track'
+                        ? 'Your current plan stays in place for next month. No changes will be made.'
+                        : `Monthly savings target: $${Math.round(snapshot.plan.currentPlan?.plannedSavings ?? 0).toLocaleString()} → $${Math.round((proposedPlannedSavingsFromChat ?? snapshot.plan.recommendedPlan.plannedSavings)).toLocaleString()}`
+                    }
+                  </p>
+                  <div className="flex gap-3">
+                    <Button variant="outline" className="flex-1" onClick={closeConfirmModal}>
+                      Cancel
+                    </Button>
+                    <Button className="flex-1 bg-green-600 hover:bg-green-700" onClick={handleConfirm}>
+                      Confirm
+                    </Button>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>

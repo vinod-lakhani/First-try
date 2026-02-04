@@ -11,7 +11,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { X, Send } from 'lucide-react';
 import { withBasePath } from '@/lib/utils/basePath';
-import { sendChatMessageStreaming } from '@/lib/chat/chatService';
+import { sendChatMessageStreaming, type PlanChangesFromChat } from '@/lib/chat/chatService';
+import {
+  parseSavingsAllocationIntent,
+  intentIsSingleCategoryChange,
+  intentToPlanChanges,
+  type SavingsAllocationIntentContext,
+} from '@/lib/chat/savingsAllocationIntent';
 import { useOnboardingStore } from '@/lib/onboarding/store';
 import { usePlanData } from '@/lib/onboarding/usePlanData';
 import { getPaychecksPerMonth } from '@/lib/onboarding/usePlanData';
@@ -28,9 +34,11 @@ interface Message {
 interface OnboardingChatProps {
   context?: string; // Context about which page we're on
   inline?: boolean; // If true, show as inline button instead of floating
+  /** When context is savings-plan and the API returns planChanges, call this so the parent can update the plan. */
+  onPlanChangesFromChat?: (changes: PlanChangesFromChat) => void;
 }
 
-export function OnboardingChat({ context, inline = false }: OnboardingChatProps) {
+export function OnboardingChat({ context, inline = false, onPlanChangesFromChat }: OnboardingChatProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [imageSrc, setImageSrc] = useState('/images/ribbit.png');
   const store = useOnboardingStore();
@@ -51,6 +59,10 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const streamingTextRef = useRef('');
+  const streamingMessageIdRef = useRef<string | null>(null);
+  const lastUserMessageRef = useRef('');
+  const [streamingTick, setStreamingTick] = useState(0);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -61,7 +73,7 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
       scrollToBottom();
       inputRef.current?.focus();
     }
-  }, [messages, isOpen]);
+  }, [messages, isOpen, streamingTick]);
 
   const handleSend = async () => {
     if (!inputValue.trim() || isLoading) return;
@@ -75,6 +87,7 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
 
     setMessages((prev) => [...prev, userMessage]);
     const currentInput = inputValue.trim();
+    lastUserMessageRef.current = currentInput;
     setInputValue('');
     setIsLoading(true);
 
@@ -363,12 +376,14 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
 
       // Call ChatGPT API with streaming
       const streamingId = (Date.now() + 1).toString();
+      streamingTextRef.current = '';
+      streamingMessageIdRef.current = streamingId;
       setMessages((prev) => [...prev, { id: streamingId, text: '', isUser: false, timestamp: new Date() }]);
 
       await sendChatMessageStreaming(
         {
           messages: [...messages, userMessage],
-          context,
+          context: context ?? 'financial-sidekick',
           userPlanData: {
             monthlyIncome,
             monthlyExpenses,
@@ -389,9 +404,31 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
         },
         {
           onChunk(text) {
-            setMessages((prev) =>
-              prev.map((m) => (m.id === streamingId ? { ...m, text: m.text + text } : m))
-            );
+            streamingTextRef.current += text;
+            setStreamingTick((t) => t + 1);
+          },
+          onDone(meta) {
+            if (context === 'savings-plan' && meta.planChanges && onPlanChangesFromChat) {
+              let changes: PlanChangesFromChat = meta.planChanges;
+              const lastMsg = lastUserMessageRef.current?.trim();
+              if (lastMsg) {
+                const customAlloc = store.safetyStrategy?.customSavingsAllocation;
+                const intentContext: SavingsAllocationIntentContext = {
+                  preTax401k$: payrollContributionsData?.monthly401kContribution ?? 0,
+                  hsa$: payrollContributionsData?.monthlyHSAContribution ?? 0,
+                  ef$: customAlloc?.ef$ ?? 0,
+                  debt$: customAlloc?.highAprDebt$ ?? 0,
+                  retirementExtra$: customAlloc?.retirementTaxAdv$ ?? 0,
+                  brokerage$: customAlloc?.brokerage$ ?? 0,
+                };
+                const intent = parseSavingsAllocationIntent(lastMsg, intentContext);
+                if (intent && intentIsSingleCategoryChange(intent)) {
+                  const fromIntent = intentToPlanChanges(intent, intentContext);
+                  if (fromIntent) changes = { ...meta.planChanges, ...fromIntent };
+                }
+              }
+              onPlanChangesFromChat(changes);
+            }
           },
         }
       );
@@ -409,6 +446,12 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
         return [...prev, { id: (Date.now() + 1).toString(), text: fallbackText, isUser: false, timestamp: new Date() }];
       });
     } finally {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === streamingId ? { ...m, text: streamingTextRef.current } : m
+        )
+      );
+      streamingMessageIdRef.current = null;
       setIsLoading(false);
     }
   };
@@ -483,7 +526,10 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
         <CardContent className="flex flex-1 flex-col overflow-hidden p-0">
           {/* Messages */}
           <div className="flex-1 space-y-4 overflow-y-auto p-4">
-            {messages.map((message) => (
+            {messages.map((message) => {
+              const isStreamingThis = message.id === streamingMessageIdRef.current && isLoading;
+              const displayText = isStreamingThis ? streamingTextRef.current : (message.text ?? '');
+              return (
               <div
                 key={message.id}
                 className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
@@ -516,13 +562,14 @@ export function OnboardingChat({ context, inline = false }: OnboardingChatProps)
                           td: ({node, ...props}) => <td className="px-2 py-1 text-slate-900 dark:text-slate-100" {...props} />,
                         }}
                       >
-                        {message.text}
+                        {displayText}
                       </ReactMarkdown>
                     </div>
                   )}
                 </div>
               </div>
-            ))}
+              );
+            })}
             {isLoading && (
               <div className="flex justify-start">
                 <div className="max-w-[80%] rounded-lg bg-slate-100 px-4 py-2 dark:bg-slate-800">

@@ -33,6 +33,10 @@ export type IncomeAllocationSnapshot = {
       plannedNeeds?: number;
       plannedWants?: number;
     };
+    /** Total savings (cash + payroll + match + HSA) for display. When set, hero shows this as "Current savings target" to match Income tab. */
+    totalSavingsTargetForDisplay?: number;
+    /** Total recommended savings (cash + payroll + match + HSA) for next month. When set, hero uses for "Proposed for next month". */
+    totalRecommendedSavings?: number;
     recommendedPlan: {
       plannedSavings: number;
       plannedSpend: number;
@@ -89,6 +93,10 @@ export interface LifecycleInputs {
   netWorthProposed?: unknown;
   /** Employer 401(k) match $/mo — included in displayed "You saved $X" total so the number matches total savings (cash + match). */
   employerMatchMonthly?: number;
+  /** Total savings target (cash + payroll + match + HSA). When set with totalActualSavings, lifecycle uses TOTAL space for comparison. */
+  totalSavingsTargetForDisplay?: number;
+  /** Total actual savings last month (cash + payroll + match + HSA). Must be provided with totalSavingsTargetForDisplay for consistency. */
+  totalActualSavings?: number;
 }
 
 /**
@@ -107,10 +115,15 @@ export function buildIncomeAllocationSnapshotFromInputs(
     netWorthCurrent,
     netWorthProposed,
     employerMatchMonthly = 0,
+    totalSavingsTargetForDisplay,
+    totalActualSavings,
   } = inputs;
 
   const shiftLimitMonthly = getShiftLimit(netIncomeMonthly);
   const nextMonthLabel = getNextMonthLabel();
+
+  // Use TOTAL (cash + payroll + match + HSA) for comparison when both provided — ensures consistency with Income tab
+  const useTotalSpace = typeof totalSavingsTargetForDisplay === 'number' && typeof totalActualSavings === 'number';
 
   // --- CALIBRATION (first-time): no existing plan ---
   if (!currentPlan || currentPlan.plannedSavings === undefined) {
@@ -159,8 +172,10 @@ export function buildIncomeAllocationSnapshotFromInputs(
   };
 
   const lastMonthSavingsActual = netIncomeMonthly - lastMonthActual.totalSpend;
-  const savings_vs_plan = lastMonthSavingsActual - currentPlan.plannedSavings;
-  const tolerance = Math.max(TOLERANCE_DOLLARS, TOLERANCE_PCT * currentPlan.plannedSavings);
+  const planTarget = useTotalSpace ? totalSavingsTargetForDisplay! : currentPlan.plannedSavings;
+  const actualForComparison = useTotalSpace ? totalActualSavings! : lastMonthSavingsActual;
+  const savings_vs_plan = actualForComparison - planTarget;
+  const tolerance = Math.max(TOLERANCE_DOLLARS, TOLERANCE_PCT * planTarget);
 
   let state: IncomeAllocationState;
   let recommendedPlan = {
@@ -170,10 +185,11 @@ export function buildIncomeAllocationSnapshotFromInputs(
     plannedWants: currentPlan.plannedWants,
   };
   let appliedChange = 0;
+  let totalRecommendedSavings: number | undefined;
 
   if (Math.abs(savings_vs_plan) <= tolerance) {
     state = 'ON_TRACK';
-    // no change
+    if (useTotalSpace) totalRecommendedSavings = planTarget;
   } else if (savings_vs_plan > tolerance) {
     state = 'OVERSAVED';
     appliedChange = Math.min(shiftLimitMonthly, savings_vs_plan);
@@ -183,21 +199,25 @@ export function buildIncomeAllocationSnapshotFromInputs(
       plannedNeeds: currentPlan.plannedNeeds,
       plannedWants: currentPlan.plannedWants,
     };
+    if (useTotalSpace) totalRecommendedSavings = actualForComparison; // Lock in what they did
   } else {
     state = 'UNDERSAVED';
-    // Move up toward target: increase from actual savings toward plan, capped by 4% shift limit
-    const gapToTarget = currentPlan.plannedSavings - lastMonthSavingsActual;
+    const gapToTarget = planTarget - actualForComparison;
     appliedChange = Math.min(shiftLimitMonthly, Math.max(0, gapToTarget));
-    const newSavings = Math.min(netIncomeMonthly, lastMonthSavingsActual + appliedChange);
+    const newCashSavings = Math.min(netIncomeMonthly, lastMonthSavingsActual + appliedChange);
+    const newTotalSavings = Math.min(actualForComparison + appliedChange, planTarget);
     recommendedPlan = {
-      plannedSavings: newSavings,
-      plannedSpend: netIncomeMonthly - newSavings,
+      plannedSavings: newCashSavings,
+      plannedSpend: netIncomeMonthly - newCashSavings,
       plannedNeeds: currentPlan.plannedNeeds,
       plannedWants: currentPlan.plannedWants,
     };
+    if (useTotalSpace) totalRecommendedSavings = newTotalSavings;
   }
 
-  const recommended_change = recommendedPlan.plannedSavings - currentPlan.plannedSavings;
+  const recommended_change = useTotalSpace
+    ? (totalRecommendedSavings ?? planTarget) - planTarget
+    : recommendedPlan.plannedSavings - currentPlan.plannedSavings;
 
   // Narrative copy per spec
   let headline: string;
@@ -239,10 +259,14 @@ export function buildIncomeAllocationSnapshotFromInputs(
     income: { netIncomeMonthly },
     actuals: {
       last3m_avg: { ...last3m_avg },
-      lastMonth: { ...lastMonthActual },
+      lastMonth: useTotalSpace
+        ? { ...lastMonthActual, savings: totalActualSavings! }
+        : { ...lastMonthActual },
     },
     plan: {
       currentPlan: { ...currentPlan },
+      totalSavingsTargetForDisplay: useTotalSpace ? planTarget : undefined,
+      totalRecommendedSavings,
       recommendedPlan,
     },
     deltas: {

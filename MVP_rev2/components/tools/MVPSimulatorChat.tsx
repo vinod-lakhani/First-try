@@ -40,6 +40,9 @@ export function MVPSimulatorChat({ userPlanData }: MVPSimulatorChatProps) {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const streamingTextRef = useRef('');
+  const streamingMessageIdRef = useRef<string | null>(null);
+  const [streamingTick, setStreamingTick] = useState(0);
 
   useEffect(() => {
     setImageSrc(withBasePath('images/ribbit.png'));
@@ -54,7 +57,7 @@ export function MVPSimulatorChat({ userPlanData }: MVPSimulatorChatProps) {
       scrollToBottom();
       inputRef.current?.focus();
     }
-  }, [messages, isOpen]);
+  }, [messages, isOpen, streamingTick]);
 
   const handleSend = async () => {
     const text = inputValue.trim();
@@ -71,6 +74,8 @@ export function MVPSimulatorChat({ userPlanData }: MVPSimulatorChatProps) {
     setIsLoading(true);
 
     const streamingId = (Date.now() + 1).toString();
+    streamingTextRef.current = '';
+    streamingMessageIdRef.current = streamingId;
     setMessages((prev) => [
       ...prev,
       { id: streamingId, text: '', isUser: false, timestamp: new Date() },
@@ -90,9 +95,8 @@ export function MVPSimulatorChat({ userPlanData }: MVPSimulatorChatProps) {
         },
         {
           onChunk(text) {
-            setMessages((prev) =>
-              prev.map((m) => (m.id === streamingId ? { ...m, text: m.text + text } : m))
-            );
+            streamingTextRef.current += text;
+            setStreamingTick((t) => t + 1);
           },
         }
       );
@@ -106,6 +110,12 @@ export function MVPSimulatorChat({ userPlanData }: MVPSimulatorChatProps) {
         )
       );
     } finally {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === streamingId ? { ...m, text: streamingTextRef.current } : m
+        )
+      );
+      streamingMessageIdRef.current = null;
       setIsLoading(false);
     }
   };
@@ -159,7 +169,10 @@ export function MVPSimulatorChat({ userPlanData }: MVPSimulatorChatProps) {
         </Button>
       </div>
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {messages.map((m) => (
+        {messages.map((m) => {
+          const isStreamingThis = m.id === streamingMessageIdRef.current && isLoading;
+          const displayText = isStreamingThis ? streamingTextRef.current : (m.text ?? '');
+          return (
           <div
             key={m.id}
             className={`flex ${m.isUser ? 'justify-end' : 'justify-start'}`}
@@ -174,11 +187,12 @@ export function MVPSimulatorChat({ userPlanData }: MVPSimulatorChatProps) {
               {m.isUser ? (
                 m.text
               ) : (
-                <div className="prose prose-sm dark:prose-invert max-w-none"><ReactMarkdown>{m.text}</ReactMarkdown></div>
+                <div className="prose prose-sm dark:prose-invert max-w-none"><ReactMarkdown>{displayText}</ReactMarkdown></div>
               )}
             </div>
           </div>
-        ))}
+          );
+        })}
         {isLoading && (
           <div className="flex justify-start">
             <div className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-500 dark:bg-slate-700">

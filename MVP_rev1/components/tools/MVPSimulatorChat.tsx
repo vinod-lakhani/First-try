@@ -94,6 +94,13 @@ export function MVPSimulatorChat({ userPlanData }: MVPSimulatorChatProps) {
               prev.map((m) => (m.id === streamingId ? { ...m, text: m.text + text } : m))
             );
           },
+          onDone(meta) {
+            if (meta.responseWithoutIntent?.trim()) {
+              setMessages((prev) =>
+                prev.map((m) => (m.id === streamingId ? { ...m, text: meta.responseWithoutIntent!.trim() } : m))
+              );
+            }
+          },
         }
       );
     } catch (err) {

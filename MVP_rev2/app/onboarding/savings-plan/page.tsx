@@ -16,6 +16,7 @@ import { allocateSavings, type SavingsInputs, type SavingsAllocation } from '@/l
 import { Info, Shield, CreditCard, TrendingUp, PiggyBank, HelpCircle, Edit, CheckCircle2, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { OnboardingChat } from '@/components/onboarding/OnboardingChat';
+import type { PlanChangesFromChat } from '@/lib/chat/chatService';
 import { getPaychecksPerMonth } from '@/lib/onboarding/usePlanData';
 import { OnboardingProgress } from '@/components/onboarding/OnboardingProgress';
 import { calculateSavingsBreakdown, calculatePreTaxSavings } from '@/lib/utils/savingsCalculations';
@@ -124,6 +125,17 @@ export default function SavingsPlanPage() {
   };
   
   const taxSavingsMonthly = savingsBreakdown.taxSavingsMonthly;
+
+  /** Apply plan changes from chat (e.g. "remove 401k") so the plan updates. Pre-tax: update payroll; post-tax deltas can be wired later. */
+  const handlePlanChangesFromChat = (changes: PlanChangesFromChat) => {
+    if (changes.preTax401k === 0) {
+      updatePayrollContributions({ currentlyContributing401k: 'no', contributionValue401k: 0 });
+    }
+    if (changes.hsa === 0) {
+      updatePayrollContributions({ currentlyContributingHSA: 'no', contributionValueHSA: 0 });
+    }
+    // Post-tax deltas (efDelta, debtDelta, etc.) could adjust allocation percentages here if needed
+  };
 
   // Calculate match capture recommendation
   const matchRecommendation = useMemo(() => {
@@ -1344,8 +1356,8 @@ export default function SavingsPlanPage() {
           </div>
         </CardContent>
 
-        {/* Floating Ribbit Chat Button */}
-        <OnboardingChat context="savings-plan" />
+        {/* Floating Ribbit Chat Button — same plan-update capability as Savings Allocator */}
+        <OnboardingChat context="savings-plan" onPlanChangesFromChat={handlePlanChangesFromChat} />
       </Card>
     </>
   );

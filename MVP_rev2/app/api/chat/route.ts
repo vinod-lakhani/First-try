@@ -33,7 +33,8 @@ export async function POST(request: NextRequest) {
     const { messages, context: requestContext, userPlanData: requestUserPlanData, stream: requestStream } = requestBody;
     context = requestContext || 'financial-sidekick';
     userPlanData = requestUserPlanData;
-    const wantStream = requestStream === true;
+    // Savings-allocator / savings-plan: always non-streaming to avoid response overwrite/disappear (embedded chat only, no floating sidekick).
+    const wantStream = (context === 'savings-allocator' || context === 'savings-plan') ? false : requestStream === true;
     
     // Extract the user's question for logging
     question = extractUserQuestion(messages);
@@ -126,7 +127,7 @@ export async function POST(request: NextRequest) {
       model: 'gpt-4o-mini',
       messages: openAIMessages,
       temperature: 0.7,
-      max_tokens: 500,
+      max_tokens: (context === 'savings-allocator' || context === 'savings-plan') ? 3200 : 500,
     };
     if (wantStream) openAIBody.stream = true;
 
@@ -243,11 +244,23 @@ export async function POST(request: NextRequest) {
     let aiResponse = data.choices?.[0]?.message?.content || 'I apologize, I could not generate a response.';
 
     // Round dollar amounts to whole dollars (no cents) in chat responses
-    aiResponse = aiResponse.replace(/\$([\d,]+)(\.\d{1,2})?\b/g, (_match: string, numPart: string, decPart?: string) => {
+    // CRITICAL: Match numbers with many decimal places (e.g., "$828.4000000000001")
+    // Match: $ followed by digits (with optional commas) followed by optional decimal part
+    // Use multiple passes to catch all cases
+    const originalResponse = aiResponse;
+    aiResponse = aiResponse.replace(/\$(\d{1,3}(?:,\d{3})*|\d+)(\.\d+)?/g, (match: string, numPart: string, decPart?: string) => {
       const num = parseFloat((numPart.replace(/,/g, '') || '0') + (decPart || ''));
+      if (isNaN(num)) return match; // Return original if parsing fails
       const rounded = Math.round(num);
       return '$' + rounded.toLocaleString('en-US', { maximumFractionDigits: 0, minimumFractionDigits: 0 });
     });
+    // Debug: Log if formatting changed anything
+    if (originalResponse !== aiResponse && originalResponse.includes('828.4')) {
+      console.log('[Chat API] Number formatting applied', {
+        original: originalResponse.match(/\$828\.\d+/)?.[0],
+        formatted: aiResponse.match(/\$828/)?.[0],
+      });
+    }
 
     // Parse PROPOSED_SAVINGS from savings-helper so the UI can show that amount when they click Explore options
     let proposedPlannedSavings: number | undefined = undefined;
@@ -260,6 +273,12 @@ export async function POST(request: NextRequest) {
           aiResponse = aiResponse.replace(/\n?PROPOSED_SAVINGS:\s*[\d.]+\s*$/im, '').trim();
         }
       }
+    }
+
+    // Parse PLAN_CHANGES for savings-allocator/savings-plan (non-streaming) so client can apply changes
+    let planChanges: Record<string, number> | undefined = undefined;
+    if (context === 'savings-allocator' || context === 'savings-plan') {
+      planChanges = parsePlanChangesFromContent(aiResponse);
     }
 
     // Log successful question/response
@@ -281,8 +300,9 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const json: { response: string; proposedPlannedSavings?: number } = { response: aiResponse };
+    const json: { response: string; proposedPlannedSavings?: number; planChanges?: Record<string, number> } = { response: aiResponse };
     if (proposedPlannedSavings != null) json.proposedPlannedSavings = proposedPlannedSavings;
+    if (planChanges != null) json.planChanges = planChanges;
     return NextResponse.json(json);
   } catch (error) {
     console.error('Chat API error:', error);
@@ -334,15 +354,29 @@ export async function POST(request: NextRequest) {
 
 /** Round dollar amounts in text to whole dollars (no cents) for chat display */
 function roundDollarAmountsInText(text: string): string {
-  return text.replace(/\$([\d,]+)(\.\d{1,2})?\b/g, (_match: string, numPart: string, decPart?: string) => {
+  // CRITICAL: Match numbers with many decimal places (e.g., "$828.4000000000001")
+  // Match: $ followed by digits (with optional commas) followed by optional decimal part
+  return text.replace(/\$(\d{1,3}(?:,\d{3})*|\d+)(\.\d+)?/g, (match: string, numPart: string, decPart?: string) => {
     const num = parseFloat((numPart.replace(/,/g, '') || '0') + (decPart || ''));
+    if (isNaN(num)) return match; // Return original if parsing fails
     const rounded = Math.round(num);
     return '$' + rounded.toLocaleString('en-US', { maximumFractionDigits: 0, minimumFractionDigits: 0 });
   });
 }
 
+/** Parse PLAN_CHANGES: {...} from AI response for savings-allocator; returns undefined if missing or invalid. */
+function parsePlanChangesFromContent(fullContent: string): Record<string, number> | undefined {
+  const match = fullContent.match(/\n?PLAN_CHANGES:\s*(\{[^}]+\})\s*$/im);
+  if (!match) return undefined;
+  try {
+    const obj = JSON.parse(match[1]) as Record<string, number>;
+    if (obj && typeof obj === 'object') return obj;
+  } catch (_) {}
+  return undefined;
+}
+
 /**
- * Stream OpenAI SSE response to our SSE format: { text } chunks then { done, proposedPlannedSavings? }.
+ * Stream OpenAI SSE response to our SSE format: { text } chunks then { done, proposedPlannedSavings?, planChanges? }.
  */
 async function streamChatResponse(
   openAIResponse: Response,
@@ -372,6 +406,7 @@ async function streamChatResponse(
             const data = line.slice(6).trim();
             if (data === '[DONE]') {
               let proposedPlannedSavings: number | undefined;
+              let planChanges: Record<string, number> | undefined;
               if (context === 'savings-helper') {
                 const match = fullContent.match(/\n?PROPOSED_SAVINGS:\s*([\d.]+)\s*$/im);
                 if (match) {
@@ -379,7 +414,8 @@ async function streamChatResponse(
                   if (!Number.isNaN(parsed) && parsed >= 0) proposedPlannedSavings = Math.round(parsed);
                 }
               }
-              controller.enqueue(encoder.encode('data: ' + JSON.stringify({ done: true, proposedPlannedSavings }) + '\n\n'));
+              if (context === 'savings-allocator' || context === 'savings-plan') planChanges = parsePlanChangesFromContent(fullContent);
+              controller.enqueue(encoder.encode('data: ' + JSON.stringify({ done: true, proposedPlannedSavings, planChanges }) + '\n\n'));
               if (question) {
                 await logQuestion({
                   timestamp: new Date().toISOString(),
@@ -419,6 +455,7 @@ async function streamChatResponse(
           const data = line.slice(6).trim();
           if (data === '[DONE]') {
             let proposedPlannedSavings: number | undefined;
+            let planChanges: Record<string, number> | undefined;
             if (context === 'savings-helper') {
               const match = fullContent.match(/\n?PROPOSED_SAVINGS:\s*([\d.]+)\s*$/im);
               if (match) {
@@ -426,7 +463,8 @@ async function streamChatResponse(
                 if (!Number.isNaN(parsed) && parsed >= 0) proposedPlannedSavings = Math.round(parsed);
               }
             }
-            controller.enqueue(encoder.encode('data: ' + JSON.stringify({ done: true, proposedPlannedSavings }) + '\n\n'));
+            if (context === 'savings-allocator' || context === 'savings-plan') planChanges = parsePlanChangesFromContent(fullContent);
+            controller.enqueue(encoder.encode('data: ' + JSON.stringify({ done: true, proposedPlannedSavings, planChanges }) + '\n\n'));
           }
         }
         if (question) {
@@ -1078,6 +1116,16 @@ RESPONSE FORMATTING GUIDELINES - Make Responses Easy to Read
    - Example of BAD formatting (what to avoid): "Your current allocations are as follows: - **Needs:** $2,868 (33.0% of income) - **Wants:** $2,400 (27.6% of income) - **Savings:** $3,412 (39.3% of income) The recommended plan maintains..."
    - Example of GOOD formatting: Use section headers, separate bullet points on their own lines, bold numbers, and blank lines between sections
 
+4a. **Expense breakdown (Needs vs Wants) - MANDATORY**:
+   - When showing monthly expense breakdown (individual expenses by category), you MUST clearly separate Needs from Wants.
+   - ALWAYS use two distinct section headers with a blank line between them:
+     * First: "**Needs (Essentials):**" or "**Monthly Expenses — Needs (Essentials):**" then list only needs items (rent, utilities, groceries, debt minimums, etc.) with a "Total: $X (Y% of income)" line for that section.
+     * Then a blank line.
+     * Second: "**Wants (Discretionary):**" or "**Monthly Expenses — Wants (Discretionary):**" then list only wants items (streaming, dining, entertainment, etc.) with a "Total: $X (Y% of income)" line for that section.
+   - NEVER list a Wants total or Wants items immediately after Needs items without the explicit "**Wants (Discretionary):**" header on its own line first.
+   - BAD: Listing "Total: $2,400" and then Netflix, Spotify under the same bullet flow as Needs without a "Wants" header — readers cannot tell what is needs vs wants.
+   - GOOD: Start with "**Needs (Essentials):**" on its own line, then bullets for needs items and needs total; then a blank line; then "**Wants (Discretionary):**" on its own line, then bullets for wants items and wants total. This makes it visually obvious which category each item belongs to.
+
 5. **Use Tables for Comparisons**:
    - When comparing current vs plan, or before vs after, use a markdown table format
    - Example table structure: Header row with Category, Current, Plan, Change columns, separator row with dashes, then data rows with values
@@ -1245,7 +1293,9 @@ If users ask about:
 - Explain the difference between Needs and Wants
 - Help them identify areas where they might want to adjust spending
 - Guide them on what to expect in the next step (Monthly Plan Design)
-- Answer questions about specific expenses or categories`,
+- Answer questions about specific expenses or categories
+
+**CRITICAL - When showing expense breakdown**: Always use two clear section headers: "**Needs (Essentials):**" then list needs items and total; then a blank line; then "**Wants (Discretionary):**" then list wants items and total. Never list wants items or a wants total without the "Wants (Discretionary)" header so the user can tell at a glance what is needs vs wants.`,
       
       'payroll-contributions': `CURRENT SCREEN: Payroll Contributions (Help Your Sidekick Make Smarter Moves)
       
@@ -1324,7 +1374,7 @@ If users ask about:
 - Answer questions about employer match calculations
 - Explain how this data feeds into the savings plan`,
       
-      'savings-plan': `CURRENT SCREEN: Savings Plan (Onboarding — Allocate Savings)
+      'savings-plan': `CURRENT SCREEN: Savings Plan (Onboarding — Allocate Savings). Plan-update-via-chat works here; in the app the same capability exists on the Savings Allocator tool (all modes).
       
 **Screen Purpose**: Allocate post-tax savings across Emergency Fund, Debt Payoff, Retirement, Brokerage. Part of onboarding (main flow now uses Savings Allocator).
 
@@ -1375,7 +1425,9 @@ If users ask about:
   * Clarify that they're adjusting POST-TAX savings (pre-tax is set elsewhere)
 - Guide them on how to use +/- buttons and input boxes to adjust allocations
 - Explain how post-tax savings is calculated (base savings minus net pre-tax impact)
-- **MANDATORY**: When users ask "I don't understand what I'm supposed to do here" or similar confusion questions, you MUST provide clear, actionable guidance on what to do using the buttons/input boxes, not just offer to help`,
+- **MANDATORY**: When users ask "I don't understand what I'm supposed to do here" or similar confusion questions, you MUST provide clear, actionable guidance on what to do using the buttons/input boxes, not just offer to help
+- **When the user says "remove money from X" or "reduce X"**: Make it easy to execute. Recommend where to move the freed funds (e.g. investment account, emergency fund, or debt) and offer a simple choice: "Want me to put it there, or say emergency fund / debt / investment and I'll apply that." Do not leave the user wondering where the money goes.
+- **Plan updates via chat**: When the user requests a change to the savings plan (e.g. "remove 401k", "put more in emergency fund", "I don't want 401k") and you agree to apply it, output a single line at the very end of your response: PLAN_CHANGES: followed by a JSON object. Use preTax401k and hsa for absolute monthly values (e.g. 0 to eliminate). Use efDelta, debtDelta, retirementExtraDelta, brokerageDelta for the monthly change in dollars. Example: PLAN_CHANGES: {"preTax401k":0}. Only include when applying a change the user requested; do not include when only explaining or directing to Payroll Contributions for 401k/HSA.`,
       
       'plan-final': `CURRENT SCREEN: Final Plan Summary (Plan Complete)
       
@@ -1467,9 +1519,10 @@ If users ask about:
 **Screen Purpose**: This is a chat-first income allocation tool. Users see a read-only dashboard comparing **Actuals vs Plan**. No sliders — all changes are proposed through chat and require explicit "Confirm & Apply".
 
 **Key Numbers (align your responses with these)**:
-- **Current savings target** — what the user was aiming to save
-- **Actual savings (last month)** — what they actually saved
+- **Current savings target** = **Total Monthly Savings** from the "TOTAL MONTHLY SAVINGS BREAKDOWN" section (same number — use it for both "target" and "total").
+- **Actual savings (last month)** — what they actually saved.
 - **Proposed for next month** — the recommended adjustment. Use these three when explaining.
+- When the user asks about "savings target", "current target", "total savings", or "breakdown", **always** respond with: (1) Total Monthly Savings: $X/month, then (2) full breakdown: Payroll + Match + Cash = Total, using the exact values from the data.
 
 **Response structure (MANDATORY):** Structure every explanation as: (1) Current situation — what happened in plain language; (2) What that results in — the consequence; (3) What we're proposing — one short sentence; (4) Why — back it up with numbers. Lead with the simple message. Write for young adults: simple, clear, no jargon. Use numbers to validate.
 
@@ -1507,9 +1560,9 @@ If users ask about:
 - Recommended Plan respects 4% shift limit; Wants is the primary lever.
 - Help interpret net worth: "current spending trend" vs "plan" (not "current plan").`,
       
-      'savings-allocator': `CURRENT SCREEN: Savings Allocator Tool
+      'savings-allocator': `CURRENT SCREEN: Savings Allocator Tool (App — all modes: first-time setup, review-from-Feed, no-match, no-hsa, etc.)
       
-**Screen Purpose**: This tool allows users to fine-tune how their savings budget is allocated across different goals. It provides detailed control over emergency fund, debt payoff, retirement, and brokerage allocations.
+**Screen Purpose**: This tool allows users to fine-tune how their savings budget is allocated across different goals. It provides detailed control over emergency fund, debt payoff, retirement, and brokerage allocations. Plan-update-via-chat works here in all modes (not limited to onboarding).
 
 **UI Layout**:
 - Shows "Post-tax savings available to allocate" at the top (calculated using centralized formula)
@@ -1592,7 +1645,11 @@ If users ask about:
   * Explain that all pages use the same centralized calculation formula
   * Explain the formula: "Base savings (income - needs - wants) minus net pre-tax impact (pre-tax contributions minus tax savings) equals post-tax cash savings"
   * State that values should match everywhere because they use the same calculation
-  * If there are actual discrepancies, explain that they may be seeing different time periods or different allocation scenarios`,
+  * If there are actual discrepancies, explain that they may be seeing different time periods or different allocation scenarios
+- **When the user says "remove money from X" or "reduce X"**: Make it easy to execute. (1) Recommend where to move the freed funds: e.g. "I'll put that $X/month toward your investment account so you keep building wealth" or "toward your emergency fund" if EF is below target, or "toward debt" if they have high-APR debt. (2) Offer a simple choice: "Want me to put it there, or would you prefer emergency fund / debt paydown / investment? Just say which." Do not leave the user wondering where the money goes — always recommend one destination and invite them to pick another in one short sentence.
+- **When reducing 401K or HSA (pre-tax accounts)**: You MUST explain pre-tax vs post-tax. When the user reduces 401K or HSA by $X, that frees up $X/month PRE-TAX. If they want to move it to a post-tax bucket (emergency fund, debt, brokerage, retirement), they'll have ~$X * 0.75 = ~$Y/month after taxes (~25% marginal rate). If they want to keep it pre-tax (move to HSA), you can use the full $X/month. Always state: "That frees up **$X/month pre-tax**. If you move it to a post-tax bucket (emergency fund, debt, investment, retirement), you'll have **~$Y/month** after taxes. If you keep it pre-tax (move to HSA), you can use the full **$X/month**. Where would you like to apply it?"
+- **MANDATORY - Net Worth Impact Rule (CARDINAL RULE)**: When ANY change is made to the savings plan (401K, HSA, emergency fund, debt, retirement, brokerage), you MUST immediately state the 20-year net worth impact in your response. Check USER_STATE for netWorthImpact20Y first - if provided, use those exact values (deltaAt20Y, ribbit20Y, proposed20Y). The format is provided in the NET WORTH IMPACT section below. Always include this BEFORE asking where to move funds or confirming the change. This is a cardinal rule - NEVER skip mentioning net worth impact when changes are made. If you don't mention it, you're violating a cardinal rule.
+- **Plan updates via chat**: When the user requests a change to the savings plan (e.g. "remove 401k", "I don't want 401k", "put more in emergency fund") and you agree to apply it, output a single line at the very end of your response: PLAN_CHANGES: followed by a JSON object. Use preTax401k and hsa for absolute monthly values (the TARGET value, not the change amount). **CRITICAL**: If the user says "reduce 401k to $100" or "set 401k to $100", use {"preTax401k": 100} (the target value), NOT 0. Only use 0 if the user explicitly wants to eliminate it completely (e.g. "remove 401k", "no 401k", "eliminate 401k"). **CRITICAL - "to $X" vs "by $X"**: (1) "Decrease emergency fund to $1000" or "reduce my emergency fund contribution to $1000" means SET the new amount TO $1000. So efDelta = (1000 minus current EF). If current EF is $1,465, then efDelta = 1000 - 1465 = -465. You must output {"efDelta": -465}, NOT -1000. (2) "Reduce emergency fund by $1000" means subtract $1000 from current; efDelta = -1000. Same for debt, retirement, brokerage: "to $X" = delta = (X - current); "by $X" = delta = ±X. Use efDelta, debtDelta, retirementExtraDelta, brokerageDelta for the monthly change in dollars (positive = add, negative = reduce). Example: PLAN_CHANGES: {"preTax401k":100} (if user said "reduce to $100"), PLAN_CHANGES: {"preTax401k":0} (if user said "remove 401k"), PLAN_CHANGES: {"efDelta":-1165} (if user said "reduce emergency fund to $200" and current is $1,365), or PLAN_CHANGES: {"efDelta":-200} (if user said "reduce emergency fund by $200"). Only include this line when you are applying a change the user requested; do not include it when only explaining or discouraging.`,
       
       'savings-optimizer': `CURRENT SCREEN: Savings Optimizer Tool
       
@@ -1646,7 +1703,23 @@ CURRENT SCREEN CONTEXT
 ${contextDesc}
 
 `;
-    
+
+    // When user asks to change savings plan but is on a screen that can't apply it, direct them to the right screen
+    const canApplySavingsPlanChanges = context === 'savings-allocator' || context === 'savings-plan';
+    if (!canApplySavingsPlanChanges) {
+      prompt += `================================================================================
+SAVINGS PLAN CHANGES — DIRECT TO RIGHT SCREEN
+================================================================================
+
+The plan-update-via-chat capability is available in BOTH onboarding (Savings Plan screen) and the app (Savings Allocator tool, all modes: first-time setup, review, no-match, etc.). It is NOT limited to onboarding.
+
+When the user is on THIS screen (not Savings Allocator / not Savings Plan) and asks to change or update their savings plan (e.g. change 401k, remove 401k, change HSA, change allocation, emergency fund, debt payoff, brokerage, "I don't want 401k"), you MUST direct them to the right screen. Do NOT attempt to apply the change in this chat.
+
+**You MUST say**: They can update their savings plan in the **Savings Allocation** tool. Tell them to go to **Tools → Savings Allocation** in the app, or to open the savings recommendation from their Feed. Be helpful and concise. Example: "You can update your savings plan in the Savings Allocation tool. Go to **Tools → Savings Allocation** in the app (or tap the savings recommendation in your Feed to open it)."
+
+`;
+    }
+
     // Add onboarding flow context for onboarding screens
     if (context && ['monthly-plan', 'monthly-plan-design', 'monthly-plan-current', 'payroll-contributions', 'savings-plan', 'plan-final'].includes(context)) {
       prompt += `================================================================================
@@ -1742,7 +1815,22 @@ OUTPUT
         efBalance$: userPlanData.efBalance$,
         totalMonthlySavingsCurrent: userPlanData.totalMonthlySavingsCurrent,
         totalMonthlySavingsProposed: userPlanData.totalMonthlySavingsProposed,
+        // CRITICAL: Include net worth impact so prompt can mention it
+        netWorthImpact20Y: userPlanData.netWorthImpact20Y,
       });
+      // Debug: Log if netWorthImpact20Y is available
+      if (userPlanData.netWorthImpact20Y) {
+        console.log('[Chat API] netWorthImpact20Y available in prompt', {
+          ribbit20Y: userPlanData.netWorthImpact20Y.ribbit20Y,
+          proposed20Y: userPlanData.netWorthImpact20Y.proposed20Y,
+          deltaAt20Y: userPlanData.netWorthImpact20Y.deltaAt20Y,
+        });
+      } else {
+        console.log('[Chat API] netWorthImpact20Y NOT available in userPlanData', {
+          hasUserPlanData: !!userPlanData,
+          userPlanDataKeys: userPlanData ? Object.keys(userPlanData).slice(0, 20) : [],
+        });
+      }
       const proposedPlanCompact = {
         planSteps: (toolOutput.planSteps || []).slice(0, 5),
         totals: toolOutput.totals || {},
@@ -1760,6 +1848,7 @@ OUTPUT
             keyMetric: baselinePlan.keyMetric || {},
           })
         : 'null (no saved plan yet)';
+      const isFirstTimeAllocator = userPlanData.allocatorScenario === 'first_time';
       prompt += `================================================================================
 ROLE
 You are Ribbit, WeLeap's financial sidekick. You are operating inside the Savings Allocation tool.
@@ -1770,16 +1859,29 @@ ARCHITECTURE RULES (NON-NEGOTIABLE)
 - You must NEVER invent or guess numbers. Only use numbers present in USER_STATE, BASELINE_PLAN, or PROPOSED_PLAN.
 - If the user asks for a number you do not have, say you don't have it and direct them to the relevant section of the page or ask a clarifying question.
 
-CONTEXT YOU HAVE (USE ALL THREE TO EXPLAIN)
+${isFirstTimeAllocator ? `**FIRST-TIME SETUP — MANDATORY FORMAT (NO COMPARISON)**
+The user has no saved plan. You must NEVER write "current plan", "proposed plan", "current vs proposed", "current → proposed", or compare two plans. There is only one plan: use PROPOSED_PLAN numbers only.
+
+When they ask "explain this plan" or similar, use EXACTLY this structure (nothing else):
+
+**Total:** One sentence only. Example: "**Total savings: $3,751/month** — that's your 401(k) and HSA from payroll, plus employer match, plus the amount we're putting toward emergency fund, debt, retirement, and investing." Use the actual total from PROPOSED_PLAN.
+
+**Where your money goes:** One short paragraph or list. List each category ONCE in this order, each on its own line: **Category name:** $X/mo — one short reason (e.g. "**401(k) employer match:** $339/mo — you're capturing the full 50% match (free money)." "**Emergency fund:** $1,365/mo — building toward 5 months of expenses."). Use PROPOSED_PLAN / planSteps and TOOL_OUTPUT_EXPLAIN for amounts and reasons. Order: 401(k) match, 401(k) contribution, HSA, Emergency fund, High-APR debt, Retirement (Roth IRA), Investment account.
+
+**Closing:** One sentence. "Ready to lock this in? Tap **Apply** above, or ask if you have questions."
+
+Do NOT add "Total Monthly Savings: Your current plan... Proposed plan...". Do NOT add "---" or extra sections. Do NOT list the same categories twice. Do NOT use the words "current" or "proposed" when describing amounts.
+` : `CONTEXT YOU HAVE (USE ALL THREE TO EXPLAIN)
 - USER_STATE: Current user financial context. Includes totalMonthlySavingsCurrent and totalMonthlySavingsProposed — these are the FULL totals (Pre-tax + Employer + Post-tax). Use these when showing "Total Monthly Savings: Current vs Proposed."
 - BASELINE_PLAN / PROPOSED_PLAN: Contain planSteps and totals. Note: totals.postTaxAllocationMonthly is POST-TAX ONLY. For "Total Monthly Savings" (the full picture), use totalMonthlySavingsCurrent and totalMonthlySavingsProposed from USER_STATE — they include Pre-tax + Employer + Post-tax.
 
 YOUR JOB IN THIS TOOL
 - Explain the recommended savings plan clearly and calmly using USER_STATE, BASELINE_PLAN, and PROPOSED_PLAN.
-- When the user asks "what's different" or "why this plan" or "explain the breakdown" or "yes" (to wanting an explanation), compare BASELINE_PLAN to PROPOSED_PLAN and explain in plain language. **You MUST start each category with a bold header** (e.g. **Emergency Fund:**, **High-APR Debt Payoff:**, **Roth IRA / Taxable Retirement:**, **Brokerage:**) on its own line, then list Current / Proposed / Reason bullets for that category. Never list Current/Proposed/Reason without the category name first.
+- When the user asks "what's different", "why this plan", "explain the breakdown", or "explain the changes you're proposing" (or similar), they want an explanation of the **proposed changes** — what's different between current and proposed and why. Use the **ONE FORMAT** below: Total Monthly Savings (Current vs Proposed if they differ) → Post-Tax Cash Allocation with each category showing **Current vs Proposed** and a brief reason for the change → Explanation focused on **what changed and why**. Do NOT only describe the current plan; lead with the changes. Compare BASELINE_PLAN to PROPOSED_PLAN; group unchanged items in one line to keep the response from being cut off.
 - Highlight the single most important reason this plan matters right now.
 - Ask for explicit confirmation before any plan is applied or changed.
 - If the user wants changes, help them adjust, then present an updated summary and ask for confirmation again.
+`}
 
 CONFIRMATION REQUIREMENT
 - Any time the plan differs from what the user previously confirmed, you must ask for confirmation.
@@ -1837,7 +1939,7 @@ For increases: "Got it. I've added $X to [category]. Here's the updated plan —
 Your Step 2 response should prepare the user for this flow. When they tap Proceed, the plan updates and they see the delta table + Net Worth impact. Then they tap "Confirm & Apply" to lock it in.
 
 ═══════════════════════════════════════════════════════════════════════════════
-STEP 5: REFERENCE THE UPDATED NET WORTH IMPACT
+STEP 5: REFERENCE THE UPDATED NET WORTH IMPACT (MANDATORY - CARDINAL RULE)
 ═══════════════════════════════════════════════════════════════════════════════
 Always reference the Net Worth card/chart:
 - "The chart above shows before vs after."
@@ -1888,56 +1990,90 @@ ${currentContextJson}
 USER_STATE (current user financial context)
 ${userStateJson}
 
+${userPlanData.netWorthImpact20Y ? `
+**CRITICAL - NET WORTH IMPACT DATA AVAILABLE IN USER_STATE:**
+- netWorthImpact20Y.ribbit20Y = $${Math.round(userPlanData.netWorthImpact20Y.ribbit20Y).toLocaleString()}
+- netWorthImpact20Y.proposed20Y = $${Math.round(userPlanData.netWorthImpact20Y.proposed20Y).toLocaleString()}
+- netWorthImpact20Y.deltaAt20Y = $${Math.round(userPlanData.netWorthImpact20Y.deltaAt20Y).toLocaleString()}
+- **YOU MUST USE THESE VALUES** in your response when confirming or applying changes
+` : ''}
+
 BASELINE_PLAN (current/saved plan — what is in effect now)
 ${baselinePlanJson}
 
 PROPOSED_PLAN (recommended plan — what will apply if user confirms)
 ${proposedPlanJson}
+
+${userPlanData.netWorthImpact20Y ? `
+**NET WORTH IMPACT (20-YEAR) - MANDATORY TO MENTION (CARDINAL RULE - NON-NEGOTIABLE):**
+- Ribbit Proposal (baseline) 20-year net worth: $${Math.round(userPlanData.netWorthImpact20Y.ribbit20Y).toLocaleString()}
+- Proposed plan 20-year net worth: $${Math.round(userPlanData.netWorthImpact20Y.proposed20Y).toLocaleString()}
+- Delta (change): $${Math.round(userPlanData.netWorthImpact20Y.deltaAt20Y).toLocaleString()} (${userPlanData.netWorthImpact20Y.deltaAt20Y >= 0 ? 'increase' : 'reduction'})
+- **CRITICAL - YOU MUST INCLUDE THIS IN YOUR RESPONSE**: When confirming or applying ANY change to the savings plan, you MUST state: "This change would **${userPlanData.netWorthImpact20Y.deltaAt20Y >= 0 ? 'increase' : 'reduce'}** your net worth by **$${Math.round(Math.abs(userPlanData.netWorthImpact20Y.deltaAt20Y)).toLocaleString()}** in 20 years (from $${Math.round(userPlanData.netWorthImpact20Y.ribbit20Y).toLocaleString()} to $${Math.round(userPlanData.netWorthImpact20Y.proposed20Y).toLocaleString()})."
+- **MANDATORY**: Include this statement BEFORE asking where to move funds or confirming the change. This is a cardinal rule - NEVER skip mentioning net worth impact.
+` : (userPlanData.netWorthImpact20Y === undefined ? `
+**NOTE**: netWorthImpact20Y is not available in userPlanData. Check USER_STATE above for netWorthImpact20Y.
+` : '')}
+
 ${(toolOutput.explain && typeof toolOutput.explain === 'object')
-  ? `
+  ? (() => {
+      const explain = toolOutput.explain as { delta?: { rows?: Array<{ label: string; current?: { monthly?: number }; proposed?: { monthly?: number }; currentMonthly?: number; proposedMonthly?: number; whyText?: string }> } };
+      const rows = explain?.delta?.rows ?? [];
+      const preformattedBreakdown = rows.length > 0
+        ? rows.map((r) => {
+            const cur = Math.round(r.current?.monthly ?? r.currentMonthly ?? 0);
+            const prop = Math.round(r.proposed?.monthly ?? r.proposedMonthly ?? 0);
+            const noChange = Math.abs((r.proposed?.monthly ?? r.proposedMonthly ?? 0) - (r.current?.monthly ?? r.currentMonthly ?? 0)) < 0.01;
+            return `**${r.label}:**
+- Current: $${cur.toLocaleString()}/month
+- Proposed: $${prop.toLocaleString()}/month
+- Reason: ${(r.whyText ?? (noChange ? 'No change.' : 'See above.')).trim()}`;
+          }).join('\n\n')
+        : '';
+      return `
 TOOL_OUTPUT_EXPLAIN (engine-only numbers — use ONLY these when explaining match, HSA, EF, benefits; do not compute or invent)
 ${JSON.stringify(toolOutput.explain, null, 2)}
-
+${preformattedBreakdown ? `
+PREFORMATTED_BREAKDOWN (reference — the labels here, e.g. Emergency fund, Extra Debt Paydown, are the exact category names you MUST use in your response. Use these names in Section 2 and Section 3; do not output this block verbatim, but do include every category BY NAME with $ and % in your Post-Tax Cash Allocation):
+${preformattedBreakdown}
+` : ''}
+${isFirstTimeAllocator ? `
+- **FIRST-TIME ONLY**: Use the FIRST-TIME SETUP format above. Do NOT use the "ONE FORMAT" or "Current vs Proposed" structure below. Your response must have: (1) One total sentence, (2) "Where your money goes" with each category once (name, $/mo, short why), (3) One closing sentence. No "current plan", no "proposed plan", no "---", no duplicate sections.
+- Use PROPOSED_PLAN and TOOL_OUTPUT_EXPLAIN for all numbers. Match, HSA, EF months from TOOL_OUTPUT_EXPLAIN.
+` : `- **ONE FORMAT FOR ALL "UNDERSTAND MY PLAN" REQUESTS** — Use the same structure for: "explain my savings plan", "explain the plan", "what's different", "why these changes", "what changed", "compare current vs proposed". This keeps responses consistent and complete.
+  **CRITICAL — You MUST include all three sections below. Never output only bare "Current: $X / Proposed: $Y" lines without section headers and category names.**
+  **CLARITY RULE**: Always make it obvious what each number refers to. Start with a one-sentence summary (e.g. "The proposal lowers your total monthly savings from $4,000 to $3,000 and reallocates that cash across your goals."). Never put unlabeled "Current: $X" and "Proposed: $Y" at the top — always use the section header and state "Total Monthly Savings" or "Post-Tax Cash Allocation" so the user knows what they're reading.
+  **Structure (always in this order):**
+  1. **Total Monthly Savings**: Start with the header "**Total Monthly Savings:**" then write in plain language: "**Your current plan:** $X/month. **Proposed plan:** $Y/month." (Use totalMonthlySavingsCurrent and totalMonthlySavingsProposed from USER_STATE.) If they differ, add one short line: "That's $Z more/less per month in total." Then one line for breakdown only when helpful: "Both plans use $0 payroll + $0 match + post-tax cash (current $X / proposed $Y)." End with verification (e.g. "Total: $0 + $0 + $3,412 = $3,412 ✓").
+  2. **Post-Tax Cash Allocation**: Start with the header "**Post-Tax Cash Allocation:**" then list EACH category BY NAME. For comparisons use this exact pattern so Current vs Proposed is obvious: "**Emergency Fund:** $1,600/mo (current) → $1,200/mo (proposed)". For no change: "**Emergency Fund:** $1,365/mo (no change)". Use the exact category labels from TOOL_OUTPUT_EXPLAIN/PREFORMATTED_BREAKDOWN (e.g. **Emergency Fund:**, **High-APR Debt Paydown:**, **Roth IRA / Retirement:**, **Investment Account:**). Never list numbers without the category name. End with verification (e.g. "Total: $1,365 + $819 + $860 + $369 = $3,412 ✓").
+  3. **Explanation of Your Savings Plan** (or **What's different** when comparing): Short numbered or bullet list — one item per category, each starting with the **category name**. Explain what changed and why. Example: "1. **Emergency Fund:** Reduced to $1,200/mo from $1,600/mo. You're at ~3 months of expenses; target is 6 — this builds your buffer more gradually. 2. **High-APR Debt Paydown:** ..."
+  **Ending**: Do NOT end with "Proceed" or a confirmation question. End with one brief closing sentence.
+  **Length**: You have enough token budget to include all three sections with every category named. Do not truncate; include Total Monthly Savings, every Post-Tax category by name with $ and %, and the Explanation section.
+`}
 - When explaining free employer match: use derived.match.matchGapMonthly and derived.match.matchRateEffective (e.g. "Free money unlocked: ~$X/mo (50% match)").
 - When explaining HSA: use outputs.preTaxPlan.employerHsaMonthlyEstimated (e.g. "Tax advantage + employer adds ~$X/mo").
 - When explaining EF: use derived.emergencyFund.currentMonths and derived.emergencyFund.targetMonths (e.g. "You're at ~X months, target is Y").
-- **401(k) employer match vs 401(k) contribution**: These are DIFFERENT. The employer match is ~50% of the employee contribution (e.g. employee $677 → employer match $339). In BASELINE_PLAN and PROPOSED_PLAN, the step labeled "401(k) employer match" or "401k_match" shows the EMPLOYER match amount (~$339), NOT the employee contribution ($677). When comparing "401(k) Employer Match", use the amountMonthly from that step — it is already the employer match.
-- No number in your response may exist unless it is present in TOOL_OUTPUT_EXPLAIN, PROPOSED_PLAN, BASELINE_PLAN, or USER_STATE above.`
+- **401(k) employer match vs 401(k) contribution**: These are DIFFERENT. The employer match is ~50% of the employee contribution. In BASELINE_PLAN and PROPOSED_PLAN, the step "401(k) employer match" shows the EMPLOYER match amount, NOT the employee contribution.
+- No number in your response may exist unless it is present in TOOL_OUTPUT_EXPLAIN, PROPOSED_PLAN, BASELINE_PLAN, or USER_STATE above.
+`;
+    })()
   : ''}
 
 OUTPUT FORMAT GUIDELINES (for clarity and readability)
-- Use **bold** for labels (e.g. **401(k) Employer Match:**, **Current:**, **Proposed:**).
+${isFirstTimeAllocator ? `- **FIRST-TIME**: Use only the format in FIRST-TIME SETUP above. Never write "current plan", "proposed plan", "current vs proposed", or "---". One total sentence, then "Where your money goes" with each category once, then one closing sentence.
+` : `- Use **bold** for section headers and category names (e.g. **Total Monthly Savings:**, **Emergency Fund:**). For comparisons, use "**Your current plan:**" and "**Proposed plan:**" so it's obvious which number is which.
+- **CRITICAL**: Never dump "Current: $X/month" and "Proposed: $Y/month" at the top without context. Always lead with a one-sentence summary (e.g. "Here's how your current plan compares to the proposal.") and use the **Total Monthly Savings:** header so the user knows the first numbers are total savings.
+- In Post-Tax Cash Allocation, every line must include the category name. For changes use the arrow format: "**Category:** $X/mo (current) → $Y/mo (proposed)". For no change: "**Category:** $X/mo (no change)".
+`}
 - Do NOT wrap plan breakdowns or comparisons in code blocks (no \`\`\`). Write markdown directly so the app can render bold and headers correctly.
-- Structure explanations with clear sections. Use line breaks between topics.
+- Structure explanations with clear section headers and line breaks between topics.
 - Use whole dollars only — never show cents. Write $338 or $677, not $338.52 or $677.04.
-- **Proposed Allocation Breakdown — MANDATORY**: When explaining current vs proposed allocation (e.g. "Explain the breakdown", "Why these changes?"), you MUST use a **bold category header** before EACH category's bullets. Never list Current/Proposed/Reason without the category name first. Use exact labels: **Emergency Fund:**, **High-APR Debt Payoff:**, **Roth IRA / Taxable Retirement:** (or **Retirement Contributions:**), **Brokerage:**, **401(k) Employer Match:**, **HSA:**. Format EVERY category like this:
-  **Emergency Fund:**
-  - Current: $X/month
-  - Proposed: $Y/month
-  - Reason: One sentence.
-  **High-APR Debt Payoff:**
-  - Current: $X/month
-  - Proposed: $Y/month
-  - Reason: One sentence.
-  (Repeat for each category.) Do NOT output a block of bullets without category headers — each group of Current/Proposed/Reason MUST be preceded by **Category Name:** on its own line.
-- When comparing current vs proposed: cover every category. For items that have NOT changed, explicitly say "No change" and explain why it stays the same.
-  Example for a change:
-  **Category name:**
-  **Current:** $X/mo
-  **Proposed:** $Y/mo
-
-  **Reason:** Plain-language explanation here.
-
-  Example for no change:
-  **Category name:**
-  **No change:** $X/mo
-
-  **Reason:** Brief explanation for why we're keeping it the same (e.g. "Already at target", "HSA is funded optimally", "Debt payoff on track").
+- For all "understand my plan" requests (explain, what's different, why these changes, compare, has anything changed), use the **ONE FORMAT** with all three sections (Total Monthly Savings → Post-Tax Cash Allocation with every category named → Explanation). Do not skip section 1 or 2; do not omit category names.
 - Use bullet points (• or -) for lists. Max 5 bullets when presenting a plan.
-- **Total Monthly Savings** = Pre-tax (401k + HSA) + Employer contributions (match + HSA) + Post-tax (EF + debt + retirement + brokerage). When comparing Current vs Proposed, ALWAYS use totalMonthlySavingsCurrent and totalMonthlySavingsProposed from USER_STATE — these are the full totals, NOT post-tax only. Example: "Total Monthly Savings: Current $X/month, Proposed $Y/month (Pre + Employer + Post combined)."
+- **Total Monthly Savings** = Pre-tax (401k + HSA) + Employer contributions (match + HSA) + Post-tax (EF + debt + retirement + brokerage). When comparing, use totalMonthlySavingsCurrent and totalMonthlySavingsProposed from USER_STATE and label them clearly: "**Your current plan:** $X/month. **Proposed plan:** $Y/month."
 - When explaining differences, reference "your current plan" (BASELINE_PLAN) and "the proposal" (PROPOSED_PLAN).
-- Include all categories in your explanation — for unchanged items, state "No change" and give a brief reason why it stays the same.
-- Always end plan summaries with a clear confirmation question.
+- Prefer a concise explanation that completes over listing every category in full — group unchanged items if needed.
+- When the user has asked for a change (e.g. "reduce EF by $200") and you are summarizing the updated plan, end with a clear confirmation question (e.g. "Want me to apply it?"). When the user only asked for an explanation (e.g. "explain my savings plan"), do NOT end with a confirmation question or "Proceed" — end with a brief closing sentence.
 
 FAILSAFE
 If PROPOSED_PLAN is missing or empty:
@@ -1946,6 +2082,30 @@ If PROPOSED_PLAN is missing or empty:
 ================================================================================
 
 `;
+    }
+
+    // Any context: when user has savings plan explain data, add preformatted breakdown so all chats (sidekick, savings-helper, savings-plan, etc.) use the same format when user asks for the plan
+    const toolOutputAny = userPlanData?.toolOutput;
+    const explainAny = toolOutputAny?.explain && typeof toolOutputAny.explain === 'object' ? toolOutputAny.explain as { delta?: { rows?: Array<{ label: string; current?: { monthly?: number }; proposed?: { monthly?: number }; currentMonthly?: number; proposedMonthly?: number; whyText?: string }> } } : null;
+    if (explainAny && !hasSavingsToolOutput) {
+      const rows = explainAny?.delta?.rows ?? [];
+      const preformattedBreakdownAny = rows.length > 0
+        ? rows.map((r: { label: string; current?: { monthly?: number }; proposed?: { monthly?: number }; currentMonthly?: number; proposedMonthly?: number; whyText?: string }) => {
+            const cur = Math.round(r.current?.monthly ?? r.currentMonthly ?? 0);
+            const prop = Math.round(r.proposed?.monthly ?? r.proposedMonthly ?? 0);
+            const noChange = Math.abs((r.proposed?.monthly ?? r.proposedMonthly ?? 0) - (r.current?.monthly ?? r.currentMonthly ?? 0)) < 0.01;
+            return `**${r.label}:**
+- Current: $${cur.toLocaleString()}/month
+- Proposed: $${prop.toLocaleString()}/month
+- Reason: ${(r.whyText ?? (noChange ? 'No change.' : 'See above.')).trim()}`;
+          }).join('\n\n')
+        : '';
+      prompt += `\n**SAVINGS PLAN EXPLANATION DATA** (use when user asks for their plan or "explain the breakdown" from any screen):\n`;
+      prompt += `TOOL_OUTPUT_EXPLAIN:\n${JSON.stringify(toolOutputAny.explain, null, 2)}\n`;
+      if (preformattedBreakdownAny) {
+        prompt += `\nPREFORMATTED_BREAKDOWN (reference — when user asks for the plan or "Explain the breakdown", use this data):\n${preformattedBreakdownAny}\n`;
+      }
+      prompt += `- When explaining the savings plan, use **bold category headers** then Current/Proposed/Reason. Respond in a natural, streamable way; no need to output one large block first.\n\n`;
     }
 
     // MVP Simulator: userPlanData has .inputs and .outputs for verification Q&A
@@ -2199,19 +2359,19 @@ If PROPOSED_PLAN is missing or empty:
       prompt += `  2. 401K Match (free money from employer): $${Math.round(finalEmployerMatchMTD).toLocaleString()}/month\n`;
       prompt += `  3. Cash Savings (post-tax): $${Math.round(finalCashSavingsMTD).toLocaleString()}/month\n`;
       prompt += `- **VERIFICATION**: Pre-tax $${Math.round(finalPayrollSavingsMTD).toLocaleString()} + Match $${Math.round(finalEmployerMatchMTD).toLocaleString()} + Post-tax Cash $${Math.round(finalCashSavingsMTD).toLocaleString()} = Total Savings $${Math.round(finalTotalSavingsMTD).toLocaleString()} ✓\n`;
-      prompt += `- **CRITICAL - MANDATORY RULE**: When users ask "what makes up my savings" or "break down my savings" or "walk me through my savings breakdown" or "what is my savings plan" or "what is my savings", you MUST:\n`;
-      prompt += `  1. Show this EXACT TOTAL savings breakdown in this format:\n`;
-      prompt += `     **Total Monthly Savings: $${Math.round(finalTotalSavingsMTD).toLocaleString()}/month**\n`;
-      prompt += `     Your total savings is made up of:\n`;
+      prompt += `- **CRITICAL - MANDATORY RULE**: When users ask about "savings target", "current target", "total savings", "what makes up my savings", "break down my savings", "walk me through my savings breakdown", "what is my savings plan", "what is my savings", "how much do I save", or "breakdown", you MUST:\n`;
+      prompt += `  1. **Always** show the full Total Monthly Savings and the three-part breakdown. Lead with: **Total Monthly Savings: $${Math.round(finalTotalSavingsMTD).toLocaleString()}/month**\n`;
+      prompt += `  2. Then list the breakdown in this format:\n`;
       prompt += `     - Payroll Savings (pre-tax 401k/HSA): $${Math.round(finalPayrollSavingsMTD).toLocaleString()}/month\n`;
       prompt += `     - 401K Match (free money from employer): $${Math.round(finalEmployerMatchMTD).toLocaleString()}/month\n`;
       prompt += `     - Cash Savings (post-tax): $${Math.round(finalCashSavingsMTD).toLocaleString()}/month\n`;
       prompt += `     Total: $${Math.round(finalPayrollSavingsMTD).toLocaleString()} + $${Math.round(finalEmployerMatchMTD).toLocaleString()} + $${Math.round(finalCashSavingsMTD).toLocaleString()} = $${Math.round(finalTotalSavingsMTD).toLocaleString()} ✓\n`;
-      prompt += `  2. NEVER say "not explicitly provided" or "not available" - these values ARE provided above and you MUST use them\n`;
-      prompt += `  3. If pre-tax or match values are $0, still show them explicitly: "Pre-tax (401k/HSA): $0/month" and "401K Match: $0/month"\n`;
-      prompt += `  4. Make it clear that Total Savings includes ALL THREE components: Pre-tax + Match + Post-tax Cash\n`;
-      prompt += `  5. THEN show the post-tax cash allocation breakdown (if savingsAllocation data is available below) - this shows WHERE the post-tax cash portion goes\n`;
-      prompt += `  6. **CRITICAL**: Do NOT confuse Total Savings with Post-tax Cash. Total Savings = Pre-tax + Match + Post-tax Cash. Post-tax Cash is only ONE component of Total Savings.\n`;
+      prompt += `  3. **CRITICAL**: "Current savings target" and "total monthly savings" are THE SAME number. Always use $${Math.round(finalTotalSavingsMTD).toLocaleString()}/month for both. Never give a different number for "target" vs "total".\n`;
+      prompt += `  4. NEVER say "not explicitly provided" or "not available" - these values ARE provided above and you MUST use them\n`;
+      prompt += `  5. If pre-tax or match values are $0, still show them explicitly: "Pre-tax (401k/HSA): $0/month" and "401K Match: $0/month"\n`;
+      prompt += `  6. Make it clear that Total Savings includes ALL THREE components: Pre-tax + Match + Post-tax Cash\n`;
+      prompt += `  7. THEN show the post-tax cash allocation breakdown (if savingsAllocation data is available below) - this shows WHERE the post-tax cash portion goes\n`;
+      prompt += `  8. Do NOT confuse Total Savings with Post-tax Cash. Total Savings = Pre-tax + Match + Post-tax Cash. Post-tax Cash is only ONE component of Total Savings.\n`;
       prompt += `\n`;
     } else if (userPlanData.monthlyIncome && userPlanData.monthlyNeeds !== undefined && userPlanData.monthlyWants !== undefined && userPlanData.payrollContributions) {
       // Fallback: Calculate using centralized formula logic if we have the necessary data
@@ -2238,12 +2398,11 @@ If PROPOSED_PLAN is missing or empty:
       prompt += `  - Payroll Savings (pre-tax 401k/HSA): $${Math.round(preTaxTotal).toLocaleString()}/month\n`;
       prompt += `  - 401K Match (free money from employer): $${Math.round(monthlyMatch).toLocaleString()}/month\n`;
       prompt += `  - **VERIFICATION**: $${Math.round(cashSavingsMTD).toLocaleString()} + $${Math.round(preTaxTotal).toLocaleString()} + $${Math.round(monthlyMatch).toLocaleString()} = $${Math.round(totalSavingsMTD).toLocaleString()} ✓\n`;
-      prompt += `- **CRITICAL - MANDATORY RULE**: When users ask "what makes up my savings" or "break down my savings" or "walk me through my savings breakdown" or "what is my savings plan", you MUST:\n`;
-      prompt += `  1. Show this EXACT TOTAL savings breakdown with the dollar amounts above: Cash Savings $${Math.round(cashSavingsMTD).toLocaleString()} + Payroll Savings $${Math.round(preTaxTotal).toLocaleString()} + 401K Match $${Math.round(monthlyMatch).toLocaleString()} = Total Savings $${Math.round(totalSavingsMTD).toLocaleString()}\n`;
-      prompt += `  2. NEVER say "not explicitly provided" or "not available" - these values ARE provided above and you MUST use them\n`;
-      prompt += `  3. If pre-tax or match values are $0, still show them: "Payroll Savings: $0/month" and "401K Match: $0/month"\n`;
-      prompt += `  4. THEN show the post-tax cash allocation breakdown (if savingsAllocation data is available below)\n`;
-      prompt += `  5. Make it clear that the total includes BOTH pre-tax (401k/HSA) and post-tax (cash) components\n`;
+      prompt += `- **CRITICAL - MANDATORY RULE**: When users ask about "savings target", "current target", "total savings", "what makes up my savings", "break down my savings", "what is my savings plan", or "breakdown", you MUST show the full Total Monthly Savings ($${Math.round(totalSavingsMTD).toLocaleString()}/month) and the three-part breakdown: Cash $${Math.round(cashSavingsMTD).toLocaleString()} + Payroll $${Math.round(preTaxTotal).toLocaleString()} + Match $${Math.round(monthlyMatch).toLocaleString()} = Total. "Current savings target" = this total; never give a different number.\n`;
+      prompt += `  1. NEVER say "not explicitly provided" or "not available" - these values ARE provided above\n`;
+      prompt += `  2. If pre-tax or match values are $0, still show them: "Payroll Savings: $0/month" and "401K Match: $0/month"\n`;
+      prompt += `  3. THEN show the post-tax cash allocation breakdown (if savingsAllocation data is available below)\n`;
+      prompt += `  4. Make it clear that the total includes BOTH pre-tax (401k/HSA) and post-tax (cash) components\n`;
       prompt += `\n`;
     } else if (userPlanData.monthlySavings && typeof userPlanData.monthlySavings === 'number') {
       // Fallback: use monthlySavings if we don't have all the data for calculation

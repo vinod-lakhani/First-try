@@ -11,7 +11,8 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useOnboardingStore } from '@/lib/onboarding/store';
-import { buildFinalPlanData, type FinalPlanData } from '@/lib/onboarding/plan';
+import { usePlanData } from '@/lib/onboarding/usePlanData';
+import type { FinalPlanData } from '@/lib/onboarding/plan';
 import { 
   TrendingUp, 
   Shield, 
@@ -20,13 +21,15 @@ import {
   DollarSign,
   AlertCircle,
   CheckCircle2,
-  ArrowRight
+  ArrowRight,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { NetWorthChart } from '@/components/charts/NetWorthChart';
 import { IncomeDistributionChart } from '@/components/charts/IncomeDistributionChart';
 import { OnboardingProgress } from '@/components/onboarding/OnboardingProgress';
 import { FinancialSidekick } from '@/app/app/components/FinancialSidekick';
-import { calculateSavingsBreakdown } from '@/lib/utils/savingsCalculations';
+import { calculateDisplaySavingsBreakdown } from '@/lib/utils/savingsCalculations';
 
 // Helper to get paychecks per month
 function getPaychecksPerMonth(frequency: string): number {
@@ -53,22 +56,29 @@ export default function PlanFinalPage() {
   const router = useRouter();
   const state = useOnboardingStore();
   const { setComplete } = useOnboardingStore();
-  const [planData, setPlanData] = useState<FinalPlanData | null>(null);
+  const planData = usePlanData();
   const [isGenerating, setIsGenerating] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [savingsExpanded, setSavingsExpanded] = useState(false);
+
+  // Plan is ready when we have data; fallback so we don't stay generating if plan stays null (e.g. build error)
+  useEffect(() => {
+    if (planData != null) setIsGenerating(false);
+  }, [planData]);
+  useEffect(() => {
+    const t = setTimeout(() => setIsGenerating(false), 2000);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
-    try {
-      const data = buildFinalPlanData(state);
-      setPlanData(data);
+    const income = state.income;
+    const hasIncome = income && (typeof income.netIncome$ === 'number' || typeof income.grossIncome$ === 'number');
+    if (!hasIncome) {
+      setError('Income data is required to generate your plan. Please complete the income step first.');
+    } else {
       setError(null);
-    } catch (err) {
-      console.error('Failed to build final plan:', err);
-      setError(err instanceof Error ? err.message : 'Failed to generate plan');
-    } finally {
-      setIsGenerating(false);
     }
-  }, [state]);
+  }, [state.income]);
 
   // Convert per-paycheck amounts to monthly for display
   const paychecksPerMonth = getPaychecksPerMonth(state.income?.payFrequency || 'biweekly');
@@ -78,8 +88,14 @@ export default function PlanFinalPage() {
     amount: cat.amount * paychecksPerMonth, // Convert to monthly
   })) : [];
 
-  // Use centralized savings calculation for consistency
+  // Single source of truth: same function as Income and Monthly Pulse
   const savingsCalculations = useMemo(() => {
+    const income = state.income;
+    const payrollContributions = state.payrollContributions;
+    const grossIncome = income?.grossIncome$
+      ? income.grossIncome$ * paychecksPerMonth
+      : monthlyTakeHomePay;
+
     if (!planData) {
       return {
         observedCashSavingsMTD: 0,
@@ -87,71 +103,41 @@ export default function PlanFinalPage() {
         expectedMatchMTD: 0,
         expectedEmployerHSAMTD: 0,
         totalSavingsMTD: 0,
-        savingsBreakdown: [],
+        savingsBreakdown: [] as Array<{ label: string; amount: number; percent: number }>,
       };
     }
 
-    // Use centralized savings calculation for consistency
-    const income = state.income;
-    const payrollContributions = state.payrollContributions;
-    
-    // Calculate needs and wants from plan categories (these don't change with custom allocation)
     const needsCategory = planData.paycheckCategories.find(c => c.key === 'essentials');
     const debtMinCategory = planData.paycheckCategories.find(c => c.key === 'debt_minimums');
     const wantsCategory = planData.paycheckCategories.find(c => c.key === 'fun_flexible');
-    
     const monthlyNeeds = ((needsCategory?.amount || 0) + (debtMinCategory?.amount || 0)) * paychecksPerMonth;
     const monthlyWants = (wantsCategory?.amount || 0) * paychecksPerMonth;
-    
-    // Use centralized calculation function
-    const savingsCalc = calculateSavingsBreakdown(income, payrollContributions, monthlyNeeds, monthlyWants);
-    
-    const observedCashSavingsMTD = savingsCalc.cashSavingsMTD;
-    const expectedPayrollSavingsMTD = savingsCalc.payrollSavingsMTD;
-    const expectedMatchMTD = savingsCalc.employerMatchMTD;
-    const expectedEmployerHSAMTD = savingsCalc.employerHSAMTD;
-    const totalSavingsMTD = savingsCalc.totalSavingsMTD;
-    
-    // Debug logging to track calculation
-    console.log('[PlanFinal] Savings Breakdown:', savingsCalc);
 
-    // Create savings breakdown for chart (same structure as income page)
-    const grossIncome = income?.grossIncome$
-      ? income.grossIncome$ * paychecksPerMonth
-      : monthlyTakeHomePay;
-    
+    const display = calculateDisplaySavingsBreakdown(
+      income,
+      payrollContributions,
+      monthlyNeeds,
+      monthlyWants,
+      planData.paycheckCategories,
+      state.safetyStrategy?.customSavingsAllocation ?? undefined
+    );
+
     const savingsBreakdown = [
-      {
-        label: 'Cash Savings',
-        amount: observedCashSavingsMTD,
-        percent: grossIncome > 0 ? (observedCashSavingsMTD / grossIncome) * 100 : 0,
-      },
-      {
-        label: 'Payroll Savings',
-        amount: expectedPayrollSavingsMTD,
-        percent: grossIncome > 0 ? (expectedPayrollSavingsMTD / grossIncome) * 100 : 0,
-      },
-      {
-        label: '401K Match',
-        amount: expectedMatchMTD,
-        percent: grossIncome > 0 ? (expectedMatchMTD / grossIncome) * 100 : 0,
-      },
-      {
-        label: 'Employer HSA',
-        amount: expectedEmployerHSAMTD,
-        percent: grossIncome > 0 ? (expectedEmployerHSAMTD / grossIncome) * 100 : 0,
-      },
-    ].filter(item => item.amount > 0.01); // Only show if amount is meaningful
+      { label: 'Cash Savings', amount: display.cashSavingsMTD, percent: grossIncome > 0 ? (display.cashSavingsMTD / grossIncome) * 100 : 0 },
+      { label: 'Payroll Savings', amount: display.payrollSavingsMTD, percent: grossIncome > 0 ? (display.payrollSavingsMTD / grossIncome) * 100 : 0 },
+      { label: '401K Match', amount: display.employerMatchMTD, percent: grossIncome > 0 ? (display.employerMatchMTD / grossIncome) * 100 : 0 },
+      { label: 'Employer HSA', amount: display.employerHSAMTD, percent: grossIncome > 0 ? (display.employerHSAMTD / grossIncome) * 100 : 0 },
+    ];
 
     return {
-      observedCashSavingsMTD,
-      expectedPayrollSavingsMTD,
-      expectedMatchMTD,
-      expectedEmployerHSAMTD,
-      totalSavingsMTD,
+      observedCashSavingsMTD: display.cashSavingsMTD,
+      expectedPayrollSavingsMTD: display.payrollSavingsMTD,
+      expectedMatchMTD: display.employerMatchMTD,
+      expectedEmployerHSAMTD: display.employerHSAMTD,
+      totalSavingsMTD: display.totalSavingsMTD,
       savingsBreakdown,
     };
-  }, [planData, paychecksPerMonth, monthlyTakeHomePay, state.payrollContributions, state.income]);
+  }, [planData, paychecksPerMonth, monthlyTakeHomePay, state.payrollContributions, state.income, state.safetyStrategy?.customSavingsAllocation]);
 
   // Responsive chart size
   const [chartSize, setChartSize] = useState(280);
@@ -178,7 +164,12 @@ export default function PlanFinalPage() {
 
   const handleSavePlan = async () => {
     try {
-      // Mark onboarding as complete first
+      // Persist total savings (cash + payroll + match + HSA) so savings-helper hero shows correct "Current savings target"
+      const totalForDisplay = planData ? savingsCalculations.totalSavingsMTD : undefined;
+      if (totalForDisplay != null && totalForDisplay > 0) {
+        state.updateSafetyStrategy?.({ totalSavingsTargetForDisplay: totalForDisplay });
+      }
+      // Mark onboarding as complete
       setComplete(true);
       
       // Wait a brief moment to ensure state update propagates
@@ -212,6 +203,7 @@ export default function PlanFinalPage() {
   }
 
   if (error || !planData) {
+    const isMissingIncome = error?.toLowerCase().includes('income');
     return (
       <Card className="w-full">
         <CardHeader className="space-y-2">
@@ -223,9 +215,16 @@ export default function PlanFinalPage() {
           <p className="text-red-600 dark:text-red-400 font-medium">
             {error || 'Unable to generate plan. Please check your information.'}
           </p>
-          <Button onClick={() => router.push('/onboarding/boost')} variant="outline">
-            Go back to Boost Hub
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-2 justify-center">
+            {isMissingIncome && (
+              <Button onClick={() => router.push('/onboarding/income')} variant="default">
+                Go to Income step
+              </Button>
+            )}
+            <Button onClick={() => router.push('/onboarding/boost')} variant="outline">
+              Go back to Boost Hub
+            </Button>
+          </div>
         </CardContent>
       </Card>
     );
@@ -278,6 +277,131 @@ export default function PlanFinalPage() {
             <p>This plan updates automatically if your income or spending changes.</p>
             <p>You can adjust categories anytime.</p>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* SECTION 2.5 – Savings (same format as income page) */}
+      <Card className="min-w-0">
+        <CardHeader>
+          <CardTitle className="text-xl font-semibold">Savings</CardTitle>
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+            Total Savings /month: ${savingsCalculations.totalSavingsMTD.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} (
+              {savingsCalculations.totalSavingsMTD > 0 && state.income?.grossIncome$
+                ? ((savingsCalculations.totalSavingsMTD / (state.income.grossIncome$ * paychecksPerMonth)) * 100).toFixed(0)
+                : '0'}% of Gross Income)
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-4">
+            <button
+              onClick={() => setSavingsExpanded(!savingsExpanded)}
+              className="w-full text-left"
+            >
+              <div className="flex items-center justify-between text-sm mb-2">
+                <span className="font-medium text-slate-700 dark:text-slate-300">Savings Breakdown</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    {savingsCalculations.totalSavingsMTD.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  </span>
+                  {savingsExpanded ? (
+                    <ChevronUp className="h-4 w-4 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-slate-400" />
+                  )}
+                </div>
+              </div>
+            </button>
+
+            {savingsExpanded && (
+              <div className="mt-3 space-y-2 pl-2 border-l-2 border-green-200 dark:border-green-800">
+                <div className="text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-slate-600 dark:text-slate-400">Cash savings (Post-tax):</span>
+                    <span className="font-medium text-slate-900 dark:text-white">
+                      ${savingsCalculations.observedCashSavingsMTD.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    </span>
+                  </div>
+                  <div className="text-slate-500 dark:text-slate-400 italic">observed</div>
+                </div>
+
+                {savingsCalculations.expectedPayrollSavingsMTD > 0 && (
+                  <div className="text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-slate-600 dark:text-slate-400">Payroll savings (Pre-tax):</span>
+                      <span className="font-medium text-slate-900 dark:text-white">
+                        ${savingsCalculations.expectedPayrollSavingsMTD.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      </span>
+                    </div>
+                    <div className="text-slate-500 dark:text-slate-400 italic">estimated</div>
+                  </div>
+                )}
+
+                {savingsCalculations.expectedMatchMTD > 0 && (
+                  <div className="text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-slate-600 dark:text-slate-400">Employer 401K match:</span>
+                      <span className="font-medium text-green-600 dark:text-green-400">
+                        +${savingsCalculations.expectedMatchMTD.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      </span>
+                    </div>
+                    <div className="text-slate-500 dark:text-slate-400 italic">estimated</div>
+                  </div>
+                )}
+
+                {savingsCalculations.expectedEmployerHSAMTD > 0 && (
+                  <div className="text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-slate-600 dark:text-slate-400">Employer HSA:</span>
+                      <span className="font-medium text-green-600 dark:text-green-400">
+                        +${savingsCalculations.expectedEmployerHSAMTD.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      </span>
+                    </div>
+                    <div className="text-slate-500 dark:text-slate-400 italic">estimated</div>
+                  </div>
+                )}
+
+                <div className="text-xs pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <div className="flex justify-between font-semibold">
+                    <span className="text-slate-700 dark:text-slate-300">Total Savings (Cash + Payroll + Employer 401K Match + Employer HSA):</span>
+                    <span className="text-slate-900 dark:text-white">
+                      ${savingsCalculations.totalSavingsMTD.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Cash savings categories from plan (EF, debt, retirement, brokerage) */}
+          {planData && (() => {
+            const savingsCats = planData.paycheckCategories.filter(
+              (c) => c.key === 'emergency' || c.key === 'debt_extra' || c.key === 'long_term_investing'
+            );
+            if (savingsCats.length === 0) return null;
+            return (
+              <div className="space-y-3 border-t border-slate-200 dark:border-slate-700 pt-4">
+                <p className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Cash Savings Categories:</p>
+                {savingsCats.map((cat) => (
+                  <div key={cat.key} className="space-y-1">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium">{cat.label}</span>
+                      <span className="font-semibold">
+                        ${(cat.amount * paychecksPerMonth).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      </span>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                      <div
+                        className="h-full bg-primary transition-all"
+                        style={{
+                          width: `${Math.min(100, (cat.amount * paychecksPerMonth) / Math.max(savingsCalculations.observedCashSavingsMTD, 1) * 100)}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
         </CardContent>
       </Card>
 

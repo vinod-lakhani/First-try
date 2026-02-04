@@ -22,9 +22,10 @@ function formatMoney(n: number): string {
 export function IncomePlanHeroCard({ snapshot, onPrimaryCta, onSecondaryCta }: IncomePlanHeroCardProps) {
   const { state, narrative, plan, actuals } = snapshot;
   const isOversavedOrUndersaved = state === 'OVERSAVED' || state === 'UNDERSAVED';
-  const currentTarget = plan.currentPlan?.plannedSavings ?? 0;
+  // Use TOTAL (cash + payroll + match + HSA) for all three — consistent with Income tab
+  const currentTarget = plan.totalSavingsTargetForDisplay ?? plan.currentPlan?.plannedSavings ?? 0;
   const actualSavings = actuals.lastMonth?.savings ?? 0;
-  const proposedTarget = plan.recommendedPlan.plannedSavings;
+  const proposedTarget = plan.totalRecommendedSavings ?? plan.recommendedPlan.plannedSavings;
 
   return (
     <Card className="border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10">
@@ -35,6 +36,11 @@ export function IncomePlanHeroCard({ snapshot, onPrimaryCta, onSecondaryCta }: I
         <p className="text-xl font-bold text-slate-900 dark:text-white">
           {narrative.subhead}
         </p>
+        {state === 'ON_TRACK' && currentTarget > 0 && (
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+            Current savings target: {formatMoney(currentTarget)}
+          </p>
+        )}
         {narrative.confidenceLine && (
           <p className="text-sm text-slate-600 dark:text-slate-400">
             {narrative.confidenceLine}

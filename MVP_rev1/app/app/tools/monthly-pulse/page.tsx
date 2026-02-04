@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { X, ChevronDown, ChevronUp } from 'lucide-react';
 import { formatCurrency, formatPercent } from '@/lib/feed/utils';
 import { getPaychecksPerMonth } from '@/lib/onboarding/usePlanData';
-import { calculateSavingsBreakdown, calculatePreTaxSavings, calculateEmployerMatch, getGrossIncomeMonthly } from '@/lib/utils/savingsCalculations';
+import { calculateDisplaySavingsBreakdown } from '@/lib/utils/savingsCalculations';
 
 export default function MonthlyPulsePage() {
   const router = useRouter();
@@ -177,87 +177,37 @@ export default function MonthlyPulsePage() {
   const wantsPct = totalIncome > 0 ? (totalWants / totalIncome) * 100 : 0;
   const savingsPct = totalIncome > 0 ? (totalSavings / totalIncome) * 100 : 0;
 
-  // Use centralized savings calculation for consistency
+  // Single source of truth: same function as Income and plan-final
   const payrollContributions = state.payrollContributions;
-  
-  // Calculate monthly needs and wants from plan categories
-  // CRITICAL: Use planData categories which reflect the current plan (updated from riskConstraints)
   const monthlyNeeds = useMemo(() => {
-    if (!planData) {
-      console.log('[Monthly Pulse] No planData, monthlyNeeds = 0');
-      return 0;
-    }
+    if (!planData) return 0;
     const needsCategories = planData.paycheckCategories.filter(c => 
       c.key === 'essentials' || c.key === 'debt_minimums'
     );
-    const needs = needsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
-    console.log('[Monthly Pulse] Calculated monthlyNeeds:', {
-      needsCategoriesCount: needsCategories.length,
-      needsCategoriesAmounts: needsCategories.map(c => ({ key: c.key, amount: c.amount })),
-      paychecksPerMonth,
-      monthlyNeeds: needs,
-      riskConstraints: state.riskConstraints,
-    });
-    return needs;
+    return needsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
   }, [planData, paychecksPerMonth, state.riskConstraints]);
-  
   const monthlyWants = useMemo(() => {
-    if (!planData) {
-      console.log('[Monthly Pulse] No planData, monthlyWants = 0');
-      return 0;
-    }
+    if (!planData) return 0;
     const wantsCategories = planData.paycheckCategories.filter(c => c.key === 'fun_flexible');
-    const wants = wantsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
-    console.log('[Monthly Pulse] Calculated monthlyWants:', {
-      wantsCategoriesCount: wantsCategories.length,
-      wantsCategoriesAmounts: wantsCategories.map(c => ({ key: c.key, amount: c.amount })),
-      paychecksPerMonth,
-      monthlyWants: wants,
-      riskConstraints: state.riskConstraints,
-    });
-    return wants;
+    return wantsCategories.reduce((sum, c) => sum + c.amount, 0) * paychecksPerMonth;
   }, [planData, paychecksPerMonth, state.riskConstraints]);
-  
-  // Use centralized calculation function
-  const savingsBreakdown = useMemo(() => {
-    return calculateSavingsBreakdown(income, payrollContributions, monthlyNeeds, monthlyWants);
-  }, [income, payrollContributions, monthlyNeeds, monthlyWants]);
 
-  const preTaxSavings = useMemo(
-    () => calculatePreTaxSavings(income, payrollContributions),
-    [income, payrollContributions]
+  const displaySavings = useMemo(
+    () => calculateDisplaySavingsBreakdown(
+      income,
+      payrollContributions,
+      monthlyNeeds,
+      monthlyWants,
+      planData?.paycheckCategories ?? null,
+      state.safetyStrategy?.customSavingsAllocation ?? undefined
+    ),
+    [income, payrollContributions, monthlyNeeds, monthlyWants, planData?.paycheckCategories, state.safetyStrategy?.customSavingsAllocation]
   );
-  const planBasedPayroll = useMemo(() => {
-    if (!planData) return null;
-    const longTerm = planData.paycheckCategories.find(c => c.key === 'long_term_investing');
-    const subs = longTerm?.subCategories;
-    if (!subs?.length) return null;
-    const matchSub = subs.find(s => s.key === '401k_match');
-    const hsaSub = subs.find(s => s.key === 'hsa');
-    const plan401kEmployeeMonthly = (matchSub?.amount ?? 0) * paychecksPerMonth;
-    const planHsaMonthly = (hsaSub?.amount ?? 0) * paychecksPerMonth;
-    if (plan401kEmployeeMonthly < 0.01 && planHsaMonthly < 0.01) return null;
-    const grossIncomeMonthly = getGrossIncomeMonthly(income);
-    const employerMatchMTD = calculateEmployerMatch(plan401kEmployeeMonthly, grossIncomeMonthly, payrollContributions ?? undefined);
-    const payrollSavingsMTD = plan401kEmployeeMonthly + (planHsaMonthly > 0.01 ? planHsaMonthly : preTaxSavings.hsa.monthly);
-    return { employerMatchMTD, payrollSavingsMTD };
-  }, [planData, paychecksPerMonth, preTaxSavings.hsa.monthly, payrollContributions, income]);
-
-  // Plan-based cash (post-tax) = EF + Debt + Roth + Brokerage
-  const emergencyCat = planData?.paycheckCategories.find(c => c.key === 'emergency');
-  const debtExtraCat = planData?.paycheckCategories.find(c => c.key === 'debt_extra');
-  const longTermCat = planData?.paycheckCategories.find(c => c.key === 'long_term_investing');
-  const rothSub = longTermCat?.subCategories?.find(s => s.key === 'retirement_tax_advantaged');
-  const brokerageSub = longTermCat?.subCategories?.find(s => s.key === 'brokerage');
-  const planBasedCashMTD = (emergencyCat?.amount ?? 0) * paychecksPerMonth
-    + (debtExtraCat?.amount ?? 0) * paychecksPerMonth
-    + (rothSub?.amount ?? 0) * paychecksPerMonth
-    + (brokerageSub?.amount ?? 0) * paychecksPerMonth;
-  const observedCashSavingsMTD = planData ? planBasedCashMTD : savingsBreakdown.cashSavingsMTD;
-  const expectedPayrollSavingsMTD = planBasedPayroll?.payrollSavingsMTD ?? savingsBreakdown.payrollSavingsMTD;
-  const expectedMatchMTD = planBasedPayroll?.employerMatchMTD ?? savingsBreakdown.employerMatchMTD;
-  const expectedEmployerHSAMTD = savingsBreakdown.employerHSAMTD;
-  const totalSavingsMTD = observedCashSavingsMTD + expectedPayrollSavingsMTD + expectedMatchMTD + expectedEmployerHSAMTD;
+  const observedCashSavingsMTD = displaySavings.cashSavingsMTD;
+  const expectedPayrollSavingsMTD = displaySavings.payrollSavingsMTD;
+  const expectedMatchMTD = displaySavings.employerMatchMTD;
+  const expectedEmployerHSAMTD = displaySavings.employerHSAMTD;
+  const totalSavingsMTD = displaySavings.totalSavingsMTD;
 
   // Calculate targets
   // For now, we'll use the same target percentage for total savings

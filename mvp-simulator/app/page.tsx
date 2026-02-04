@@ -28,6 +28,7 @@ import type { OnboardingState, Goal } from '@/lib/onboarding/types';
 import { generateInitialPaycheckPlanFromEngines, generateBoostedPlanAndProjection } from '@/lib/onboarding/plan';
 import { getPaychecksPerMonth } from '@/lib/onboarding/usePlanData';
 import { simulateScenario } from '@/lib/sim/netWorth';
+import { calculatePreTaxSavings } from '@/lib/utils/savingsCalculations';
 import { NetWorthChart } from '@/components/charts/NetWorthChart';
 import { MVPSimulatorChat } from '@/components/MVPSimulatorChat';
 
@@ -132,6 +133,13 @@ function buildSimulatorState(form: FormState): OnboardingState {
     hasEmployerMatch: form.hasEmployerMatch,
     employerMatchPct: form.hasEmployerMatch === 'yes' ? form.employerMatchPct : null,
     employerMatchCapPct: form.hasEmployerMatch === 'yes' ? form.employerMatchCapPct : null,
+    currentlyContributing401k: form.contributing401k,
+    contributionType401k:
+      form.contributing401k === 'yes' && form.contributing401kMonthly$ != null ? 'amount' : form.payrollContributions?.contributionType401k ?? null,
+    contributionValue401k:
+      form.contributing401k === 'yes' && form.contributing401kMonthly$ != null ? form.contributing401kMonthly$ : form.payrollContributions?.contributionValue401k ?? null,
+    contributionFrequency401k:
+      form.contributing401k === 'yes' && form.contributing401kMonthly$ != null ? 'per_month' : form.payrollContributions?.contributionFrequency401k ?? null,
     hasHSA: form.hasHSA,
     hsaEligible: form.hsaEligible,
     hsaCoverageType: form.hsaCoverageType,
@@ -345,6 +353,7 @@ export default function MVPSimulatorPage() {
           extraPayment: (d.isHighApr || d.aprPct > 10) ? paycheckPlan.savingsBreakdown?.debt$ : undefined,
         })),
       };
+      const preTaxSavings = calculatePreTaxSavings(state.income, state.payrollContributions);
       const monthlyPlan = {
         monthIndex: 0,
         incomeNet: monthlyIncome$,
@@ -353,7 +362,9 @@ export default function MVPSimulatorPage() {
         ef$: (paycheckPlan.savingsBreakdown?.ef$ ?? 0) * paychecksPerMonth,
         highAprDebt$: (paycheckPlan.savingsBreakdown?.debt$ ?? 0) * paychecksPerMonth,
         match401k$: (paycheckPlan.savingsBreakdown?.match401k$ ?? 0) * paychecksPerMonth,
+        preTax401k$: preTaxSavings.traditional401k.monthly,
         hsa$: (paycheckPlan.savingsBreakdown?.hsa$ ?? 0) * paychecksPerMonth,
+        employerHsa$: preTaxSavings.employerHSA.monthly,
         retirementTaxAdv$: (paycheckPlan.savingsBreakdown?.retirement$ ?? 0) * paychecksPerMonth,
         brokerage$: (paycheckPlan.savingsBreakdown?.brokerage$ ?? 0) * paychecksPerMonth,
       };

@@ -15,7 +15,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Send } from 'lucide-react';
 import { ChatMarkdown } from '@/components/chat/ChatMarkdown';
 import { ChatLoadingDots } from '@/components/chat/ChatLoadingDots';
-import { sendChatMessageStreaming } from '@/lib/chat/chatService';
+import { sendChatMessage } from '@/lib/chat/chatService';
 import { CHAT_INPUT_PLACEHOLDER } from '@/lib/chat/chatPrompts';
 import type { ChatCurrentPlanData } from '@/lib/chat/buildChatPlanData';
 import type { ProposedPlan } from '@/lib/tools/savings/types';
@@ -81,19 +81,36 @@ export interface SavingsChatPanelProps {
 
 /** Post-tax categories shown with Proceed/Skip. Pre-tax (401k, HSA) parsed but handled via engine rerun. */
 type DeviationCategory = 'ef' | 'debt' | 'retirementExtra' | 'brokerage' | '401k' | 'hsa';
+const VALID_DEVIATION_CATEGORIES = new Set<string>(['ef', 'debt', 'retirementExtra', 'brokerage', '401k', 'hsa']);
 
-/** Parse deviation REQUEST (e.g. "reduce emergency fund by $200"). Triggers Proceed/Skip for any allocation change. */
+/** Parse deviation REQUEST — kept for parseDeviationConfirmation / future use. Intent for Proceed/Skip now comes from chat API (allocationChangeIntent). */
 function parseDeviationRequest(
   text: string
 ): { category: DeviationCategory; delta: number } | null {
   const t = text.trim();
+
+  // "Change/set my emergency fund contribution from $1365 to $1000" → delta = 1000 - 1365 = -365
+  const fromToMatch = t.match(/(?:from\s+)\$?(\d{1,7})\s+to\s+\$?(\d{1,7})/i) ?? t.match(/\$?(\d{1,7})\s+to\s+\$?(\d{1,7})/);
+  if (fromToMatch) {
+    const fromNum = parseInt(fromToMatch[1], 10);
+    const toNum = parseInt(fromToMatch[2], 10);
+    const delta = toNum - fromNum;
+    if (delta !== 0 && fromNum > 0 && toNum >= 0) {
+      if (/(?:emergency\s*fund|ef|buffer|emergency)(?:\s+contribution)?/i.test(t)) return { category: 'ef', delta };
+      if (/(?:debt|high\s*[- ]?apr)(?:\s+pay(?:ment|down)?)?/i.test(t)) return { category: 'debt', delta };
+      if (/(?:retirement|roth|ira)(?:\s+contribution)?/i.test(t)) return { category: 'retirementExtra', delta };
+      if (/(?:brokerage|investing)(?:\s+contribution)?/i.test(t)) return { category: 'brokerage', delta };
+      if (/(?:401\s*k|401k)(?:\s+contribution)?/i.test(t)) return { category: '401k', delta };
+      if (/\bhsa\b(?:\s+contribution)?/i.test(t)) return { category: 'hsa', delta };
+    }
+  }
+
   // Prefer amount from "by $200" or "by 200" — avoid matching unrelated numbers (e.g. "3 months")
   const byMatch = t.match(/by\s+\$?(\d+)(?:\s|$|,|\.)/i) ?? t.match(/(?:reduce|lower|cut|drop|decrease|increase|raise|boost|add)\s+(?:my\s+)?(?:emergency\s*fund|ef|debt|retirement|roth|ira|brokerage|investing|401\s*k|hsa)[^0-9]*\$?(\d+)/i);
   const numMatch = byMatch ?? t.match(/\$(\d+)/) ?? t.match(/(?:by\s+)?\$?(\d+)/);
   if (!numMatch) return null;
   const amount = parseInt(numMatch[1], 10);
   if (amount <= 0) return null;
-  // Reduce patterns: reduce, lower, cut, drop, decrease
   const reduce = /(?:reduce|lower|cut|drop|decrease)\s+(?:my\s+)?/i;
   const increase = /(?:increase|raise|boost|add)\s+(?:my\s+)?/i;
   const reduceEf = /(?:emergency\s*fund|ef|buffer|emergency)/i.test(t) && reduce.test(t);
@@ -120,28 +137,6 @@ function parseDeviationRequest(
   if (increaseBrokerage) return { category: 'brokerage', delta: amount };
   if (increase401k) return { category: '401k', delta: amount };
   if (increaseHsa) return { category: 'hsa', delta: amount };
-  return null;
-}
-
-/** Fallback: extract deviation from assistant message when it mentions Proceed/Skip and a specific change. */
-function parseDeviationFromAssistantResponse(assistantText: string): { category: DeviationCategory; delta: number } | null {
-  const t = assistantText.replace(/\*\*/g, '');
-  // Prefer amount from "by $200" or "reduce ... by $200" — avoid matching "3 months", "6 target", etc.
-  const byMatch = t.match(/by\s+\$?(\d+)(?:\s|$|,|\.|\/mo|per month|monthly)/i) ?? t.match(/(?:reduce|reducing|lower|cut|drop|decrease)[^0-9]*\$?(\d+)/i);
-  const numMatch = byMatch ?? t.match(/\$(\d+)\s*(?:\/mo|per month|monthly)?/) ?? t.match(/\$(\d+)/);
-  if (!numMatch) return null;
-  const amount = parseInt(numMatch[1], 10);
-  if (amount <= 0 || amount > 10000) return null;
-  const isReduce = /(?:reduce|reducing|lower|cut|drop|decrease)/i.test(t);
-  const isIncrease = /(?:increase|increasing|raise|boost|add)/i.test(t);
-  const delta = isReduce ? -amount : isIncrease ? amount : 0;
-  if (delta === 0) return null;
-  if (/(?:emergency\s*fund|emergency fund|ef|buffer)/i.test(t)) return { category: 'ef', delta };
-  if (/(?:debt|high\s*[- ]?apr)/i.test(t)) return { category: 'debt', delta };
-  if (/(?:retirement|roth|ira)/i.test(t)) return { category: 'retirementExtra', delta };
-  if (/(?:brokerage|investing|investment)/i.test(t)) return { category: 'brokerage', delta };
-  if (/(?:401\s*k|401k)/i.test(t)) return { category: '401k', delta };
-  if (/\bhsa\b/i.test(t)) return { category: 'hsa', delta };
   return null;
 }
 
@@ -258,16 +253,7 @@ export function SavingsChatPanel({
     }
   }, [messages]);
 
-  // When assistant responds with "Proceed" and "Skip" but we didn't parse the user's request, extract from assistant's message so buttons show
-  useEffect(() => {
-    if (pendingDeviation || !onUserRequestedPlanChange || messages.length < 2) return;
-    const last = messages[messages.length - 1];
-    if (last.isUser) return;
-    const text = last.text ?? '';
-    if (!/Proceed/i.test(text) || !/Skip/i.test(text)) return;
-    const parsed = parseDeviationFromAssistantResponse(text);
-    if (parsed) setPendingDeviation(parsed);
-  }, [messages, pendingDeviation, onUserRequestedPlanChange]);
+  // Proceed/Skip are shown when the chat API returns allocationChangeIntent (model infers user intent). No client-side regex.
 
   const handleSend = async (overrideText?: string) => {
     const text = (overrideText ?? chatInput).trim();
@@ -281,59 +267,54 @@ export function SavingsChatPanel({
     setMessages((prev) => [...prev, userMessage]);
     if (!overrideText) setChatInput('');
     setIsLoading(true);
+    setPendingDeviation(null);
 
-    const requestParsed = parseDeviationRequest(text);
-    if (requestParsed) {
-      setPendingDeviation(requestParsed);
-    } else if (!/^(?:Why\s+(?:these\s+changes|the\s+plan\s+works)\??)$/i.test(text)) {
-      // Don't clear when user asks "Why these changes?" — that's a follow-up; keep buttons if assistant will explain
-      setPendingDeviation(null);
-    }
+    const proposedPlanCompact = {
+      planSteps: proposedPlan.steps.slice(0, 5),
+      totals: proposedPlan.totals,
+      assumptions: proposedPlan.assumptions.slice(0, 5),
+      warnings: proposedPlan.warnings ?? [],
+      keyMetric: proposedPlan.keyMetric,
+      ...(toolOutputExplain && { explain: toolOutputExplain }),
+    };
+    const chatPayload = {
+      messages: [...messages, userMessage].map((m) => ({
+        id: m.id,
+        text: m.text,
+        isUser: m.isUser,
+        timestamp: m.timestamp,
+      })),
+      context: 'savings-allocator' as const,
+      userPlanData: {
+        ...userStateForChat,
+        ...currentPlanDataForChat,
+        toolOutput: proposedPlanCompact,
+        baselinePlan: baselinePlanForChat ?? undefined,
+        currentContext: currentContextForChat,
+      },
+    };
 
-    const streamingId = (Date.now() + 1).toString();
-    setMessages((prev) => [...prev, { id: streamingId, text: '', isUser: false, timestamp: new Date() }]);
-
+    // Always non-streaming for savings-allocator: full response in one shot so we never get overwrite/disappear.
     try {
-      const proposedPlanCompact = {
-        planSteps: proposedPlan.steps.slice(0, 5),
-        totals: proposedPlan.totals,
-        assumptions: proposedPlan.assumptions.slice(0, 5),
-        warnings: proposedPlan.warnings ?? [],
-        keyMetric: proposedPlan.keyMetric,
-        ...(toolOutputExplain && { explain: toolOutputExplain }),
-      };
-      await sendChatMessageStreaming(
-        {
-          messages: [...messages, userMessage].map((m) => ({
-            id: m.id,
-            text: m.text,
-            isUser: m.isUser,
-            timestamp: m.timestamp,
-          })),
-          context: 'savings-allocator',
-          userPlanData: {
-            ...userStateForChat,
-            ...currentPlanDataForChat,
-            toolOutput: proposedPlanCompact,
-            baselinePlan: baselinePlanForChat ?? undefined,
-            currentContext: currentContextForChat,
-          },
-        },
-        {
-          onChunk(text) {
-            setMessages((prev) =>
-              prev.map((m) => (m.id === streamingId ? { ...m, text: m.text + text } : m))
-            );
-          },
-        }
-      );
+      const result = await sendChatMessage(chatPayload);
+      const responseText = typeof result === 'string' ? result : result.response;
+      setMessages((prev) => [
+        ...prev,
+        { id: `msg-${Date.now()}`, text: responseText, isUser: false, timestamp: new Date() },
+      ]);
+      // Show Proceed/Skip only when the chat API inferred allocation_change intent. Use intent.type so explain/compare never show buttons.
+      const intentType = typeof result === 'object' ? result.intent?.type : undefined;
+      const allocationChange = typeof result === 'object' ? result.allocationChangeIntent : undefined;
+      const isAllocationChange = intentType === 'allocation_change' && allocationChange && VALID_DEVIATION_CATEGORIES.has(allocationChange.category) && typeof allocationChange.delta === 'number';
+      if (isAllocationChange) {
+        setPendingDeviation({ category: allocationChange.category as DeviationCategory, delta: allocationChange.delta });
+      }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : 'Something went wrong.';
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === streamingId ? { ...m, text: `I couldn't complete that: ${errMsg}` } : m
-        )
-      );
+      setMessages((prev) => [
+        ...prev,
+        { id: `msg-${Date.now()}`, text: `I couldn't complete that: ${errMsg}`, isUser: false, timestamp: new Date() },
+      ]);
     } finally {
       setIsLoading(false);
     }
@@ -393,7 +374,7 @@ export function SavingsChatPanel({
           )}
         </div>
 
-        {/* Delta view: headline + Current vs Proposed table (always two columns when we have delta rows). Hidden for first-time (hero card shown in parent). */}
+        {/* Delta view: Ribbit Proposal (col 1, frozen) vs Proposed (col 2, working copy). Hidden for first-time (hero card shown in parent). */}
         {!isFirstTimeSetup && (
         <div className="rounded-lg bg-slate-100 dark:bg-slate-800 p-3 text-sm text-slate-700 dark:text-slate-300">
           {hasDelta && delta ? (
@@ -405,7 +386,7 @@ export function SavingsChatPanel({
                 <thead>
                   <tr className="border-b border-slate-300 dark:border-slate-600">
                     <th className="text-left py-1 pr-2 font-medium text-slate-700 dark:text-slate-300"></th>
-                    <th className="text-right py-1 px-2 font-medium text-slate-700 dark:text-slate-300">Current</th>
+                    <th className="text-right py-1 px-2 font-medium text-slate-700 dark:text-slate-300">Ribbit Proposal</th>
                     <th className="text-right py-1 px-2 font-medium text-slate-700 dark:text-slate-300">Proposed</th>
                   </tr>
                 </thead>
@@ -434,16 +415,16 @@ export function SavingsChatPanel({
             </>
           ) : planSummaryBullets ? (
             <>
-              <p className="font-medium text-slate-900 dark:text-white mb-1">Proposed plan</p>
+              <p className="font-medium text-slate-900 dark:text-white mb-1">Proposed</p>
               <pre className="whitespace-pre-wrap font-sans text-xs">{planSummaryBullets}</pre>
               {keyLine && <p className="mt-2 font-medium text-slate-900 dark:text-white">{keyLine}</p>}
             </>
           ) : currentPlanBullets ? (
             <>
-              <p className="font-medium text-slate-900 dark:text-white mb-1">Current plan</p>
+              <p className="font-medium text-slate-900 dark:text-white mb-1">Ribbit Proposal</p>
               <pre className="whitespace-pre-wrap font-sans text-xs">{currentPlanBullets}</pre>
               <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                Proposed plan will appear here after reviewing your budget. Ask Ribbit if you have questions.
+                Proposed will appear here after you adjust the plan. Ask Ribbit if you have questions.
               </p>
             </>
           ) : (
@@ -463,11 +444,11 @@ export function SavingsChatPanel({
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => handleSend(isNoChange ? 'Why the plan works?' : 'Why these changes?')}
+              onClick={() => handleSend(isNoChange ? 'Why the plan works?' : 'Explain the breakdown')}
               disabled={isLoading}
               className="rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
             >
-              {isNoChange ? 'Why the plan works?' : 'Why these changes?'}
+              {isNoChange ? 'Why the plan works?' : 'Explain the breakdown'}
             </button>
           </div>
         )}
@@ -494,7 +475,7 @@ export function SavingsChatPanel({
         )}
 
         {/* Chat thread — show messages and responses. In first-time, intro is above; show only user Q + assistant A here. */}
-        <div ref={chatThreadContainerRef} className="space-y-4 max-h-[28rem] overflow-y-auto border-t border-slate-200 dark:border-slate-700 pt-3">
+        <div ref={chatThreadContainerRef} className="space-y-4 max-h-[36rem] overflow-y-auto border-t border-slate-200 dark:border-slate-700 pt-3">
           {(isFirstTimeSetup ? messages.slice(1) : messages).map((m) => (
             <div
               key={m.id}

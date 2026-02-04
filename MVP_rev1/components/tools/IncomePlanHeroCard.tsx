@@ -22,7 +22,8 @@ function formatMoney(n: number): string {
 export function IncomePlanHeroCard({ snapshot, onPrimaryCta, onSecondaryCta }: IncomePlanHeroCardProps) {
   const { state, narrative, plan, actuals } = snapshot;
   const isOversavedOrUndersaved = state === 'OVERSAVED' || state === 'UNDERSAVED';
-  const currentTarget = plan.currentPlan?.plannedSavings ?? 0;
+  // Use total (cash + payroll + match + HSA) for display when set, so "Current savings target" matches Income tab
+  const currentTarget = plan.totalSavingsTargetForDisplay ?? plan.currentPlan?.plannedSavings ?? 0;
   const actualSavings = actuals.lastMonth?.savings ?? 0;
   const proposedTarget = plan.recommendedPlan.plannedSavings;
 

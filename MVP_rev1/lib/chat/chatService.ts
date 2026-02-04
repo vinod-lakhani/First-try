@@ -23,11 +23,28 @@ interface ChatRequest {
   stream?: boolean;
 }
 
-export type ChatResult = string | { response: string; proposedPlannedSavings: number };
+export type AllocationChangeIntent = { category: string; delta: number };
+
+/** Intent inferred by the model: explain, compare, allocation_change, question. Enables robust UI without client-side phrase matching. */
+export type ChatIntent = { type: string; category?: string; delta?: number };
+
+export type ChatResult = string | {
+  response: string;
+  proposedPlannedSavings?: number;
+  /** Model-inferred intent (explain, compare, allocation_change, question). Use for UI: e.g. explain/compare → no Proceed/Skip. */
+  intent?: ChatIntent;
+  allocationChangeIntent?: AllocationChangeIntent;
+};
 
 export interface StreamChatCallbacks {
   onChunk: (text: string) => void;
-  onDone?: (meta: { proposedPlannedSavings?: number }) => void;
+  onDone?: (meta: {
+    proposedPlannedSavings?: number;
+    intent?: ChatIntent;
+    allocationChangeIntent?: AllocationChangeIntent;
+    /** When present, use this as the final message text (intent block stripped) */
+    responseWithoutIntent?: string;
+  }) => void;
 }
 
 /**
@@ -166,10 +183,21 @@ export async function sendChatMessage(request: ChatRequest): Promise<ChatResult>
     if (data.error) {
       throw new Error(data.error);
     }
-    // Savings-helper may return { response, proposedPlannedSavings }; other contexts return { response }
+    // API may return { response, proposedPlannedSavings?, intent?, allocationChangeIntent? }
     const text = data.response || 'I apologize, I could not generate a response.';
-    if (data.proposedPlannedSavings != null && typeof data.proposedPlannedSavings === 'number') {
-      return { response: text, proposedPlannedSavings: data.proposedPlannedSavings };
+    const hasExtras = data.proposedPlannedSavings != null || data.intent != null || data.allocationChangeIntent != null;
+    if (hasExtras) {
+      const result: { response: string; proposedPlannedSavings?: number; intent?: ChatIntent; allocationChangeIntent?: AllocationChangeIntent } = { response: text };
+      if (data.proposedPlannedSavings != null && typeof data.proposedPlannedSavings === 'number') {
+        result.proposedPlannedSavings = data.proposedPlannedSavings;
+      }
+      if (data.intent && typeof data.intent === 'object' && typeof data.intent.type === 'string') {
+        result.intent = data.intent;
+      }
+      if (data.allocationChangeIntent && typeof data.allocationChangeIntent === 'object' && typeof data.allocationChangeIntent.category === 'string' && typeof data.allocationChangeIntent.delta === 'number') {
+        result.allocationChangeIntent = data.allocationChangeIntent;
+      }
+      return result;
     }
     return text;
   } catch (error) {
@@ -245,6 +273,9 @@ export async function sendChatMessageStreaming(
   const decoder = new TextDecoder();
   let buffer = '';
   let proposedPlannedSavings: number | undefined;
+  let intent: ChatIntent | undefined;
+  let allocationChangeIntent: AllocationChangeIntent | undefined;
+  let responseWithoutIntent: string | undefined;
 
   try {
     while (true) {
@@ -266,6 +297,13 @@ export async function sendChatMessageStreaming(
             if (data.proposedPlannedSavings != null && typeof data.proposedPlannedSavings === 'number') {
               proposedPlannedSavings = data.proposedPlannedSavings;
             }
+            if (data.intent && typeof data.intent === 'object') intent = data.intent;
+            if (data.allocationChangeIntent && typeof data.allocationChangeIntent === 'object') {
+              allocationChangeIntent = data.allocationChangeIntent;
+            }
+            if (data.responseWithoutIntent != null && typeof data.responseWithoutIntent === 'string') {
+              responseWithoutIntent = data.responseWithoutIntent;
+            }
           }
         } catch (_) {
           // ignore non-JSON lines
@@ -277,8 +315,11 @@ export async function sendChatMessageStreaming(
     if (line) {
       try {
         const data = JSON.parse(line.slice(6).trim());
-        if (data.done === true && data.proposedPlannedSavings != null) {
-          proposedPlannedSavings = data.proposedPlannedSavings;
+        if (data.done === true) {
+          if (data.proposedPlannedSavings != null) proposedPlannedSavings = data.proposedPlannedSavings;
+          if (data.intent) intent = data.intent;
+          if (data.allocationChangeIntent) allocationChangeIntent = data.allocationChangeIntent;
+          if (data.responseWithoutIntent) responseWithoutIntent = data.responseWithoutIntent;
         }
       } catch (_) {}
     }
@@ -286,7 +327,7 @@ export async function sendChatMessageStreaming(
     reader.releaseLock();
   }
 
-  callbacks.onDone?.({ proposedPlannedSavings });
-  return { proposedPlannedSavings };
+  callbacks.onDone?.({ proposedPlannedSavings, intent, allocationChangeIntent, responseWithoutIntent });
+  return { proposedPlannedSavings, intent, allocationChangeIntent };
 }
 

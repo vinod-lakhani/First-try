@@ -94,6 +94,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
     { href: '/app/profile', label: 'Profile', icon: User },
   ];
 
+  // Hide floating sidekick on tools that have embedded chat to avoid confusion
   const hideFloatingSidekick =
     pathname?.includes('/app/tools/savings-allocator') || pathname?.includes('/app/tools/savings-helper');
 
@@ -135,7 +136,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
         {children}
       </main>
 
-      {/* Financial Sidekick - floating button, opens as modal. Hidden on savings-allocator and savings-helper (embedded chat there). */}
+      {/* Financial Sidekick - floating button. Hidden on savings-allocator and savings-helper (embedded chat there) to avoid conflicting UIs. */}
       {!hideFloatingSidekick && <FinancialSidekick />}
     </div>
   );

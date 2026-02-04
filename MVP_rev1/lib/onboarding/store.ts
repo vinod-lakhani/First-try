@@ -137,6 +137,9 @@ export interface OnboardingStore extends OnboardingState {
   invalidatePlan: () => void;
   /** Apply income plan from savings-helper in one atomic update so Income/Monthly Pulse see latest. */
   applyIncomePlanFromSavingsHelper: (targets: { needsPct: number; wantsPct: number; savingsPct: number }) => void;
+  /** Pending proposed monthly savings from savings-helper (user typed amount but has not clicked Apply). Used by savings-allocator to show Proposed Plan. Cleared when user Applies or Keeps plan. Not persisted. */
+  proposedSavingsFromHelper: number | null;
+  setProposedSavingsFromHelper: (amount: number | null) => void;
 }
 
 /**
@@ -146,11 +149,12 @@ export interface OnboardingStore extends OnboardingState {
 /** Internal key bumped when plan is applied so usePlanData recalculates. Not in OnboardingState / not persisted. */
 type PlanInvalidationKey = number;
 
-export const useOnboardingStore = create<OnboardingStore & { planInvalidationKey: PlanInvalidationKey }>()(
+export const useOnboardingStore = create<OnboardingStore & { planInvalidationKey: PlanInvalidationKey; proposedSavingsFromHelper: number | null }>()(
   persist(
     (set) => ({
       ...defaultState,
       planInvalidationKey: 0,
+      proposedSavingsFromHelper: null,
 
   // Income setters
   setIncome: (income) => set({ income }),
@@ -355,6 +359,13 @@ export const useOnboardingStore = create<OnboardingStore & { planInvalidationKey
         planInvalidationKey: Date.now(),
       };
     }),
+      setProposedSavingsFromHelper: (amount) => {
+        if (typeof window !== 'undefined') {
+          if (amount != null) sessionStorage.setItem('weleap_proposedSavingsFromHelper', String(amount));
+          else sessionStorage.removeItem('weleap_proposedSavingsFromHelper');
+        }
+        set({ proposedSavingsFromHelper: amount });
+      },
   }),
   {
     name: 'weleap-onboarding-storage', // unique name for localStorage key

@@ -261,17 +261,24 @@ export interface PlanPaycheckCategory {
   subCategories?: Array<{ key: string; amount: number }>;
 }
 
+/** Optional fallback when plan categories have no 401k/HSA (e.g. before plan rebuild). All amounts monthly. */
+export interface CustomSavingsAllocationFallback {
+  match401k$?: number;
+  hsa$?: number;
+}
+
 /**
- * Calculate display savings breakdown — SAME logic as Income tab and Monthly Pulse.
- * Uses plan-based overrides when plan has 401k/HSA in long_term_investing, so chat and UI show
- * identical numbers. Use this for chat context and any "Savings Breakdown" display.
+ * Calculate display savings breakdown — SINGLE SOURCE OF TRUTH for Income, Monthly Pulse, and plan-final.
+ * Uses plan-based overrides when plan has 401k/HSA in long_term_investing. When plan has zeros but
+ * customSavingsAllocation has 401k/HSA (e.g. user saved from savings-plan, plan not yet rebuilt), uses that fallback.
  */
 export function calculateDisplaySavingsBreakdown(
   income: IncomeState | undefined,
   payrollContributions: PayrollContributions | undefined,
   monthlyNeeds: number,
   monthlyWants: number,
-  planCategories: PlanPaycheckCategory[] | null | undefined
+  planCategories: PlanPaycheckCategory[] | null | undefined,
+  customSavingsAllocation?: CustomSavingsAllocationFallback | null
 ): SavingsBreakdown {
   const savingsCalc = calculateSavingsBreakdown(income, payrollContributions, monthlyNeeds, monthlyWants);
   const preTaxSavings = calculatePreTaxSavings(income, payrollContributions);
@@ -289,8 +296,13 @@ export function calculateDisplaySavingsBreakdown(
   const rothSub = longTermCat?.subCategories?.find((s) => s.key === 'retirement_tax_advantaged');
   const brokerageSub = longTermCat?.subCategories?.find((s) => s.key === 'brokerage');
 
-  const plan401kEmployeeMonthly = (matchSub?.amount ?? 0) * paychecksPerMonth;
-  const planHsaMonthly = (hsaSub?.amount ?? 0) * paychecksPerMonth;
+  let plan401kEmployeeMonthly = (matchSub?.amount ?? 0) * paychecksPerMonth;
+  let planHsaMonthly = (hsaSub?.amount ?? 0) * paychecksPerMonth;
+  // When plan has no 401k/HSA but user has saved custom allocation (e.g. from savings-plan), use it so total matches.
+  if (plan401kEmployeeMonthly < 0.01 && planHsaMonthly < 0.01 && customSavingsAllocation && (customSavingsAllocation.match401k$ ?? 0) + (customSavingsAllocation.hsa$ ?? 0) > 0.01) {
+    plan401kEmployeeMonthly = customSavingsAllocation.match401k$ ?? 0;
+    planHsaMonthly = customSavingsAllocation.hsa$ ?? 0;
+  }
   const usePlanPayroll = (plan401kEmployeeMonthly > 0.01 || planHsaMonthly > 0.01);
 
   const grossIncomeMonthly = getGrossIncomeMonthly(income);
@@ -306,12 +318,22 @@ export function calculateDisplaySavingsBreakdown(
     (rothSub?.amount ?? 0) * paychecksPerMonth +
     (brokerageSub?.amount ?? 0) * paychecksPerMonth;
 
-  const observedCashSavingsMTD = planCategories.length > 0 ? planBasedCashMTD : savingsCalc.cashSavingsMTD;
-  const expectedPayrollSavingsMTD = usePlanPayroll
+  let observedCashSavingsMTD = planCategories.length > 0 ? planBasedCashMTD : savingsCalc.cashSavingsMTD;
+  let expectedPayrollSavingsMTD = usePlanPayroll
     ? plan401kEmployeeMonthly + (planHsaMonthly > 0.01 ? planHsaMonthly : preTaxSavings.hsa.monthly)
     : savingsCalc.payrollSavingsMTD;
-  const expectedMatchMTD = usePlanPayroll ? employerMatchFromPlan : savingsCalc.employerMatchMTD;
-  const expectedEmployerHSAMTD = savingsCalc.employerHSAMTD;
+  let expectedMatchMTD = usePlanPayroll ? employerMatchFromPlan : savingsCalc.employerMatchMTD;
+  let expectedEmployerHSAMTD = savingsCalc.employerHSAMTD;
+
+  // Defensive: whenever payroll data (payrollContributions) implies a higher non-cash total than plan/customAlloc, use it so plan-final and Income never diverge (e.g. plan-final before customSavingsAllocation is set, or plan built with 0 for 401k/HSA).
+  const nonCashFromPlan = expectedPayrollSavingsMTD + expectedMatchMTD + expectedEmployerHSAMTD;
+  const nonCashFromPayroll = savingsCalc.payrollSavingsMTD + savingsCalc.employerMatchMTD + savingsCalc.employerHSAMTD;
+  if (nonCashFromPayroll > nonCashFromPlan + 0.01) {
+    expectedPayrollSavingsMTD = savingsCalc.payrollSavingsMTD;
+    expectedMatchMTD = savingsCalc.employerMatchMTD;
+    expectedEmployerHSAMTD = savingsCalc.employerHSAMTD;
+  }
+
   const totalSavingsMTD =
     observedCashSavingsMTD + expectedPayrollSavingsMTD + expectedMatchMTD + expectedEmployerHSAMTD;
 

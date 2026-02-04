@@ -102,11 +102,15 @@ export function IncomePlanChatCard({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const lastConfirmationRef = useRef<string | null>(null);
+  const streamingTextRef = useRef('');
+  const streamingMessageIdRef = useRef<string | null>(null);
+  const [streamingTick, setStreamingTick] = useState(0);
 
   useEffect(() => {
     const el = containerRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages]);
+  }, [messages, streamingTick]);
 
   useEffect(() => {
     if (chatFocusRequested && containerRef.current) {
@@ -121,7 +125,6 @@ export function IncomePlanChatCard({
     }
   }, [uiMode, adjustPlanMessage, lastInjectedMessageKey, onMessageInjected]);
 
-  const lastConfirmationRef = useRef<string | null>(null);
   useEffect(() => {
     if (confirmationMessage && confirmationMessage !== lastConfirmationRef.current) {
       lastConfirmationRef.current = confirmationMessage;
@@ -164,6 +167,8 @@ export function IncomePlanChatCard({
     setIsLoading(true);
 
     const streamingId = `streaming_${Date.now()}`;
+    streamingTextRef.current = '';
+    streamingMessageIdRef.current = streamingId;
     setMessages((prev) => [
       ...prev,
       { id: streamingId, text: '', isUser: false, timestamp: new Date() },
@@ -205,22 +210,15 @@ export function IncomePlanChatCard({
         },
         {
           onChunk(text) {
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === streamingId ? { ...m, text: m.text + text } : m
-              )
-            );
+            streamingTextRef.current += text;
+            setStreamingTick((t) => t + 1);
           },
           onDone({ proposedPlannedSavings: proposedSavings }) {
             if (proposedSavings != null && onProposalFromChat) onProposalFromChat(proposedSavings);
+            const finalText = streamingTextRef.current.replace(/\n?PROPOSED_SAVINGS:\s*[\d.]+\s*$/im, '').trim();
             setMessages((prev) =>
               prev.map((m) =>
-                m.id === streamingId
-                  ? {
-                      ...m,
-                      text: m.text.replace(/\n?PROPOSED_SAVINGS:\s*[\d.]+\s*$/im, '').trim(),
-                    }
-                  : m
+                m.id === streamingId ? { ...m, text: finalText } : m
               )
             );
           },
@@ -236,6 +234,12 @@ export function IncomePlanChatCard({
         )
       );
     } finally {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === streamingId ? { ...m, text: streamingTextRef.current.replace(/\n?PROPOSED_SAVINGS:\s*[\d.]+\s*$/im, '').trim() } : m
+        )
+      );
+      streamingMessageIdRef.current = null;
       setIsLoading(false);
     }
   };
@@ -282,33 +286,20 @@ export function IncomePlanChatCard({
                         </div>
                       );
                     }
-                    if (block.type === 'bullets') return <ul key={idx} className="text-sm list-disc list-inside space-y-1 text-slate-700 dark:text-slate-300 [&_li]:leading-snug [&_li>p]:inline [&_li>p]:m-0 [&_li>p]:leading-snug">{block.items.map((i, j) => <li key={j}><ChatMarkdown size="sm">{i}</ChatMarkdown></li>)}</ul>;
+                    if (block.type === 'bullets') return <div key={idx} className="text-sm space-y-1 text-slate-700 dark:text-slate-300">{block.items.map((i, j) => <div key={j} className="leading-snug [&>p]:inline [&>p]:m-0 [&>p]:leading-snug"><ChatMarkdown size="sm">{i}</ChatMarkdown></div>)}</div>;
                     if (block.type === 'question') return <div key={idx} className="text-sm font-medium text-slate-800 dark:text-slate-200"><ChatMarkdown size="sm">{block.value}</ChatMarkdown></div>;
-                    if (block.type === 'actions') {
-                      return (
-                        <div key={idx} className="flex flex-wrap gap-2 pt-2">
-                          {block.actions.map((action) => {
-                            if (action.id === 'apply') {
-                              return <Button key={action.id} size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={onApply}>{action.label}</Button>;
-                            }
-                            if (action.id === 'ask') {
-                              return <Button key={action.id} size="sm" variant="outline" onClick={() => { setShowSuggestions(true); onAskQuestion(); textareaRef.current?.focus(); }}>{action.label}</Button>;
-                            }
-                            if (action.id === 'keep') {
-                              return <Button key={action.id} size="sm" variant="ghost" onClick={onKeepPlan}>{action.label}</Button>;
-                            }
-                            return null;
-                          })}
-                        </div>
-                      );
-                    }
+                    // Skip rendering actions inside the bubble — same buttons appear in the fixed row below the chat
+                    if (block.type === 'actions') return null;
                     return null;
                   })}
                 </div>
               </div>
             </div>
           )}
-          {messages.map((m) => (
+          {messages.map((m) => {
+            const isStreamingThis = m.id === streamingMessageIdRef.current && isLoading;
+            const displayText = isStreamingThis ? streamingTextRef.current : (m.text ?? '');
+            return (
             <div key={m.id} className={`flex ${m.isUser ? 'justify-end' : 'justify-start'}`}>
               <div
                 className={`max-w-[80%] rounded-lg px-4 py-2.5 ${
@@ -318,11 +309,12 @@ export function IncomePlanChatCard({
                 {m.isUser ? (
                   <p className="text-sm whitespace-pre-wrap">{m.text}</p>
                 ) : (
-                  <ChatMarkdown size="sm">{m.text}</ChatMarkdown>
+                  <ChatMarkdown size="sm">{displayText}</ChatMarkdown>
                 )}
               </div>
             </div>
-          ))}
+            );
+          })}
           {showSuggestions && (
             <div className="flex flex-wrap gap-2">
               {SUGGESTION_CHIPS.map((s) => (
@@ -349,6 +341,27 @@ export function IncomePlanChatCard({
             ) : null;
           })()}
         </div>
+        {/* Apply / Ask / Keep below chat when in adjust-review — same logic as top, so user doesn't have to scroll up */}
+        {uiMode === 'ADJUST_REVIEW' && latestInjectedMessage && (() => {
+          const actionsBlock = latestInjectedMessage.blocks.find((b) => b.type === 'actions');
+          if (!actionsBlock || actionsBlock.type !== 'actions') return null;
+          return (
+            <div className="flex flex-wrap gap-2 border-t border-slate-200 dark:border-slate-700 pt-3">
+              {actionsBlock.actions.map((action) => {
+                if (action.id === 'apply') {
+                  return <Button key={action.id} size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={onApply}>{action.label}</Button>;
+                }
+                if (action.id === 'ask') {
+                  return <Button key={action.id} size="sm" variant="outline" onClick={() => { setShowSuggestions(true); onAskQuestion(); textareaRef.current?.focus(); }}>{action.label}</Button>;
+                }
+                if (action.id === 'keep') {
+                  return <Button key={action.id} size="sm" variant="ghost" onClick={onKeepPlan}>{action.label}</Button>;
+                }
+                return null;
+              })}
+            </div>
+          );
+        })()}
         <div className="flex items-end gap-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 min-h-[4rem]">
           <textarea
             ref={textareaRef}

@@ -48,7 +48,7 @@ function calculateMonthlyBasics(expenses: OnboardingState['fixedExpenses']): num
 function NetWorthAnalyzerContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const scenario = searchParams.get('scenario') || 'rent';
+  const scenario = searchParams?.get('scenario') || 'rent';
   const baselineState = useOnboardingStore();
   
   // Use centralized hook for baseline plan data - ensures consistency with other pages

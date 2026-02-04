@@ -7,7 +7,7 @@
 
 'use client';
 
-import { Suspense, useEffect } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useOnboardingStore } from '@/lib/onboarding/store';
 import { FinancialSidekick } from './components/FinancialSidekick';
@@ -22,8 +22,14 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isComplete } = useOnboardingStore();
+  // Defer params-dependent UI until after mount so server and client render the same (avoids hydration mismatch)
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // Dev bypass: ?dev=feed allows testing Feed without completing onboarding
-  const devBypassFeed = typeof window !== 'undefined' && searchParams?.get('dev') === 'feed';
+  const devBypassFeed = searchParams?.get('dev') === 'feed';
   // Allow savings-allocator during onboarding (replaces savings-plan step)
   const onboardingSavingsAllocator =
     pathname?.includes('/app/tools/savings-allocator') && searchParams?.get('source') === 'onboarding';
@@ -50,6 +56,15 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
       return () => clearTimeout(timeoutId);
     }
   }, [effectiveComplete, pathname, router]);
+
+  // Before mount, render same loading UI as Suspense fallback so server and client HTML match
+  if (!mounted) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <p className="text-slate-600 dark:text-slate-400">Loading...</p>
+      </div>
+    );
+  }
 
   // Show onboarding prompt if not complete
   if (!effectiveComplete) {

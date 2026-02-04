@@ -17,14 +17,14 @@
 
 'use client';
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Send } from 'lucide-react';
 import { ChatMarkdown } from '@/components/chat/ChatMarkdown';
 import { ChatLoadingDots } from '@/components/chat/ChatLoadingDots';
-import { sendChatMessageStreaming } from '@/lib/chat/chatService';
+import { sendChatMessage, sendChatMessageStreaming } from '@/lib/chat/chatService';
 
 /** Structured plan changes from chat (savings-allocator). Absolute values for pre-tax; deltas for post-tax. */
 type PlanChangesFromChat = {
@@ -36,19 +36,48 @@ type PlanChangesFromChat = {
   brokerageDelta?: number;
 };
 import { CHAT_INPUT_PLACEHOLDER } from '@/lib/chat/chatPrompts';
+import {
+  parseSavingsAllocationIntent,
+  intentToDelta,
+  intentIsSingleCategoryChange,
+  type SavingsAllocationIntentContext,
+} from '@/lib/chat/savingsAllocationIntent';
 import type { ChatCurrentPlanData } from '@/lib/chat/buildChatPlanData';
 import type { ProposedPlan } from '@/lib/tools/savings/types';
-import type { SavingsAllocationExplain, DeltaRowId } from '@/lib/tools/savings/explain';
+import type { SavingsAllocationExplain } from '@/lib/tools/savings/explain';
 
-const WHY_KEY_COPY: Record<DeltaRowId, string> = {
-  EMPLOYER_MATCH: 'Capture employer match — free money.',
-  '401K_CONTRIB': 'Save in your 401(k) for retirement.',
-  HSA: 'Tax-advantaged health savings.',
-  EMERGENCY_FUND: 'Build a buffer for emergencies.',
-  HIGH_APR_DEBT: 'Pay down high-interest debt for a guaranteed return.',
-  RETIREMENT: 'Tax-advantaged retirement (Roth IRA, etc.).',
-  BROKERAGE: 'Invest in a taxable brokerage for flexibility.',
-};
+const DEBUG_STREAMING = typeof window !== 'undefined' && (
+  window.location.search.includes('debug=stream') ||
+  (window as unknown as { __SAVINGS_CHAT_DEBUG_STREAM__?: boolean }).__SAVINGS_CHAT_DEBUG_STREAM__
+);
+function streamLog(...args: unknown[]) {
+  if (DEBUG_STREAMING) console.log('[SavingsChatPanel:stream]', ...args);
+}
+
+/** True if the user only asked for an explanation or comparison (no allocation change). We skip applying plan changes, skip deviation parsing, and do not show Proceed/Skip. */
+function isExplainOnlyRequest(text: string): boolean {
+  if (!text || typeof text !== 'string') return false;
+  const t = text.trim().toLowerCase();
+  return (
+    /^explain\s*(this\s+)?(the\s+)?(plan|breakdown|allocation)/i.test(t) ||
+    /^explain\s+(the\s+)?change\s+(you\s+are\s+)?proposing/i.test(t) ||
+    /^explain\s+the\s+change/i.test(t) ||
+    /^explain\s+the\s+difference\s+(between)?/i.test(t) ||
+    /^explain\s+(my\s+)?(savings\s+)?plan/i.test(t) ||
+    /^explain\s+(the\s+)?savings\s+(plan|breakdown)/i.test(t) ||
+    /plan\s+to\s+me/i.test(t) ||
+    /^why\s+(the\s+plan\s+works|these\s+changes)\??$/i.test(t) ||
+    /^explain\s+the\s+breakdown$/i.test(t) ||
+    /what('s|\s+is)\s+different/i.test(t) ||
+    /^what\s+changed\??$/i.test(t) ||
+    /^how\s+(does\s+)?(this\s+)?compare/i.test(t) ||
+    /^compare\s+(current|baseline|plan)/i.test(t) ||
+    /^(current|baseline)\s+vs\s+(proposed|plan)/i.test(t) ||
+    /has\s+anything\s+changed/i.test(t) ||
+    /(anything|something)\s+changed\s+between/i.test(t) ||
+    /difference\s+between\s+(the\s+)?(current|existing)\s+and\s+(the\s+)?proposed/i.test(t)
+  );
+}
 
 export interface SavingsChatPanelProps {
   /** Intro message (seeded assistant) — contextual based on leap or "Review savings allocation" */
@@ -85,81 +114,122 @@ export interface SavingsChatPanelProps {
   pendingUpdateMessage?: string | null;
   /** Engine-only explain (toolOutput.explain) — Sidekick uses ONLY these numbers */
   toolOutputExplain?: SavingsAllocationExplain | null;
-  /** Called when user confirms a deviation via Proceed. Parent applies override and recomputes plan. Returns confirmation message to show in chat. */
+  /** Called when user confirms a deviation via Proceed. Parent applies override and recomputes plan. Returns confirmation message to show in chat. When targetMonthly is set (set_target intent), parent should set that category to the target value so the proposed plan shows the correct amount regardless of engine base. */
   onUserRequestedPlanChange?: (constraint: {
     category: 'ef' | 'debt' | 'retirementExtra' | 'brokerage' | '401k' | 'hsa';
     delta: number;
+    targetMonthly?: number;
   }) => string | void;
   /** When user has made custom changes, override delta to show current (baseline) vs proposed (custom). Ensures "Not applied yet" and delta table appear. */
   deltaOverride?: {
     headline?: string;
     rows: Array<{ id: string; label: string; current: { monthly: number }; proposed: { monthly: number } }>;
     isNoChange?: boolean;
+    /** When true (first_time, no user changes yet), show only Ribbit Proposal column. */
+    singleColumn?: boolean;
   } | null;
   /** Current 401k employee contribution (monthly) — used to parse "eliminate 401k" from assistant message. */
   currentPreTax401k$?: number;
   /** Current HSA contribution (monthly) — used to parse "eliminate HSA" from assistant message. */
   currentHsa$?: number;
+  /** When provided, chat thread is controlled by parent so messages survive panel remounts (fixes "explanation overwritten" when parent re-renders). */
+  messages?: ChatMessage[];
+  /** Setter for controlled messages; must be provided together with messages. */
+  setMessages?: (updater: React.SetStateAction<ChatMessage[]>) => void;
 }
 
 /** Post-tax categories shown with Proceed/Skip. Pre-tax (401k, HSA) parsed but handled via engine rerun. */
 type DeviationCategory = 'ef' | 'debt' | 'retirementExtra' | 'brokerage' | '401k' | 'hsa';
 
-/** Apply structured plan changes from chat API via the single onUserRequestedPlanChange path. */
+/** Apply plan changes: intent first (chat creates intent, tool uses intent), then PLAN_CHANGES as fallback.
+ * Returns the first "Got it. That frees up $X/month" message from the callback for patching the streamed reply. */
 function applyPlanChangesFromChat(
   changes: PlanChangesFromChat,
-  ctx: { onUserRequestedPlanChange: (c: { category: DeviationCategory; delta: number }) => string | void; currentPreTax401k$: number; currentHsa$: number },
+  ctx: {
+    onUserRequestedPlanChange: (c: { category: DeviationCategory; delta: number; targetMonthly?: number }) => string | void;
+    currentPreTax401k$: number;
+    currentHsa$: number;
+    currentEf$?: number;
+    currentDebt$?: number;
+    currentRetirementExtra$?: number;
+    currentBrokerage$?: number;
+  },
   lastUserMessage?: string
-) {
-  const { onUserRequestedPlanChange, currentPreTax401k$, currentHsa$ } = ctx;
-  
-  // Safeguard: If user said "reduce 401k to $X", validate PLAN_CHANGES matches the target
-  let corrected401k: number | null = null;
-  if (changes.preTax401k != null && lastUserMessage) {
-    const userText = lastUserMessage.toLowerCase();
-    const to401kMatch = userText.match(/(?:reduce|set|make)\s+(?:my\s+)?(?:401\s*\(?\s*k\s*\)?|401k)\s+(?:contribution\s+)?to\s+\$?(\d+)/i) ??
-      userText.match(/(?:401\s*\(?\s*k\s*\)?|401k)\s+(?:contribution\s+)?to\s+\$?(\d+)/i) ??
-      userText.match(/(?:reduce|set|make)\s+(?:my\s+)?(?:401\s*\(?\s*k\s*\)?|401k)\s+to\s+\$?(\d+)/i);
-    if (to401kMatch) {
-      const userTarget = parseInt(to401kMatch[1], 10);
-      // If AI output doesn't match user's target, use the user's target instead
-      if (userTarget >= 0 && userTarget <= 100000 && changes.preTax401k !== userTarget) {
-        console.warn(`PLAN_CHANGES preTax401k (${changes.preTax401k}) doesn't match user target (${userTarget}), using user target`);
-        corrected401k = userTarget;
-      }
+): string | undefined {
+  const {
+    onUserRequestedPlanChange,
+    currentPreTax401k$,
+    currentHsa$,
+    currentEf$ = 0,
+    currentDebt$ = 0,
+    currentRetirementExtra$ = 0,
+    currentBrokerage$ = 0,
+  } = ctx;
+  let followUpMessage: string | undefined;
+  const captureCallback = (c: { category: DeviationCategory; delta: number; targetMonthly?: number }) => {
+    const result = onUserRequestedPlanChange(c);
+    if (typeof result === 'string' && followUpMessage === undefined) followUpMessage = result;
+    return result;
+  };
+
+  const intentContext: SavingsAllocationIntentContext = {
+    preTax401k$: currentPreTax401k$,
+    hsa$: currentHsa$,
+    ef$: currentEf$,
+    debt$: currentDebt$,
+    retirementExtra$: currentRetirementExtra$,
+    brokerage$: currentBrokerage$,
+  };
+
+  const intent = lastUserMessage ? parseSavingsAllocationIntent(lastUserMessage, intentContext) : null;
+  const appliedFromIntent =
+    intent != null && intent.kind !== 'reset' && intentIsSingleCategoryChange(intent);
+  const intentCategory =
+    appliedFromIntent && intent != null && intent.kind !== 'reset'
+      ? (intent.kind === 'eliminate' ? intent.category : intent.category)
+      : null;
+  const skipApiDestinationDeltas =
+    appliedFromIntent &&
+    intentCategory != null &&
+    ['ef', 'debt', 'retirementExtra', 'brokerage'].includes(intentCategory);
+
+  if (appliedFromIntent && intent != null && intent.kind !== 'reset') {
+    const resolved = intentToDelta(intent, intentContext);
+    if (resolved && Math.abs(resolved.delta) > 0.5) {
+      // For post-tax categories, always pass targetMonthly so the allocator applies it relative to the displayed "Current" plan, not the engine base (avoids EF going to 0 when base differs from baseline).
+      const isPostTax = ['ef', 'debt', 'retirementExtra', 'brokerage'].includes(resolved.category);
+      const current = resolved.category === 'ef' ? currentEf$ : resolved.category === 'debt' ? currentDebt$ : resolved.category === 'retirementExtra' ? currentRetirementExtra$ : resolved.category === 'brokerage' ? currentBrokerage$ : 0;
+      const targetMonthly =
+        intent.kind === 'set_target'
+          ? intent.targetMonthly
+          : isPostTax
+            ? Math.max(0, current + resolved.delta)
+            : undefined;
+      captureCallback({ category: resolved.category as DeviationCategory, delta: resolved.delta, targetMonthly });
     }
   }
-  
-  // Safeguard: If user said "reduce HSA to $X", validate PLAN_CHANGES matches the target
-  let correctedHsa: number | null = null;
-  if (changes.hsa != null && lastUserMessage) {
-    const userText = lastUserMessage.toLowerCase();
-    const toHsaMatch = userText.match(/(?:reduce|set|make)\s+(?:my\s+)?hsa\s+(?:contribution\s+)?to\s+\$?(\d+)/i) ??
-      userText.match(/hsa\s+(?:contribution\s+)?to\s+\$?(\d+)/i) ??
-      userText.match(/(?:reduce|set|make)\s+(?:my\s+)?hsa\s+to\s+\$?(\d+)/i);
-    if (toHsaMatch) {
-      const userTarget = parseInt(toHsaMatch[1], 10);
-      if (userTarget >= 0 && userTarget <= 100000 && changes.hsa !== userTarget) {
-        console.warn(`PLAN_CHANGES hsa (${changes.hsa}) doesn't match user target (${userTarget}), using user target`);
-        correctedHsa = userTarget;
-      }
+
+  if (!appliedFromIntent || intentCategory !== '401k') {
+    if (changes.preTax401k != null) {
+      const delta = changes.preTax401k - currentPreTax401k$;
+      if (Math.abs(delta) > 0.5) captureCallback({ category: '401k', delta });
     }
   }
-  
-  if (changes.preTax401k != null) {
-    const targetValue = corrected401k ?? changes.preTax401k;
-    const delta = targetValue - currentPreTax401k$;
-    if (Math.abs(delta) > 0.5) onUserRequestedPlanChange({ category: '401k', delta });
+  if (!appliedFromIntent || intentCategory !== 'hsa') {
+    if (changes.hsa != null) {
+      const delta = changes.hsa - currentHsa$;
+      if (Math.abs(delta) > 0.5) captureCallback({ category: 'hsa', delta });
+    }
   }
-  if (changes.hsa != null) {
-    const targetValue = correctedHsa ?? changes.hsa;
-    const delta = targetValue - currentHsa$;
-    if (Math.abs(delta) > 0.5) onUserRequestedPlanChange({ category: 'hsa', delta });
+
+  if (!skipApiDestinationDeltas) {
+    if (changes.efDelta != null && Math.abs(changes.efDelta) > 0.5) captureCallback({ category: 'ef', delta: changes.efDelta });
+    if (changes.debtDelta != null && Math.abs(changes.debtDelta) > 0.5) captureCallback({ category: 'debt', delta: changes.debtDelta });
+    if (changes.retirementExtraDelta != null && Math.abs(changes.retirementExtraDelta) > 0.5) captureCallback({ category: 'retirementExtra', delta: changes.retirementExtraDelta });
+    if (changes.brokerageDelta != null && Math.abs(changes.brokerageDelta) > 0.5) captureCallback({ category: 'brokerage', delta: changes.brokerageDelta });
   }
-  if (changes.efDelta != null && Math.abs(changes.efDelta) > 0.5) onUserRequestedPlanChange({ category: 'ef', delta: changes.efDelta });
-  if (changes.debtDelta != null && Math.abs(changes.debtDelta) > 0.5) onUserRequestedPlanChange({ category: 'debt', delta: changes.debtDelta });
-  if (changes.retirementExtraDelta != null && Math.abs(changes.retirementExtraDelta) > 0.5) onUserRequestedPlanChange({ category: 'retirementExtra', delta: changes.retirementExtraDelta });
-  if (changes.brokerageDelta != null && Math.abs(changes.brokerageDelta) > 0.5) onUserRequestedPlanChange({ category: 'brokerage', delta: changes.brokerageDelta });
+
+  return followUpMessage;
 }
 
 /** Parse "no 401k" / "don't want 401k contributions" etc. — needs context for full amount. */
@@ -176,11 +246,26 @@ function parseOptOutRequest(
   return null;
 }
 
-/** Parse deviation REQUEST (e.g. "reduce emergency fund by $200", "reduce 401k to $100"). Triggers Proceed/Skip for any allocation change. */
+/** Parse deviation REQUEST from user message. Uses intent (chat creates intent, tool uses intent). */
 function parseDeviationRequest(
   text: string,
   context?: DeviationParseContext
 ): { category: DeviationCategory; delta: number } | null {
+  if (context) {
+    const intentContext: SavingsAllocationIntentContext = {
+      preTax401k$: context.preTax401k$ ?? 0,
+      hsa$: context.hsa$ ?? 0,
+      ef$: context.ef$ ?? 0,
+      debt$: context.debt$ ?? 0,
+      retirementExtra$: context.retirementExtra$ ?? 0,
+      brokerage$: context.brokerage$ ?? 0,
+    };
+    const intent = parseSavingsAllocationIntent(text, intentContext);
+    if (!intent || intent.kind === 'reset') return null;
+    const resolved = intentToDelta(intent, intentContext);
+    if (!resolved || Math.abs(resolved.delta) < 0.5) return null;
+    return { category: resolved.category as DeviationCategory, delta: resolved.delta };
+  }
   const t = text.trim();
   const ctx401k = context?.preTax401k$ ?? 0;
   const ctxHsa = context?.hsa$ ?? 0;
@@ -220,8 +305,9 @@ function parseDeviationRequest(
   const ctxBrokerage = context?.brokerage$ ?? 0;
   
   const toEfPatterns = [
-    /(?:reduce|set|make)\s+(?:my\s+)?(?:emergency\s*fund|emergency fund|ef|buffer)\s+to\s+\$?(\d+)/i,
-    /(?:emergency\s*fund|emergency fund|ef|buffer)\s+to\s+\$?(\d+)/i,
+    /(?:reduce|set|make|change)\s+(?:my\s+)?(?:emergency\s*fund|emergency fund|ef|buffer)\s+(?:contribution\s+)?to\s+\$?(\d+)/i,
+    /(?:want\s+to\s+)?(?:change\s+)?(?:my\s+)?(?:emergency\s*fund|emergency fund|ef|buffer)\s+(?:contribution\s+)?to\s+\$?(\d+)/i,
+    /(?:emergency\s*fund|emergency fund|ef|buffer)\s+(?:contribution\s+)?to\s+\$?(\d+)/i,
   ];
   for (const pattern of toEfPatterns) {
     const match = t.match(pattern);
@@ -615,7 +701,7 @@ function parseDeviationConfirmation(
   return null;
 }
 
-interface ChatMessage {
+export interface ChatMessage {
   id: string;
   text: string;
   isUser: boolean;
@@ -641,6 +727,8 @@ export const SavingsChatPanel: React.FC<SavingsChatPanelProps> = ({
   deltaOverride = null,
   currentPreTax401k$,
   currentHsa$,
+  messages: controlledMessages,
+  setMessages: controlledSetMessages,
 }) => {
   // Always pass current amounts so we can parse "eliminate 401k/HSA" and "reduce to X" from assistant message
   // Get baseline values from baselinePlanForChat (which reflects the frozen baseline/Ribbit Proposal)
@@ -680,9 +768,19 @@ export const SavingsChatPanel: React.FC<SavingsChatPanelProps> = ({
     [currentPreTax401k$, currentHsa$, baselineEf$, baselineDebt$, baselineRetirement$, baselineBrokerage$]
   );
   const router = useRouter();
-  const [messages, setMessages] = useState<ChatMessage[]>([
+  const [internalMessages, setMessagesRaw] = useState<ChatMessage[]>([
     { id: '0', text: introMessage, isUser: false, timestamp: new Date() },
   ]);
+  const setMessagesInternal = useCallback((updater: React.SetStateAction<ChatMessage[]>) => {
+    if (DEBUG_STREAMING) {
+      const stack = new Error().stack ?? '';
+      streamLog('setMessages INVOKED', { callSite: stack.split('\n').slice(2, 5).join(' | ') });
+    }
+    setMessagesRaw(updater);
+  }, []);
+  const isControlled = controlledMessages != null && controlledSetMessages != null;
+  const messages = isControlled ? controlledMessages : internalMessages;
+  const setMessages = isControlled ? controlledSetMessages : setMessagesInternal;
   const [chatInput, setChatInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [pendingDeviation, setPendingDeviation] = useState<{
@@ -694,6 +792,27 @@ export const SavingsChatPanel: React.FC<SavingsChatPanelProps> = ({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   /** Avoid applying the same assistant message twice when parent re-renders (prevents "Maximum update depth exceeded"). */
   const lastAppliedMessageIdRef = useRef<string | null>(null);
+  /** Same streaming pattern as FinancialSidekick: accumulate in ref, render from ref during stream, flush to state in finally. */
+  const streamingTextRef = useRef('');
+  const streamingMessageIdRef = useRef<string | null>(null);
+  /** When we correct "to $X" and apply plan changes, allocator returns "Got it. That frees up $N/month". We patch the streamed reply with this amount. */
+  const streamingCorrectFreedAmountRef = useRef<number | null>(null);
+  /** Id of the message we last streamed into — keep so we can show ref content until state has committed (avoids flash/overwrite). */
+  const lastStreamedMessageIdRef = useRef<string | null>(null);
+  /** Track last assistant message id + length to detect overwrite of same message. */
+  const lastAssistantRef = useRef<{ id: string; len: number }>({ id: '', len: 0 });
+  const [streamingTick, setStreamingTick] = useState(0);
+  /** Ref to read latest messages from async callbacks (e.g. stability check). */
+  const messagesRef = useRef<ChatMessage[]>([]);
+  messagesRef.current = messages;
+
+  useEffect(() => {
+    if (!DEBUG_STREAMING) return;
+    streamLog('MOUNTED');
+    return () => {
+      streamLog('UNMOUNTED');
+    };
+  }, []);
 
   // Scroll only the chat thread area so new messages are visible; do not scroll the page (avoids jumping to net worth chart)
   useEffect(() => {
@@ -701,13 +820,19 @@ export const SavingsChatPanel: React.FC<SavingsChatPanelProps> = ({
     if (el) {
       el.scrollTop = el.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, streamingTick]);
 
   // When assistant proposes or confirms a change, extract deviation so Proceed shows and/or plan updates immediately
+  // Skip for "explain the plan" type requests — the response contains Current/Proposed text that can be falsely parsed as a deviation and trigger a plan update that overwrites the streamed reply
   useEffect(() => {
     if (!onUserRequestedPlanChange || messages.length < 2) return;
     const last = messages[messages.length - 1];
     if (last.isUser) return;
+    const prevUser = [...messages].reverse().find((m) => m.isUser);
+    if (prevUser && isExplainOnlyRequest(prevUser.text ?? '')) {
+      streamLog('deviation effect: SKIP (explain-only)', { lastId: last.id, lastMsgLen: (last.text ?? '').length });
+      return;
+    }
     const text = last.text ?? '';
     const parsed = parseDeviationFromAssistantResponse(text, deviationContext);
     if (!parsed) return;
@@ -733,6 +858,7 @@ export const SavingsChatPanel: React.FC<SavingsChatPanelProps> = ({
           ? 'WARNING: pendingDeviation delta is smaller than parsed delta - may indicate baseline was wrong'
           : undefined,
       });
+      streamLog('deviation effect: CALLING onUserRequestedPlanChange', { category: toApply.category, delta: toApply.delta });
       onUserRequestedPlanChange(toApply);
       setPendingDeviation(null);
       return;
@@ -755,7 +881,9 @@ export const SavingsChatPanel: React.FC<SavingsChatPanelProps> = ({
 
     const requestParsed = parseDeviationRequest(text, deviationContext);
     const optOutParsed = parseOptOutRequest(text, deviationContext);
-    if (requestParsed) {
+    if (isExplainOnlyRequest(text)) {
+      setPendingDeviation(null);
+    } else if (requestParsed) {
       console.log('[SavingsChatPanel] Setting pendingDeviation from user request:', {
         text: text.substring(0, 100),
         requestParsed,
@@ -875,63 +1003,165 @@ export const SavingsChatPanel: React.FC<SavingsChatPanelProps> = ({
       }
     }
 
+    const proposedPlanCompact = {
+      planSteps: proposedPlan.steps.slice(0, 5),
+      totals: proposedPlan.totals,
+      assumptions: proposedPlan.assumptions.slice(0, 5),
+      warnings: proposedPlan.warnings ?? [],
+      keyMetric: proposedPlan.keyMetric,
+      ...(toolOutputExplain && { explain: toolOutputExplain }),
+    };
+    const chatRequest = {
+      messages: [...messages, userMessage].map((m) => ({
+        id: m.id,
+        text: m.text,
+        isUser: m.isUser,
+        timestamp: m.timestamp,
+      })),
+      context: 'savings-allocator' as const,
+      userPlanData: {
+        ...userStateForChat,
+        ...currentPlanDataForChat,
+        toolOutput: proposedPlanCompact,
+        baselinePlan: baselinePlanForChat ?? undefined,
+        currentContext: currentContextForChat,
+      },
+    };
+
+    // Explain-only requests: use non-streaming so we set one complete message and avoid streaming timing/overwrite issues
+    if (isExplainOnlyRequest(text)) {
+      const explainMessageId = (Date.now() + 1).toString();
+      setMessages((prev) => [...prev, { id: explainMessageId, text: '', isUser: false, timestamp: new Date() }]);
+      try {
+        const result = await sendChatMessage(chatRequest);
+        const fullText = typeof result === 'string' ? result : (result?.response ?? '');
+        setMessages((prev) =>
+          prev.map((m) => (m.id === explainMessageId ? { ...m, text: fullText || 'I couldn\'t generate an explanation.' } : m))
+        );
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : 'Something went wrong.';
+        setMessages((prev) =>
+          prev.map((m) => (m.id === explainMessageId ? { ...m, text: `I couldn't complete that: ${errMsg}` } : m))
+        );
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+
     const streamingId = (Date.now() + 1).toString();
+    streamingTextRef.current = '';
+    streamingMessageIdRef.current = streamingId;
+    lastStreamedMessageIdRef.current = streamingId;
+    streamLog('stream START', { streamingId, userMsgPreview: text.slice(0, 50), messagesCount: messages.length + 2 });
     setMessages((prev) => [...prev, { id: streamingId, text: '', isUser: false, timestamp: new Date() }]);
 
+    let chunkCount = 0;
     try {
-      const proposedPlanCompact = {
-        planSteps: proposedPlan.steps.slice(0, 5),
-        totals: proposedPlan.totals,
-        assumptions: proposedPlan.assumptions.slice(0, 5),
-        warnings: proposedPlan.warnings ?? [],
-        keyMetric: proposedPlan.keyMetric,
-        ...(toolOutputExplain && { explain: toolOutputExplain }),
-      };
       await sendChatMessageStreaming(
+        chatRequest,
         {
-          messages: [...messages, userMessage].map((m) => ({
-            id: m.id,
-            text: m.text,
-            isUser: m.isUser,
-            timestamp: m.timestamp,
-          })),
-          context: 'savings-allocator',
-          userPlanData: {
-            ...userStateForChat,
-            ...currentPlanDataForChat,
-            toolOutput: proposedPlanCompact,
-            baselinePlan: baselinePlanForChat ?? undefined,
-            currentContext: currentContextForChat,
-          },
-        },
-        {
-          onChunk(text) {
-            setMessages((prev) =>
-              prev.map((m) => (m.id === streamingId ? { ...m, text: m.text + text } : m))
-            );
+          onChunk(chunk: string) {
+            chunkCount++;
+            streamingTextRef.current += chunk;
+            setStreamingTick((t) => t + 1);
+            if (DEBUG_STREAMING && chunkCount <= 3) streamLog('onChunk', { chunkNum: chunkCount, chunkLen: chunk.length, totalLen: streamingTextRef.current.length });
           },
           onDone(meta: { proposedPlannedSavings?: number; planChanges?: PlanChangesFromChat }) {
+            streamLog('onDone', { hasPlanChanges: !!meta.planChanges, chunkCount, refLen: streamingTextRef.current.length, refPreview: streamingTextRef.current.slice(0, 80) });
             if (!meta.planChanges || !onUserRequestedPlanChange) return;
-            const lastUserMsg = [...messages, userMessage].filter((m) => m.isUser).pop()?.text;
-            applyPlanChangesFromChat(meta.planChanges, {
+            const lastUserMsg = [...messages, userMessage].filter((m) => m.isUser).pop()?.text ?? '';
+            if (isExplainOnlyRequest(lastUserMsg)) {
+              streamLog('onDone SKIP applyPlanChanges (explain-only request)');
+              return;
+            }
+            streamLog('onDone APPLYING planChanges', meta.planChanges);
+            streamingCorrectFreedAmountRef.current = null;
+            const followUpMsg = applyPlanChangesFromChat(meta.planChanges, {
               onUserRequestedPlanChange,
               currentPreTax401k$: currentPreTax401k$ ?? 0,
               currentHsa$: currentHsa$ ?? 0,
+              currentEf$: baselineEf$,
+              currentDebt$: baselineDebt$,
+              currentRetirementExtra$: baselineRetirement$,
+              currentBrokerage$: baselineBrokerage$,
             }, lastUserMsg);
+            // Extract correct "frees up $N/month" so we can patch the streamed reply if the AI said the wrong amount
+            if (typeof followUpMsg === 'string') {
+              const match = followUpMsg.match(/frees up \$\*?(\d+)\*?\/month/i) ?? followUpMsg.match(/That frees up \$(\d+)/i);
+              if (match) streamingCorrectFreedAmountRef.current = parseInt(match[1], 10);
+            }
           },
         }
       );
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : 'Something went wrong.';
+      streamLog('catch: setting error message', { streamingId, errMsg });
       setMessages((prev) =>
         prev.map((m) =>
           m.id === streamingId ? { ...m, text: `I couldn't complete that: ${errMsg}` } : m
         )
       );
     } finally {
+      let finalText = streamingTextRef.current;
+      const correctAmount = streamingCorrectFreedAmountRef.current;
+      if (correctAmount != null && correctAmount > 0) {
+        // AI may have said "That frees up $1/month" — replace with correct amount from allocator callback
+        finalText = finalText.replace(
+          /(frees up |That frees up )(\$\*?\d+\*?\/month)/gi,
+          (_, prefix, _old) => `${prefix}$${correctAmount}/month`
+        );
+        streamLog('finally: patched frees up amount', { correctAmount, hadPatch: true });
+      }
+      streamingCorrectFreedAmountRef.current = null;
+      streamLog('finally: flushing to state', { streamingId, finalLen: finalText.length, finalPreview: finalText.slice(0, 100) });
+      setMessages((prev) => {
+        const next = prev.map((m) => (m.id === streamingId ? { ...m, text: finalText } : m));
+        const updated = next.find((m) => m.id === streamingId);
+        streamLog('setMessages(flush) updater ran', { streamingId, updatedMsgLen: updated?.text?.length ?? 0 });
+        return next;
+      });
       setIsLoading(false);
+      queueMicrotask(() => {
+        streamLog('queueMicrotask: clearing streamingMessageIdRef');
+        streamingMessageIdRef.current = null;
+      });
     }
   };
+
+  // Once the last-streamed message has content in state, stop using the ref fallback so we don't hold refs forever
+  useEffect(() => {
+    const lastId = lastStreamedMessageIdRef.current;
+    if (!lastId) return;
+    const msg = messages.find((m) => m.id === lastId);
+    if (msg && (msg.text ?? '').trim().length > 0) {
+      const len = msg.text!.length;
+      streamLog('effect: clearing lastStreamedMessageIdRef (message has content in state)', { lastId, msgLen: len });
+      lastStreamedMessageIdRef.current = null;
+      // Delayed stability check: read latest state after 2s to see if something overwrote the message
+      if (DEBUG_STREAMING) {
+        const checkAt = 2000;
+        const idToCheck = lastId;
+        const expectedLen = len;
+        const timeoutId = window.setTimeout(() => {
+          const latest = messagesRef.current;
+          const current = latest.find((m) => m.id === idToCheck);
+          const currentLen = (current?.text ?? '').length;
+          if (currentLen !== expectedLen) {
+            streamLog('STABILITY CHECK: message length changed after 2s', {
+              id: idToCheck,
+              expectedLen,
+              currentLen,
+              preview: (current?.text ?? '').slice(0, 80),
+            });
+          } else {
+            streamLog('stability check (2s): message unchanged', { id: idToCheck, len: currentLen });
+          }
+        }, checkAt);
+        return () => window.clearTimeout(timeoutId);
+      }
+    }
+  }, [messages]);
 
   const delta = deltaOverride ?? toolOutputExplain?.delta;
   const hasDelta = (delta?.rows?.length ?? 0) > 0;
@@ -987,7 +1217,7 @@ export const SavingsChatPanel: React.FC<SavingsChatPanelProps> = ({
           )}
         </div>
 
-        {/* Delta view: col 1 = Ribbit Plan (first_time) or Current (my_data), col 2 = Proposed (working copy). */}
+        {/* Delta view: single column (Ribbit only) when first_time and no user changes; else col 1 = Ribbit/Current, col 2 = Proposed. */}
         <div className="rounded-lg bg-slate-100 dark:bg-slate-800 p-3 text-sm text-slate-700 dark:text-slate-300">
           {hasDelta && delta ? (
             <>
@@ -998,8 +1228,12 @@ export const SavingsChatPanel: React.FC<SavingsChatPanelProps> = ({
                 <thead>
                   <tr className="border-b border-slate-300 dark:border-slate-600">
                     <th className="text-left py-1 pr-2 font-medium text-slate-700 dark:text-slate-300"></th>
-                    <th className="text-right py-1 px-2 font-medium text-slate-700 dark:text-slate-300">{isFirstTimeSetup ? 'Ribbit Proposal' : 'Current Plan'}</th>
-                    <th className="text-right py-1 px-2 font-medium text-slate-700 dark:text-slate-300">Proposed</th>
+                    <th className="text-right py-1 px-2 font-medium text-slate-700 dark:text-slate-300">
+                      {delta.singleColumn ? 'Ribbit Proposal' : (isFirstTimeSetup ? 'Ribbit Proposal' : 'Current Plan')}
+                    </th>
+                    {!delta.singleColumn && (
+                      <th className="text-right py-1 px-2 font-medium text-slate-700 dark:text-slate-300">Proposed</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -1018,7 +1252,9 @@ export const SavingsChatPanel: React.FC<SavingsChatPanelProps> = ({
                       <tr key={row.id} className="border-b border-slate-200 dark:border-slate-600/50">
                         <td className="py-1 pr-2 text-slate-700 dark:text-slate-300">{row.label}</td>
                         <td className="text-right py-1 px-2">{fmt(row.current.monthly)}</td>
-                        <td className={`text-right py-1 px-2 ${proposedCellClass}`}>{fmt(row.proposed.monthly)}</td>
+                        {!delta.singleColumn && (
+                          <td className={`text-right py-1 px-2 ${proposedCellClass}`}>{fmt(row.proposed.monthly)}</td>
+                        )}
                       </tr>
                     );
                   })}
@@ -1055,7 +1291,11 @@ export const SavingsChatPanel: React.FC<SavingsChatPanelProps> = ({
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => handleSend(isNoChange ? 'Why the plan works?' : 'Explain the breakdown')}
+              onClick={() => handleSend(
+                isNoChange
+                  ? 'Why the plan works?'
+                  : "What's different between my current plan and the proposed plan? Explain the changes you're proposing and why."
+              )}
               disabled={isLoading}
               className="rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
             >
@@ -1085,28 +1325,56 @@ export const SavingsChatPanel: React.FC<SavingsChatPanelProps> = ({
           </>
         )}
 
-        {/* Chat thread — show messages and responses. In first-time, intro is above; show only user Q + assistant A here. */}
+        {/* Chat thread — show only streamed/final text (no prepended breakdown block). */}
         <div ref={chatThreadContainerRef} className="space-y-4 max-h-[36rem] overflow-y-auto border-t border-slate-200 dark:border-slate-700 pt-3">
-          {(isFirstTimeSetup ? messages.slice(1) : messages).map((m) => (
-            <div
-              key={m.id}
-              className={`flex ${m.isUser ? 'justify-end' : 'justify-start'}`}
-            >
+          {(isFirstTimeSetup ? messages.slice(1) : messages).map((m, idx, arr) => {
+            const isStreamingThis = m.id === streamingMessageIdRef.current && isLoading;
+            const isJustStreamed = m.id === lastStreamedMessageIdRef.current && !m.isUser;
+            const displayText = isStreamingThis
+              ? streamingTextRef.current
+              : isJustStreamed && (m.text ?? '').trim() === '' && streamingTextRef.current
+                ? streamingTextRef.current
+                : (m.text ?? '');
+            const isLastAssistant = !m.isUser && idx === arr.length - 1;
+            if (DEBUG_STREAMING && isLastAssistant) {
+              const len = (m.text ?? '').length;
+              const prev = lastAssistantRef.current;
+              if (prev.id === m.id && prev.len > 0 && len < prev.len) {
+                streamLog('OVERWRITE DETECTED: same message length decreased', { id: m.id, from: prev.len, to: len, preview: (m.text ?? '').slice(0, 80) });
+              }
+              lastAssistantRef.current = { id: m.id, len };
+              streamLog('render last assistant', {
+                id: m.id,
+                mTextLen: len,
+                mTextPreview: (m.text ?? '').slice(0, 60),
+                displayLen: displayText.length,
+                displayPreview: displayText.slice(0, 60),
+                isStreamingThis,
+                isJustStreamed,
+                refLen: streamingTextRef.current.length,
+              });
+            }
+            return (
               <div
-                className={`max-w-[80%] rounded-lg px-4 py-2.5 ${
-                  m.isUser
-                    ? 'bg-green-600 text-white text-sm'
-                    : 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100'
-                }`}
+                key={m.id}
+                className={`flex ${m.isUser ? 'justify-end' : 'justify-start'}`}
               >
-                {m.isUser ? (
-                  <p className="text-sm whitespace-pre-wrap">{m.text}</p>
-                ) : (
-                  <ChatMarkdown size="sm">{m.text}</ChatMarkdown>
-                )}
+                <div
+                  className={`max-w-[80%] rounded-lg px-4 py-2.5 ${
+                    m.isUser
+                      ? 'bg-green-600 text-white text-sm'
+                      : 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100'
+                  }`}
+                >
+                  {m.isUser ? (
+                    <p className="text-sm whitespace-pre-wrap">{m.text}</p>
+                  ) : (
+                    <ChatMarkdown size="sm">{displayText}</ChatMarkdown>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           {isLoading && (
             <div className="flex justify-start">
               <div className="max-w-[80%] rounded-lg bg-slate-100 dark:bg-slate-800 px-4 py-2.5">

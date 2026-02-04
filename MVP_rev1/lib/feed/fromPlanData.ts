@@ -21,14 +21,15 @@ export function buildUserFinancialStateFromPlan(
     'income' | 'assets' | 'debts' | 'payrollContributions' | 'plaidConnected' | 'safetyStrategy'
   >
 ): UserFinancialState {
-  if (!planData) {
+  if (!planData || !Array.isArray(planData.paycheckCategories)) {
     return getDefaultLiveState();
   }
 
   const income = store.income;
   const payFrequency = income?.payFrequency ?? 'biweekly';
   const paychecksPerMonth = getPaychecksPerMonth(payFrequency);
-  const takeHomePayMonthly = planData.paycheckAmount * paychecksPerMonth;
+  const paycheckAmount = typeof planData.paycheckAmount === 'number' ? planData.paycheckAmount : 0;
+  const takeHomePayMonthly = paycheckAmount * paychecksPerMonth;
 
   const needsCategories = planData.paycheckCategories.filter(
     (c) => c.key === 'essentials' || c.key === 'debt_minimums'
@@ -40,9 +41,10 @@ export function buildUserFinancialStateFromPlan(
       c.key === 'long_term_investing' ||
       c.key === 'debt_extra'
   );
-  const needsPercent = needsCategories.reduce((s, c) => s + c.percent, 0);
-  const wantsPercent = wantsCategories.reduce((s, c) => s + c.percent, 0);
-  const savingsPercent = savingsCategories.reduce((s, c) => s + c.percent, 0);
+  const pct = (c: { percent?: number }) => (typeof c.percent === 'number' ? c.percent : 0);
+  const needsPercent = needsCategories.reduce((s, c) => s + pct(c), 0);
+  const wantsPercent = wantsCategories.reduce((s, c) => s + pct(c), 0);
+  const savingsPercent = savingsCategories.reduce((s, c) => s + pct(c), 0);
 
   const cashBalance =
     store.assets?.filter((a) => a.type === 'cash').reduce((s, a) => s + a.value$, 0) ??
@@ -140,7 +142,8 @@ export function buildTriggerSignalsFromPlan(
 
   const income = store.income;
   const paychecksPerMonth = getPaychecksPerMonth(income?.payFrequency ?? 'biweekly');
-  const takeHomePayMonthly = planData.paycheckAmount * paychecksPerMonth;
+  const paycheckAmount = typeof planData.paycheckAmount === 'number' ? planData.paycheckAmount : 0;
+  const takeHomePayMonthly = paycheckAmount * paychecksPerMonth;
   const monthlyBasics = takeHomePayMonthly * 0.5;
   const cashBalance =
     store.assets?.filter((a) => a.type === 'cash').reduce((s, a) => s + a.value$, 0) ??
