@@ -200,6 +200,8 @@ export interface SavingsExplainDelta {
   rows: DeltaRow[];
   /** True when current and proposed are the same (no changes). */
   isNoChange?: boolean;
+  /** When true (e.g. first_time, no user changes), UI shows only Ribbit Proposal column. */
+  singleColumn?: boolean;
 }
 
 export interface SavingsAllocationExplain {
