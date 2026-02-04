@@ -266,9 +266,10 @@ function parseDeviationRequest(
     if (!resolved || Math.abs(resolved.delta) < 0.5) return null;
     return { category: resolved.category as DeviationCategory, delta: resolved.delta };
   }
+  const safeContext: DeviationParseContext = context ?? {};
   const t = text.trim();
-  const ctx401k = context?.preTax401k$ ?? 0;
-  const ctxHsa = context?.hsa$ ?? 0;
+  const ctx401k = safeContext.preTax401k$ ?? 0;
+  const ctxHsa = safeContext.hsa$ ?? 0;
 
   // "Reduce/set 401k to $100" or "401k to 100" = target value; delta = target - current
   // Check for "to X" patterns first (before "by X") so "reduce 401k to 100" is parsed as target, not "reduce by 100"
@@ -299,10 +300,10 @@ function parseDeviationRequest(
   
   // "Reduce/set emergency fund to $200" = target value; delta = target - current
   // Check for "to X" patterns BEFORE "by X" so "reduce emergency fund to 200" is parsed as target
-  const ctxEf = context?.ef$ ?? 0;
-  const ctxDebt = context?.debt$ ?? 0;
-  const ctxRetirement = context?.retirementExtra$ ?? 0;
-  const ctxBrokerage = context?.brokerage$ ?? 0;
+  const ctxEf = safeContext.ef$ ?? 0;
+  const ctxDebt = safeContext.debt$ ?? 0;
+  const ctxRetirement = safeContext.retirementExtra$ ?? 0;
+  const ctxBrokerage = safeContext.brokerage$ ?? 0;
   
   const toEfPatterns = [
     /(?:reduce|set|make|change)\s+(?:my\s+)?(?:emergency\s*fund|emergency fund|ef|buffer)\s+(?:contribution\s+)?to\s+\$?(\d+)/i,
