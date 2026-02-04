@@ -621,10 +621,11 @@ export function FinancialSidekick({ inline = false, variant = 'modal' }: Financi
       }));
 
       // Call ChatGPT API with streaming
-      streamingId = (Date.now() + 1).toString();
+      const newMessageId = (Date.now() + 1).toString();
+      streamingId = newMessageId;
       streamingTextRef.current = '';
-      streamingMessageIdRef.current = streamingId;
-      setMessages((prev) => [...prev, { id: streamingId, text: '', isUser: false, timestamp: new Date() }]);
+      streamingMessageIdRef.current = newMessageId;
+      setMessages((prev) => [...prev, { id: newMessageId, text: '', isUser: false, timestamp: new Date() }]);
 
       await sendChatMessageStreaming(
         {
