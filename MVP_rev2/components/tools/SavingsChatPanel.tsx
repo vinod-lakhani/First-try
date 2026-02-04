@@ -185,7 +185,7 @@ function applyPlanChangesFromChat(
   const appliedFromIntent =
     intent != null && intent.kind !== 'reset' && intentIsSingleCategoryChange(intent);
   const intentCategory =
-    appliedFromIntent && intent != null && intent.kind !== 'reset'
+    appliedFromIntent && intent != null
       ? (intent.kind === 'eliminate' ? intent.category : intent.category)
       : null;
   const skipApiDestinationDeltas =
@@ -193,7 +193,7 @@ function applyPlanChangesFromChat(
     intentCategory != null &&
     ['ef', 'debt', 'retirementExtra', 'brokerage'].includes(intentCategory);
 
-  if (appliedFromIntent && intent != null && intent.kind !== 'reset') {
+  if (appliedFromIntent && intent != null) {
     const resolved = intentToDelta(intent, intentContext);
     if (resolved && Math.abs(resolved.delta) > 0.5) {
       // For post-tax categories, always pass targetMonthly so the allocator applies it relative to the displayed "Current" plan, not the engine base (avoids EF going to 0 when base differs from baseline).
