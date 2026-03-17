@@ -14,6 +14,7 @@ import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import Link from "next/link";
 import { X, Send } from "lucide-react";
+import Image from "next/image";
 import type { RibbitScreenContext } from "@/lib/ribbit/types";
 
 const DEFAULT_MESSAGE =
@@ -225,7 +226,7 @@ export function RibbitChat({
           style={{ right: "max(1rem, calc(50vw - 16rem + 1rem))" }}
           aria-label="Need help? Ask Ribbit"
         >
-          <span className="text-lg" aria-hidden>🐸</span>
+          <Image src="/images/ribbit.png" alt="" width={20} height={20} className="shrink-0" aria-hidden />
           <span>Need help?</span>
         </button>
       )}
@@ -247,7 +248,7 @@ export function RibbitChat({
             {/* Header */}
             <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700">
               <div className="flex items-center gap-2">
-                <span className="text-xl" aria-hidden>🐸</span>
+                <Image src="/images/ribbit.png" alt="" width={24} height={24} className="shrink-0" aria-hidden />
                 <span className="font-semibold text-slate-900 dark:text-white">
                   Ribbit
                 </span>

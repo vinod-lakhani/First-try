@@ -6,9 +6,10 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
 import { RibbitChat } from "@/components/onboarding/RibbitChat";
+import { RibbitIcon } from "@/components/onboarding/RibbitIcon";
 import type { PlanScreenContext } from "@/lib/ribbit/types";
 import { projectNetWorth } from "@/lib/sim/projectNetWorth";
-import { X } from "lucide-react";
+import { X, ChevronDown, ChevronUp } from "lucide-react";
 
 const NetWorthChart = dynamic(
   () => import("@/components/charts/NetWorthChart").then((m) => ({ default: m.NetWorthChart })),
@@ -31,6 +32,7 @@ function HomeContent() {
   const [chartModalOpen, setChartModalOpen] = useState(false);
   const [ribbitOpen, setRibbitOpen] = useState(false);
   const [ribbitInitialQuestion, setRibbitInitialQuestion] = useState<string | null>(null);
+  const [unlockMoreExpanded, setUnlockMoreExpanded] = useState(false);
 
   const { labels, netWorth } = projectNetWorth(monthlySavings, 30, 8);
 
@@ -62,40 +64,30 @@ function HomeContent() {
         </p>
         <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
           <p className="text-sm text-slate-700 dark:text-slate-300 mb-3">
-            <span className="mr-1" aria-hidden>🐸</span>
+            <RibbitIcon size="sm" className="mr-1.5 align-middle" />
             <strong>Ribbit:</strong> You&apos;re off to a strong start — but this plan is still based on estimates.
             <br />
-            Want to see what&apos;s actually happening with your money?
+            <span className="mt-2 block">You might be leaving money on the table every month</span>
           </p>
-          <div className="flex flex-wrap gap-2">
-            {[
-              { label: "Am I overspending right now?", question: "Am I overspending right now?" },
-              { label: "How much could I actually be saving?", question: "How much could I actually be saving?" },
-              { label: `What would change in my ${formatMoney(projected30Y, true)} plan?`, question: "What would change in my plan?" },
-              { label: "Where is my money going each month?", question: "Where is my money going each month?" },
-            ].map((chip) => (
-              <button
-                key={chip.question}
-                type="button"
-                onClick={() => {
-                  setRibbitInitialQuestion(chip.question);
-                  setRibbitOpen(true);
-                }}
-                className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-              >
-                {chip.label}
-              </button>
-            ))}
-          </div>
-          <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
-            People like you often overspend $200–$400/month without realizing it
+          <p className="mb-3 text-xs text-slate-600 dark:text-slate-400">
+            Most people your age overspend in 2–3 categories without realizing it
           </p>
+          <button
+            type="button"
+            onClick={() => {
+              setRibbitInitialQuestion("Where am I overspending right now?");
+              setRibbitOpen(true);
+            }}
+            className="w-full rounded-full border-2 border-primary/30 bg-primary/10 px-4 py-2.5 text-sm font-medium text-slate-800 transition-colors hover:bg-primary/20 hover:border-primary/50 dark:text-slate-100 dark:hover:bg-primary/20"
+          >
+            Where am I overspending right now?
+          </button>
         </div>
 
         {/* Plan Progress */}
         <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Plan strength</span>
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Plan completeness</span>
             <span className="text-xs text-slate-500 dark:text-slate-400">40% complete · Starter</span>
           </div>
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
@@ -105,7 +97,7 @@ function HomeContent() {
             />
           </div>
           <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-            Add more data to unlock better moves
+            This improves as we learn your real numbers
           </p>
           <p className="mt-0.5 text-[11px] text-slate-400 dark:text-slate-500">
             Every step makes your plan more real
@@ -123,7 +115,7 @@ function HomeContent() {
             Unlock your real spending
           </h3>
           <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-            Find out if you&apos;re overspending — and what to fix immediately
+            See where your money is going — and what to change this month
           </p>
           <Link
             href="/onboarding/connect"
@@ -131,7 +123,10 @@ function HomeContent() {
           >
             Unlock my real numbers →
           </Link>
-          <p className="mt-2 text-center text-xs text-slate-500 dark:text-slate-400">
+          <p className="mt-2 text-center text-xs font-medium text-slate-700 dark:text-slate-300">
+            Most users find $200–$500/month they didn&apos;t realize they could save
+          </p>
+          <p className="mt-1 text-center text-xs text-slate-500 dark:text-slate-400">
             Takes ~30 seconds • Secure via Plaid
           </p>
           <p className="mt-1 text-center text-[11px] text-slate-500 dark:text-slate-400">
@@ -147,12 +142,6 @@ function HomeContent() {
               <li>• A more accurate version of your plan</li>
             </ul>
           </div>
-        </div>
-        <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
-          <p className="text-sm text-slate-600 dark:text-slate-400">
-            <span className="mr-1" aria-hidden>🐸</span>
-            <strong>Ribbit:</strong> Most people think they&apos;re saving enough — until they see their real numbers.
-          </p>
         </div>
       </div>
 
@@ -172,7 +161,7 @@ function HomeContent() {
             {formatMoney(projected30Y, true)}
           </p>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Still based on estimates — your real numbers could change this
+            Based on assumptions — your actual spending will change this
           </p>
           <p className="text-xs text-primary mt-2 font-medium">
             See what could change this →
@@ -211,38 +200,42 @@ function HomeContent() {
         </div>
       )}
 
-      {/* 4. UNLOCK MORE */}
+      {/* 4. MAKE YOUR PLAN SMARTER */}
       <div className="mb-8">
-        <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-          The more you unlock, the better Ribbit gets at telling you what to do next.
-        </p>
-        <h2 className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2">
-          Unlock more
-        </h2>
-        <div className="space-y-1.5">
+        <button
+          type="button"
+          onClick={() => setUnlockMoreExpanded((v) => !v)}
+          className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-left transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700/50"
+        >
+          <h2 className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+            Make your plan smarter
+          </h2>
+          {unlockMoreExpanded ? (
+            <ChevronUp className="h-4 w-4 text-slate-400" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-slate-400" />
+          )}
+        </button>
+        {unlockMoreExpanded && (
+        <div className="mt-2 space-y-1.5">
           {[
-            { title: "Unlock your real spending", subtitle: "See where your money actually goes", tag: "+20% plan strength", action: "connect" as const, question: "How do I see where my money is actually going?" },
-            { title: "Unlock debt impact", subtitle: "See how much interest is costing you", tag: "high value", action: "ribbit" as const, question: "How much is interest costing me? How do I add my debts?" },
-            { title: "Unlock cash flow", subtitle: "See what you really have left each month", tag: "+clarity", action: "ribbit" as const, question: "How do I see my real cash flow each month?" },
-            { title: "Unlock real net worth", subtitle: "Replace estimates with actual balances", tag: "+confidence", action: "ribbit" as const, question: "How do I see my real net worth instead of estimates?" },
-            { title: "Unlock payroll savings", subtitle: "Account for 401(k), HSA, and deductions", tag: "+precision", action: "ribbit" as const, question: "How do I account for my 401(k) and HSA in my plan?" },
+            { title: "See your real spending", subtitle: "See where your money actually goes", action: "connect" as const, question: "How do I see where my money is actually going?" },
+            { title: "Understand your debt impact", subtitle: "See how much interest is costing you", action: "ribbit" as const, question: "How much is interest costing me? How do I add my debts?" },
+            { title: "See your true cash flow", subtitle: "See what you really have left each month", action: "ribbit" as const, question: "How do I see my real cash flow each month?" },
+            { title: "Track your net worth", subtitle: "Replace estimates with actual balances", action: "ribbit" as const, question: "How do I see my real net worth instead of estimates?" },
+            { title: "Include payroll savings", subtitle: "Account for 401(k), HSA, and deductions", action: "ribbit" as const, question: "How do I account for my 401(k) and HSA in my plan?" },
           ].map((item) => (
             item.action === "connect" ? (
               <Link
                 key={item.title}
                 href="/onboarding/connect"
-                className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50/50 px-3 py-2.5 text-left transition-colors hover:bg-slate-100/50 dark:border-slate-700/50 dark:bg-slate-800/30 dark:hover:bg-slate-800/50"
+                className="flex w-full flex-col gap-0.5 rounded-lg border border-slate-100 bg-slate-50/50 px-3 py-2.5 text-left transition-colors hover:bg-slate-100/50 dark:border-slate-700/50 dark:bg-slate-800/30 dark:hover:bg-slate-800/50"
               >
-                <div className="flex min-w-0 flex-col gap-0.5">
-                  <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                    {item.title}
-                  </span>
-                  <span className="text-[11px] text-slate-500 dark:text-slate-500">
-                    {item.subtitle}
-                  </span>
-                </div>
-                <span className="shrink-0 text-[10px] font-medium text-primary">
-                  {item.tag}
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                  {item.title}
+                </span>
+                <span className="text-[11px] text-slate-500 dark:text-slate-500">
+                  {item.subtitle}
                 </span>
               </Link>
             ) : (
@@ -253,23 +246,19 @@ function HomeContent() {
                   setRibbitInitialQuestion(item.question);
                   setRibbitOpen(true);
                 }}
-                className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50/50 px-3 py-2.5 text-left hover:bg-slate-100/50 dark:border-slate-700/50 dark:bg-slate-800/30 dark:hover:bg-slate-800/50"
+                className="flex w-full flex-col gap-0.5 rounded-lg border border-slate-100 bg-slate-50/50 px-3 py-2.5 text-left hover:bg-slate-100/50 dark:border-slate-700/50 dark:bg-slate-800/30 dark:hover:bg-slate-800/50"
               >
-                <div className="flex min-w-0 flex-col gap-0.5">
-                  <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                    {item.title}
-                  </span>
-                  <span className="text-[11px] text-slate-500 dark:text-slate-500">
-                    {item.subtitle}
-                  </span>
-                </div>
-                <span className="shrink-0 text-[10px] font-medium text-primary">
-                  {item.tag}
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                  {item.title}
+                </span>
+                <span className="text-[11px] text-slate-500 dark:text-slate-500">
+                  {item.subtitle}
                 </span>
               </button>
             )
           ))}
         </div>
+        )}
       </div>
 
       <RibbitChat
