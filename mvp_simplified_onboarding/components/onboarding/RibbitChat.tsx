@@ -12,6 +12,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
+import Link from "next/link";
 import { X, Send } from "lucide-react";
 import type { RibbitScreenContext } from "@/lib/ribbit/types";
 
@@ -44,6 +45,20 @@ const markdownComponents: Parameters<typeof ReactMarkdown>[0]["components"] = {
       {children}
     </li>
   ),
+  a: ({ href, children }) => {
+    if (href?.startsWith("/")) {
+      return (
+        <Link href={href} className="font-medium text-primary underline hover:text-primary/90">
+          {children}
+        </Link>
+      );
+    }
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" className="font-medium text-primary underline hover:text-primary/90">
+        {children}
+      </a>
+    );
+  },
 };
 
 function ChatMarkdown({ text }: { text: string }) {
@@ -89,22 +104,57 @@ export function RibbitChat({
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const lastSentQuestionRef = useRef<string | null>(null);
 
-  // When sheet opens, show default message if no messages yet
+  // When sheet opens, show default message if no messages yet (skip when opening with a chip question)
   useEffect(() => {
-    if (open && messages.length === 0) {
+    if (open && messages.length === 0 && !initialQuestion?.trim()) {
       setMessages([{ text: DEFAULT_MESSAGE, isUser: false }]);
     }
-  }, [open, messages.length]);
+  }, [open, messages.length, initialQuestion]);
 
-  // When opening with initialQuestion (from page chip), send it immediately
+  // Reset when chat closes
   useEffect(() => {
-    if (open && initialQuestion?.trim()) {
-      sendMessage(initialQuestion.trim());
-      onInitialQuestionSent?.();
+    if (!open) {
+      lastSentQuestionRef.current = null;
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialQuestion]);
+  }, [open]);
+
+  // When opening with initialQuestion (from page chip), send it immediately to the LLM
+  useEffect(() => {
+    const question = initialQuestion?.trim();
+    if (!open || !question) return;
+    if (lastSentQuestionRef.current === question) return; // Already sent this exact question
+    lastSentQuestionRef.current = question;
+    onInitialQuestionSent?.();
+    // Send to API with screen context for contextual LLM response
+    const sendInitialQuestion = async () => {
+      setMessages([{ text: question, isUser: true }]);
+      setLoading(true);
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages: [{ text: question, isUser: true }],
+            screenContext,
+          }),
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        const reply = data.response ?? "I couldn't generate a response.";
+        setMessages((prev) => [...prev, { text: reply, isUser: false }]);
+      } catch (err) {
+        setMessages((prev) => [
+          ...prev,
+          { text: "Something went wrong. Please try again.", isUser: false },
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    sendInitialQuestion();
+  }, [open, initialQuestion, screenContext, onInitialQuestionSent]);
 
   // Focus input when sheet opens
   useEffect(() => {

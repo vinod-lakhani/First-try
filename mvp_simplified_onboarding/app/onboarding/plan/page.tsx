@@ -67,7 +67,7 @@ function PlanContent() {
   );
 
   const handleSeeFirstMove = () => {
-    router.push("/");
+    router.push(`/app?savings=${monthlySavings}&projected=${projected30Y}`);
   };
 
   return (
