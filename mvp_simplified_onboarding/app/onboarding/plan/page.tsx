@@ -6,12 +6,14 @@
 
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { OnboardingProgress } from "@/components/onboarding/OnboardingProgress";
 import { NetWorthChart } from "@/components/charts/NetWorthChart";
 import { projectNetWorth } from "@/lib/sim/projectNetWorth";
+import { RibbitChat } from "@/components/onboarding/RibbitChat";
+import type { PlanScreenContext } from "@/lib/ribbit/types";
 
 function formatMoney(n: number, compact = false) {
   if (compact && n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
@@ -19,17 +21,45 @@ function formatMoney(n: number, compact = false) {
   return `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 }
 
+const PLAN_CHIPS = [
+  { label: "Is this realistic?", question: "Is this realistic?" },
+  { label: "What assumptions are used?", question: "What assumptions are used?" },
+  { label: "How do I reach this faster?", question: "How do I reach this faster?" },
+  { label: "What should I do first?", question: "What should I do first?" },
+];
+
 function PlanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const savingsParam = searchParams.get("savings");
   const monthlySavings = savingsParam ? parseFloat(savingsParam) || 1362 : 1362;
+  const [ribbitOpen, setRibbitOpen] = useState(false);
+  const [ribbitInitialQuestion, setRibbitInitialQuestion] = useState<string | null>(null);
 
   const { labels, netWorth } = projectNetWorth(monthlySavings, 30, 8);
   const projected30Y = netWorth[netWorth.length - 1] ?? 0;
   const at1Y = netWorth[12] ?? 0;
   const at5Y = netWorth[60] ?? 0;
   const at10Y = netWorth[120] ?? 0;
+
+  const ribbitScreenContext: PlanScreenContext = useMemo(
+    () => ({
+      screen: "plan",
+      onboardingStage: "plan",
+      hasLinkedAccounts: false,
+      source: "estimated_from_income",
+      monthlySavings,
+      projectedNetWorth30Y: projected30Y,
+      horizonYears: 30,
+      milestones: {
+        oneYear: at1Y,
+        fiveYears: at5Y,
+        tenYears: at10Y,
+      },
+      projectionAssumptionsLabel: "steady monthly saving and long-term market growth",
+    }),
+    [monthlySavings, projected30Y, at1Y, at5Y, at10Y]
+  );
 
   const handleSeeFirstMove = () => {
     router.push("/");
@@ -61,8 +91,25 @@ function PlanContent() {
       </div>
 
       {/* Net worth chart */}
-      <div className="mb-8">
+      <div className="mb-6">
         <NetWorthChart labels={labels} netWorth={netWorth} height={220} />
+      </div>
+
+      {/* Quick question chips */}
+      <div className="flex flex-wrap gap-2 mb-8">
+        {PLAN_CHIPS.map((chip) => (
+          <button
+            key={chip.question}
+            type="button"
+            onClick={() => {
+              setRibbitInitialQuestion(chip.question);
+              setRibbitOpen(true);
+            }}
+            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+          >
+            {chip.label}
+          </button>
+        ))}
       </div>
 
       {/* Growth table */}
@@ -93,7 +140,7 @@ function PlanContent() {
       </div>
 
       {/* Insight */}
-      <div className="mb-8 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/30">
+      <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/30">
         <p className="text-sm font-medium text-amber-900 dark:text-amber-200 mb-1">
           💡 Small monthly decisions compound massively
         </p>
@@ -103,9 +150,29 @@ function PlanContent() {
         </p>
       </div>
 
+      <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+        Want help getting there?{" "}
+        <button
+          type="button"
+          onClick={() => setRibbitOpen(true)}
+          className="font-medium text-primary hover:underline"
+        >
+          Ask Ribbit
+        </button>
+      </p>
+
       <Button onClick={handleSeeFirstMove} size="lg" className="w-full">
         See my first move →
       </Button>
+
+      <RibbitChat
+        screenContext={ribbitScreenContext}
+        chips={PLAN_CHIPS}
+        open={ribbitOpen}
+        onOpenChange={setRibbitOpen}
+        initialQuestion={ribbitInitialQuestion}
+        onInitialQuestionSent={() => setRibbitInitialQuestion(null)}
+      />
     </div>
   );
 }
