@@ -58,7 +58,10 @@ export default function ConnectPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    router.push("/onboarding/income");
+    const parsed = parseInt(annualIncome.replace(/[^0-9]/g, ""), 10);
+    const annual = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    const params = annual ? `?annualIncome=${annual}` : "";
+    router.push(`/onboarding/income${params}`);
   };
 
   const inputBase =
@@ -222,7 +225,7 @@ export default function ConnectPage() {
 
         {/* CTA */}
         <Button type="submit" size="lg" className="w-full">
-          Provide Financial Details
+          How much could I save
         </Button>
       </form>
     </div>

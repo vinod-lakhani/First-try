@@ -7,15 +7,17 @@
 
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState, useMemo, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronUp, Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OnboardingProgress } from "@/components/onboarding/OnboardingProgress";
 import { RibbitChat } from "@/components/onboarding/RibbitChat";
 import type { IncomeScreenContext } from "@/lib/ribbit/types";
+import { estimateMonthlyTakeHome } from "@/lib/income/estimateTakeHome";
 
 const STEP = 50;
+const DEFAULT_MONTHLY = 6810;
 
 // Needs subcategories (from second image)
 const NEEDS_KEYS = [
@@ -57,24 +59,37 @@ function formatMoney(n: number) {
   return `$${n.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`;
 }
 
-export default function IncomePage() {
-  const router = useRouter();
+function getInitialIncome(searchParams: ReturnType<typeof useSearchParams> | null): number {
+  const annual = searchParams?.get("annualIncome");
+  const parsed = annual ? parseInt(annual, 10) : NaN;
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return estimateMonthlyTakeHome(parsed);
+  }
+  return DEFAULT_MONTHLY;
+}
 
-  // Default: $6810 income, 50% needs ($3405), 30% wants ($2043), 20% savings ($1362)
-  const [income, setIncome] = useState(6810);
-  const [needs, setNeeds] = useState(3405);
-  const [wants, setWants] = useState(2043);
+function IncomeContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialIncome = useMemo(() => getInitialIncome(searchParams), [searchParams]);
+
+  // Use estimated monthly from Connect screen, or default
+  const [income, setIncome] = useState(initialIncome);
+  const [needs, setNeeds] = useState(Math.round(initialIncome * 0.5));
+  const [wants, setWants] = useState(Math.round(initialIncome * 0.3));
 
   // Savings = leftover
   const savings = useMemo(() => Math.max(0, income - needs - wants), [income, needs, wants]);
 
   // Subcategory state - distribute proportionally
   const [needsBreakdown, setNeedsBreakdown] = useState<Record<(typeof NEEDS_KEYS)[number], number>>(() => {
-    const per = 3405 / NEEDS_KEYS.length;
+    const n = Math.round(initialIncome * 0.5);
+    const per = n / NEEDS_KEYS.length;
     return NEEDS_KEYS.reduce((acc, k) => ({ ...acc, [k]: Math.round(per * 100) / 100 }), {} as Record<(typeof NEEDS_KEYS)[number], number>);
   });
   const [wantsBreakdown, setWantsBreakdown] = useState<Record<(typeof WANTS_KEYS)[number], number>>(() => {
-    const per = 2043 / WANTS_KEYS.length;
+    const w = Math.round(initialIncome * 0.3);
+    const per = w / WANTS_KEYS.length;
     return WANTS_KEYS.reduce((acc, k) => ({ ...acc, [k]: Math.round(per * 100) / 100 }), {} as Record<(typeof WANTS_KEYS)[number], number>);
   });
 
@@ -167,6 +182,11 @@ export default function IncomePage() {
         <p className="text-base font-semibold text-slate-900 dark:text-white mb-2">
           Based on your income of {formatMoney(income)}/month
         </p>
+        {searchParams?.get("annualIncome") && (
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+            Estimated take-home from your annual income (after taxes)
+          </p>
+        )}
         <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Recommended split</p>
         <div className="flex h-12 w-full overflow-hidden rounded-lg mb-4">
           <div
@@ -445,7 +465,7 @@ export default function IncomePage() {
       </div>
 
       <Button onClick={handleAllocate} size="lg" className="w-full">
-        How much could I save →
+        How should I allocate my savings →
       </Button>
 
       <RibbitChat
@@ -461,5 +481,13 @@ export default function IncomePage() {
         onInitialQuestionSent={() => setRibbitInitialQuestion(null)}
       />
     </div>
+  );
+}
+
+export default function IncomePage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-slate-500">Loading...</div>}>
+      <IncomeContent />
+    </Suspense>
   );
 }
