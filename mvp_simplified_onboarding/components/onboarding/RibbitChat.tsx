@@ -18,6 +18,42 @@ import type { RibbitScreenContext } from "@/lib/ribbit/types";
 const DEFAULT_MESSAGE =
   "Hey — I can explain anything on this screen or help you adjust it.";
 
+const markdownComponents: Parameters<typeof ReactMarkdown>[0]["components"] = {
+  p: ({ children, ...props }) => (
+    <p className="mb-2 last:mb-0 leading-relaxed" {...props}>
+      {children}
+    </p>
+  ),
+  strong: ({ children, ...props }) => (
+    <strong className="font-semibold" {...props}>
+      {children}
+    </strong>
+  ),
+  ul: ({ children, ...props }) => (
+    <ul className="my-2 pl-5 list-disc space-y-1" {...props}>
+      {children}
+    </ul>
+  ),
+  ol: ({ children, ...props }) => (
+    <ol className="my-2 pl-5 list-decimal space-y-1" {...props}>
+      {children}
+    </ol>
+  ),
+  li: ({ children, ...props }) => (
+    <li className="leading-relaxed" {...props}>
+      {children}
+    </li>
+  ),
+};
+
+function ChatMarkdown({ text }: { text: string }) {
+  return (
+    <div className="text-sm">
+      <ReactMarkdown components={markdownComponents}>{text}</ReactMarkdown>
+    </div>
+  );
+}
+
 export type RibbitMessage = {
   text: string;
   isUser: boolean;
@@ -194,9 +230,7 @@ export function RibbitChat({
                       {m.isUser ? (
                         <p className="text-sm whitespace-pre-wrap">{m.text}</p>
                       ) : (
-                        <div className="ribbit-markdown text-sm [&_p]:mb-2 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-4 [&_ul]:space-y-1 [&_li]:leading-relaxed">
-                          <ReactMarkdown>{m.text}</ReactMarkdown>
-                        </div>
+                        <ChatMarkdown text={m.text} />
                       )}
                     </div>
                   </div>
