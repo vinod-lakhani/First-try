@@ -6,11 +6,16 @@
 
 "use client";
 
+import dynamic from "next/dynamic";
 import { Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { OnboardingProgress } from "@/components/onboarding/OnboardingProgress";
-import { NetWorthChart } from "@/components/charts/NetWorthChart";
+
+const NetWorthChart = dynamic(() => import("@/components/charts/NetWorthChart").then((m) => ({ default: m.NetWorthChart })), {
+  ssr: false,
+  loading: () => <div className="h-[220px] w-full animate-pulse rounded-lg bg-slate-200 dark:bg-slate-700" />,
+});
 import { projectNetWorth } from "@/lib/sim/projectNetWorth";
 import { RibbitChat } from "@/components/onboarding/RibbitChat";
 import type { PlanScreenContext } from "@/lib/ribbit/types";
@@ -38,9 +43,9 @@ function PlanContent() {
 
   const { labels, netWorth } = projectNetWorth(monthlySavings, 30, 8);
   const projected30Y = netWorth[netWorth.length - 1] ?? 0;
-  const at1Y = netWorth[12] ?? 0;
-  const at5Y = netWorth[60] ?? 0;
-  const at10Y = netWorth[120] ?? 0;
+  const at1Y = netWorth[1] ?? 0;
+  const at5Y = netWorth[5] ?? 0;
+  const at10Y = netWorth[10] ?? 0;
 
   const ribbitScreenContext: PlanScreenContext = useMemo(
     () => ({

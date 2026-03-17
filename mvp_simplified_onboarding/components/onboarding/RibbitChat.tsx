@@ -189,7 +189,7 @@ export function RibbitChat({
             aria-hidden
           />
           <div
-            className="fixed bottom-0 left-1/2 z-[110] flex h-[65vh] min-h-[320px] w-full max-w-lg -translate-x-1/2 flex-col rounded-t-2xl border border-b-0 border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+            className="fixed inset-x-0 bottom-0 z-[110] flex h-[70dvh] min-h-[280px] max-h-[85dvh] flex-col rounded-t-2xl border border-b-0 border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:left-1/2 sm:right-auto sm:w-full sm:max-w-lg sm:-translate-x-1/2"
             role="dialog"
             aria-label="Ribbit chat"
             onClick={(e) => e.stopPropagation()}
@@ -212,8 +212,8 @@ export function RibbitChat({
               </button>
             </div>
 
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-4 py-4">
+            {/* Messages - min-h-0 needed for flex overflow on mobile */}
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
               <div className="space-y-4">
                 {messages.map((m, i) => (
                   <div
@@ -268,10 +268,10 @@ export function RibbitChat({
               </div>
             )}
 
-            {/* Text input */}
+            {/* Text input - pb-safe for mobile home indicator */}
             <form
               onSubmit={handleSubmit}
-              className="border-t border-slate-200 px-4 py-3 dark:border-slate-700"
+              className="border-t border-slate-200 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] dark:border-slate-700"
             >
               <div className="flex gap-2">
                 <input

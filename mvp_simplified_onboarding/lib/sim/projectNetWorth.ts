@@ -1,6 +1,7 @@
 /**
  * Simple net worth projection
  * FV of annuity: monthly savings + compound growth over time
+ * Returns yearly data points with "Year 0", "Year 5", "Year 10", etc. labels
  */
 
 export function projectNetWorth(
@@ -8,19 +9,19 @@ export function projectNetWorth(
   years: number = 30,
   annualReturnPct: number = 7.5
 ): { labels: string[]; netWorth: number[] } {
-  const months = years * 12;
   const monthlyRate = annualReturnPct / 100 / 12;
   const labels: string[] = [];
   const netWorth: number[] = [];
   let nw = 0;
 
-  const start = new Date();
-  for (let i = 0; i <= months; i++) {
-    const d = new Date(start);
-    d.setMonth(d.getMonth() + i);
-    labels.push(d.toLocaleDateString("en-US", { month: "short", year: "2-digit" }));
+  const yearInterval = years <= 10 ? 2 : 5;
+  for (let y = 0; y <= years; y++) {
+    const label = y === 0 ? "Year 0" : y % yearInterval === 0 ? `Year ${y}` : "";
+    labels.push(label);
     netWorth.push(Math.round(nw));
-    nw = nw * (1 + monthlyRate) + monthlySavings;
+    for (let m = 0; m < 12; m++) {
+      nw = nw * (1 + monthlyRate) + monthlySavings;
+    }
   }
 
   return { labels, netWorth };
