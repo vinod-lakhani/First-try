@@ -445,7 +445,7 @@ export default function IncomePage() {
       </div>
 
       <Button onClick={handleAllocate} size="lg" className="w-full">
-        See how to grow this →
+        How much could I save →
       </Button>
 
       <RibbitChat
