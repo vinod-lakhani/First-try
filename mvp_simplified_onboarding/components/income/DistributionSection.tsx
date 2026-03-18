@@ -151,6 +151,7 @@ export function DistributionSection({
   onChipClick,
 }: DistributionSectionProps) {
   const sorted = [...items].sort((a, b) => b.amount - a.amount);
+  const itemsSum = sorted.reduce((s, i) => s + i.amount, 0);
   const largestLabel = sorted[0]?.label;
   const stripShades = SHADE_PALETTES[colorTheme];
   const dotShades = DOT_PALETTES[colorTheme];
@@ -191,10 +192,10 @@ export function DistributionSection({
         </div>
       )}
 
-      {/* Horizontal stacked strip — proportional segments, color-coded by subcategory */}
-      <div className="flex h-4 w-full overflow-hidden rounded-md">
+      {/* Horizontal stacked strip — proportional segments, color-coded by subcategory. Always fills 100% width. */}
+      <div className="flex h-8 min-h-8 shrink-0 w-full overflow-hidden rounded-md">
         {sorted.map((item, idx) => {
-          const pct = total > 0 ? (item.amount / total) * 100 : 0;
+          const pct = itemsSum > 0 ? (item.amount / itemsSum) * 100 : 0;
           const shadeClass = stripShades[idx % stripShades.length];
           return (
             <div

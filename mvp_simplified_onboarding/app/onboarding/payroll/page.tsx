@@ -22,6 +22,22 @@ const FREQUENCY_OPTIONS = [
 const inputBase =
   "w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500";
 
+function parseNum(s: string): number {
+  const n = parseFloat(s.replace(/[^0-9.]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** Paychecks per year by frequency */
+const FREQ_PAYCHECKS: Record<string, number> = {
+  "Every Paycheck (Bi-weekly)": 26,
+  "Every Paycheck (Weekly)": 52,
+  "Twice per month": 24,
+  "Monthly": 12,
+};
+
+/** Default monthly gross for % calculations when income unknown */
+const DEFAULT_MONTHLY_GROSS = 8000;
+
 function PayrollPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -45,12 +61,92 @@ function PayrollPageContent() {
   const [contribPctHsa, setContribPctHsa] = useState("");
   const [contribAmountHsa, setContribAmountHsa] = useState("");
   const [freqHsa, setFreqHsa] = useState(FREQUENCY_OPTIONS[0]);
+  const [savingsModalOpen, setSavingsModalOpen] = useState(false);
 
   const appBackHref = `/app?savings=${savings}&projected=${projected}`;
 
+  const { payroll401k, payrollHsa, employee401k, totalPayrollSavings } = (() => {
+    const gross = DEFAULT_MONTHLY_GROSS;
+    let p401k = 0;
+    let emp401k = 0;
+    let pHsa = 0;
+
+    const paychecks401k = FREQ_PAYCHECKS[freq401k] ?? 26;
+    const paychecksHsa = FREQ_PAYCHECKS[freqHsa] ?? 26;
+
+    if (contributing401k) {
+      const monthly401k =
+        contribType401k === "%"
+          ? gross * (parseNum(contribPct401k) / 100)
+          : parseNum(contribAmount401k) * (paychecks401k / 12);
+      emp401k = monthly401k;
+      p401k += monthly401k;
+      if (has401kMatch) {
+        const matchPctVal = parseNum(matchPct) / 100;
+        const matchUpToVal = parseNum(matchUpToPct) / 100;
+        const employeePct = contribType401k === "%" ? parseNum(contribPct401k) / 100 : monthly401k / gross;
+        const matchedPct = Math.min(employeePct, matchUpToVal);
+        p401k += gross * matchedPct * matchPctVal;
+      }
+    }
+
+    if (employerOffersHsa) {
+      pHsa += parseNum(employerHsaContrib);
+    }
+    if (contributingHsa) {
+      const monthlyHsa =
+        contribTypeHsa === "%"
+          ? gross * (parseNum(contribPctHsa) / 100)
+          : parseNum(contribAmountHsa) * (paychecksHsa / 12);
+      pHsa += monthlyHsa;
+    }
+
+    return {
+      payroll401k: Math.round(p401k),
+      payrollHsa: Math.round(pHsa),
+      employee401k: Math.round(emp401k),
+      totalPayrollSavings: Math.round(p401k + pHsa),
+    };
+  })();
+
+  const hasPayrollSavings = totalPayrollSavings > 0;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (returnTo === "app") {
+    if (returnTo === "app" && hasPayrollSavings) {
+      setSavingsModalOpen(true);
+    } else if (returnTo === "app") {
+      const q = new URLSearchParams({ payroll: "1", savings, projected });
+      router.push(`/app?${q.toString()}`);
+    } else {
+      router.push(`/app?savings=${savings}&projected=${projected}`);
+    }
+  };
+
+  const navigateAfterPayroll = () => {
+    if (returnTo === "app" && hasPayrollSavings) {
+      const q = new URLSearchParams({
+        savings,
+        projected,
+        payroll401k: String(payroll401k),
+        payrollHsa: String(payrollHsa),
+        fromPayroll: "1",
+      });
+      if (has401kMatch || contributing401k) {
+        q.set("has401k", "1");
+        if (has401kMatch) {
+          const mp = parseNum(matchPct);
+          const mu = parseNum(matchUpToPct);
+          if (mp > 0) q.set("matchPct", String(mp));
+          if (mu > 0) q.set("matchUpToPct", String(mu));
+        }
+        q.set("employee401k", String(employee401k));
+      }
+      if (employerOffersHsa || contributingHsa) q.set("hasHsa", "1");
+      q.set("annualIncome", String(12 * DEFAULT_MONTHLY_GROSS));
+      q.set("returnTo", "app");
+      router.push(`/onboarding/savings-allocation?${q.toString()}`);
+    } else if (returnTo === "app") {
       const q = new URLSearchParams({ payroll: "1", savings, projected });
       router.push(`/app?${q.toString()}`);
     } else {
@@ -449,6 +545,46 @@ function PayrollPageContent() {
           See my automatic savings
         </Button>
       </form>
+
+      {/* Payroll savings modal — shown when user has payroll savings before going to savings allocation */}
+      {savingsModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="payroll-modal-title"
+        >
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-800">
+            <h2 id="payroll-modal-title" className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+              You&apos;re saving more than you think
+            </h2>
+            <p className="text-slate-600 dark:text-slate-400 mb-4">
+              Through payroll (401k, HSA), you&apos;re adding approximately{" "}
+              <strong className="text-slate-900 dark:text-white">
+                ${totalPayrollSavings.toLocaleString()}/month
+              </strong>{" "}
+              to your wealth — that&apos;s{" "}
+              <strong className="text-slate-900 dark:text-white">
+                ${(totalPayrollSavings * 12).toLocaleString()}/year
+              </strong>{" "}
+              on top of your post-tax savings.
+            </p>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
+              Next, we&apos;ll show you how to allocate your post-tax savings so your full picture works together. Your 401k and HSA amounts will appear as already allocated.
+            </p>
+            <Button
+              onClick={() => {
+                setSavingsModalOpen(false);
+                navigateAfterPayroll();
+              }}
+              size="lg"
+              className="w-full"
+            >
+              Adjust my savings allocation →
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

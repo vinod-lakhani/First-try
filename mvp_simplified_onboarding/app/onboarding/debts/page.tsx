@@ -45,6 +45,11 @@ function parseNum(s: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Monthly interest = balance * (rate/100) / 12 */
+function monthlyInterest(balance: number, ratePct: number): number {
+  return (balance * (ratePct / 100)) / 12;
+}
+
 function DebtsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -61,8 +66,30 @@ function DebtsPageContent() {
   const [creditCards, setCreditCards] = useState<CreditCardEntry[]>([
     { id: "1", name: "", balance: "", rate: "", minPayment: "" },
   ]);
+  const [interestModalOpen, setInterestModalOpen] = useState(false);
 
   const appBackHref = `/app?savings=${savings}&projected=${projected}`;
+
+  const { totalMonthlyInterest, suggestedDebtPayoff } = (() => {
+    let total = 0;
+    if (hasLoans) {
+      for (const l of loans) {
+        total += monthlyInterest(parseNum(l.balance), parseNum(l.rate));
+      }
+    }
+    if (hasCreditCards) {
+      for (const c of creditCards) {
+        total += monthlyInterest(parseNum(c.balance), parseNum(c.rate));
+      }
+    }
+    const monthlySavingsNum = parseFloat(savings) || 1362;
+    const ef = Math.round(monthlySavingsNum * 0.4);
+    const remaining = monthlySavingsNum - ef;
+    const suggested = Math.round(remaining * 0.4);
+    return { totalMonthlyInterest: total, suggestedDebtPayoff: suggested };
+  })();
+
+  const hasDebt = hasLoans || hasCreditCards;
 
   const addLoan = () => {
     setLoans((prev) => [
@@ -119,7 +146,25 @@ function DebtsPageContent() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (returnTo === "app") {
+    if (hasDebt) {
+      setInterestModalOpen(true);
+    } else {
+      navigateAfterDebts();
+    }
+  };
+
+  const navigateAfterDebts = () => {
+    if (hasDebt) {
+      const q = new URLSearchParams({
+        savings,
+        projected,
+        monthlyInterest: String(Math.round(totalMonthlyInterest)),
+        suggestedDebtPayoff: String(suggestedDebtPayoff),
+        fromDebts: "1",
+      });
+      if (returnTo === "app") q.set("returnTo", "app");
+      router.push(`/onboarding/savings-allocation?${q.toString()}`);
+    } else if (returnTo === "app") {
       const q = new URLSearchParams({ debts: "1", savings, projected });
       router.push(`/app?${q.toString()}`);
     } else {
@@ -459,6 +504,40 @@ function DebtsPageContent() {
           See my interest impact
         </Button>
       </form>
+
+      {/* Interest modal — shown when user has debt before going to savings allocation */}
+      {interestModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="interest-modal-title"
+        >
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-800">
+            <h2 id="interest-modal-title" className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+              Your interest is costing you
+            </h2>
+            <p className="text-slate-600 dark:text-slate-400 mb-4">
+              You&apos;re paying approximately{" "}
+              <strong className="text-slate-900 dark:text-white">
+                ${Math.round(totalMonthlyInterest).toLocaleString()}/month
+              </strong>{" "}
+              in interest — that&apos;s{" "}
+              <strong className="text-slate-900 dark:text-white">
+                ${Math.round(totalMonthlyInterest * 12).toLocaleString()}/year
+              </strong>{" "}
+              lost.
+            </p>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
+              Next, we&apos;ll show you how to allocate your savings — including{" "}
+              <strong>${suggestedDebtPayoff.toLocaleString()}/month</strong> toward debt payoff — so you can reduce this cost faster.
+            </p>
+            <Button onClick={() => { setInterestModalOpen(false); navigateAfterDebts(); }} size="lg" className="w-full">
+              See my savings allocation →
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

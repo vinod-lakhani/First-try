@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import Link from "next/link";
+import { Pencil } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { DistributionSection } from "@/components/income/DistributionSection";
 import { IncomeAllocationDonut } from "@/components/charts/IncomeAllocationDonut";
 import { RibbitChat } from "@/components/onboarding/RibbitChat";
@@ -117,6 +120,15 @@ export default function IncomePage() {
                 </span>
               </div>
             </div>
+            <Link
+              href={`/app/adjust-plan?income=${MOCK_MONTHLY_TAKE_HOME}&targetSavings=${MOCK_SAVINGS}&currentSavings=${MOCK_SAVINGS}&returnTo=income`}
+              className="mt-4 flex w-full items-center justify-center gap-2"
+            >
+              <Button variant="outline" size="sm" className="w-full">
+                <Pencil className="h-3.5 w-3.5" />
+                Edit income allocation
+              </Button>
+            </Link>
           </CardContent>
         </Card>
 
@@ -198,6 +210,15 @@ export default function IncomePage() {
               totalIncome={MOCK_MONTHLY_TAKE_HOME}
               onChipClick={handleRibbitChipClick}
             />
+            <Link
+              href={`/onboarding/savings-allocation?savings=${MOCK_SAVINGS}&projected=2000000&returnTo=income`}
+              className="mt-4 flex w-full items-center justify-center gap-2"
+            >
+              <Button variant="outline" size="sm" className="w-full">
+                <Pencil className="h-3.5 w-3.5" />
+                Edit savings
+              </Button>
+            </Link>
           </CardContent>
         </Card>
       </div>

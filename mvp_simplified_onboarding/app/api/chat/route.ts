@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
         model: "gpt-4o-mini",
         messages: openAIMessages,
         temperature: 0.7,
-        max_tokens: 500,
+        max_tokens: 600,
       }),
     });
 

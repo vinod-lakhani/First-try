@@ -3,7 +3,7 @@
  * Persists to localStorage, syncs from URL params
  */
 
-export const STEPS = ["connect", "debts", "assets", "payroll", "savings-allocation"] as const;
+export const STEPS = ["connect", "debts", "payroll", "savings-allocation"] as const;
 export type StepId = (typeof STEPS)[number];
 
 const STORAGE_KEY = "weleap_completed_steps";

@@ -144,10 +144,16 @@ function AdjustPlanContent() {
     setIncome((prev) => Math.max(0, prev + delta));
   }, []);
 
+  const returnTo = searchParams.get("returnTo");
+
   const handleSave = () => {
     const { netWorth } = projectNetWorth(savings, 30);
     const projected30Y = netWorth[netWorth.length - 1] ?? 2000000;
-    router.push(`/app?savings=${Math.round(savings)}&projected=${Math.round(projected30Y)}`);
+    if (returnTo === "income") {
+      router.push(`/app/income?savings=${Math.round(savings)}&projected=${Math.round(projected30Y)}`);
+    } else {
+      router.push(`/app?savings=${Math.round(savings)}&projected=${Math.round(projected30Y)}`);
+    }
   };
 
   const needsPct = income > 0 ? (needs / income) * 100 : 50;
@@ -184,11 +190,11 @@ function AdjustPlanContent() {
   return (
     <div className="mx-auto max-w-xl px-4 py-6">
       <Link
-        href="/app"
+        href={returnTo === "income" ? "/app/income" : "/app"}
         className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
       >
         <ArrowLeft className="h-4 w-4" />
-        Back to home
+        {returnTo === "income" ? "Back to income" : "Back to home"}
       </Link>
 
       <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-1">
@@ -377,7 +383,7 @@ function AdjustPlanContent() {
       </div>
 
       <Button onClick={handleSave} size="lg" className="w-full">
-        Save and return to home
+        {returnTo === "income" ? "Save and return to income" : "Save and return to home"}
       </Button>
 
       <RibbitChat

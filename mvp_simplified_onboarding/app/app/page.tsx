@@ -49,14 +49,6 @@ const STEP_INSIGHTS: Record<
     cta: "See how to reduce this →",
     ctaQuestion: "Help me reduce my interest costs. How should I change my savings allocation to include debt payoff? Give me specific, actionable steps I can take right now.",
   },
-  assets: {
-    headline: "Your net worth is $12,400 higher than your estimate",
-    subtext: "",
-    ribbit: "You're further ahead than you think.",
-    cta: "View net worth →",
-    ctaAction: "openChart",
-    ctaQuestion: "My net worth is higher than I thought. What should I do with this information? Give me specific, actionable next steps to adjust my plan and goals.",
-  },
   payroll: {
     headline: "You're already investing $350/month automatically",
     subtext: "",
@@ -77,7 +69,6 @@ const STEP_INSIGHTS: Record<
 const NEXT_ACTION_LABELS: Record<StepId, string> = {
   connect: "Unlock your real spending",
   debts: "See how much interest is costing you",
-  assets: "Track your real net worth",
   payroll: "Account for payroll savings",
   "savings-allocation": "Optimize your savings plan",
 };
@@ -97,12 +88,6 @@ const RIBBIT_TILE: Record<
     subtext: "Discover the real cost of your debt and how to reduce it.",
     cta: "Add my debts →",
     href: "debts",
-  },
-  assets: {
-    message: "Your debts are in the plan. Track your real net worth next — many people are further ahead than they think.",
-    subtext: "Replace estimates with actual account balances.",
-    cta: "Add my assets →",
-    href: "assets",
   },
   payroll: {
     message: "Almost there. Account for payroll savings — 401(k) and HSA are doing more work for you than it looks.",
@@ -142,13 +127,6 @@ const NEXT_UNLOCK_CARD: Record<
     href: "debts",
     extra: "Interest is often the fastest leak to fix",
   },
-  assets: {
-    title: "Track your real net worth",
-    subtitle: "Replace estimates with actual account balances",
-    cta: "Add my assets →",
-    href: "assets",
-    extra: "Many people are further ahead than they think",
-  },
   payroll: {
     title: "Include payroll savings",
     subtitle: "Account for 401(k), HSA, and other deductions",
@@ -184,41 +162,33 @@ function HomeContent() {
     let steps = getCompletedSteps();
     const connected = searchParams.get("connected");
     const debts = searchParams.get("debts");
-    const assets = searchParams.get("assets");
     const payroll = searchParams.get("payroll");
     const savingsAllocation = searchParams.get("savingsAllocation");
     let justCompletedStep: StepId | null = null;
     const params = new URLSearchParams({ savings: String(monthlySavings), projected: String(projected30Y) });
 
-    if (connected === "1" && !steps.includes("connect")) {
-      steps = addCompletedStep("connect");
+    const skipInsight = searchParams.get("skipInsight") === "1";
+
+    const toAdd: StepId[] = [];
+    if (connected === "1" && !steps.includes("connect")) toAdd.push("connect");
+    if (debts === "1" && !steps.includes("debts")) toAdd.push("debts");
+    if (payroll === "1" && !steps.includes("payroll")) toAdd.push("payroll");
+    if (savingsAllocation === "1" && !steps.includes("savings-allocation")) toAdd.push("savings-allocation");
+
+    if (toAdd.length > 0) {
+      for (const step of toAdd) {
+        steps = addCompletedStep(step);
+      }
       setCompletedSteps(steps);
-      justCompletedStep = "connect";
-      router.replace("/app?" + params.toString());
-    } else if (debts === "1" && !steps.includes("debts")) {
-      steps = addCompletedStep("debts");
-      setCompletedSteps(steps);
-      justCompletedStep = "debts";
-      router.replace("/app?" + params.toString());
-    } else if (assets === "1" && !steps.includes("assets")) {
-      steps = addCompletedStep("assets");
-      setCompletedSteps(steps);
-      justCompletedStep = "assets";
-      router.replace("/app?" + params.toString());
-    } else if (payroll === "1" && !steps.includes("payroll")) {
-      steps = addCompletedStep("payroll");
-      setCompletedSteps(steps);
-      justCompletedStep = "payroll";
-      router.replace("/app?" + params.toString());
-    } else if (savingsAllocation === "1" && !steps.includes("savings-allocation")) {
-      steps = addCompletedStep("savings-allocation");
-      setCompletedSteps(steps);
-      justCompletedStep = "savings-allocation";
-      router.replace("/app?" + params.toString());
+      justCompletedStep = toAdd[toAdd.length - 1];
+      // Don't replace URL when showing connect modal — it causes a re-render that can make the modal disappear
+      if (justCompletedStep !== "connect") {
+        router.replace("/app?" + params.toString());
+      }
     } else {
       setCompletedSteps(steps);
     }
-    if (justCompletedStep) {
+    if (justCompletedStep && !skipInsight) {
       setInsightPopupStep(justCompletedStep);
     }
   }, [searchParams, router, monthlySavings, projected30Y]);
@@ -279,9 +249,7 @@ function HomeContent() {
             ? plaidHref
             : tile.href === "debts"
               ? `/onboarding/debts?returnTo=app&savings=${monthlySavings}&projected=${projected30Y}`
-              : tile.href === "assets"
-                ? `/onboarding/assets?returnTo=app&savings=${monthlySavings}&projected=${projected30Y}`
-                : tile.href === "payroll"
+              : tile.href === "payroll"
                   ? `/onboarding/payroll?returnTo=app&savings=${monthlySavings}&projected=${projected30Y}`
                   : tile.href === "savings-allocation"
                     ? `/onboarding/savings-allocation?savings=${monthlySavings}&projected=${projected30Y}`
@@ -378,13 +346,6 @@ function HomeContent() {
               >
                 {NEXT_UNLOCK_CARD[nextStep].cta}
               </Link>
-            ) : NEXT_UNLOCK_CARD[nextStep].href === "assets" ? (
-              <Link
-                href={`/onboarding/assets?returnTo=app&savings=${monthlySavings}&projected=${projected30Y}`}
-                className={buttonVariants({ size: "lg", className: "w-full" })}
-              >
-                {NEXT_UNLOCK_CARD[nextStep].cta}
-              </Link>
             ) : NEXT_UNLOCK_CARD[nextStep].href === "payroll" ? (
               <Link
                 href={`/onboarding/payroll?returnTo=app&savings=${monthlySavings}&projected=${projected30Y}`}
@@ -456,7 +417,6 @@ function HomeContent() {
                   const stepLabels: Record<StepId, { title: string; subtitle: string }> = {
                     connect: { title: "Unlock your real spending", subtitle: "See where your money is actually going" },
                     debts: { title: "Understand your debt impact", subtitle: "See how much interest is costing you" },
-                    assets: { title: "Track your net worth", subtitle: "Replace estimates with actual balances" },
                     payroll: { title: "Include payroll savings", subtitle: "Account for 401(k), HSA, and deductions" },
                     "savings-allocation": { title: "Optimize your savings plan", subtitle: "Prioritize where your next dollar should go" },
                   };
@@ -515,9 +475,7 @@ function HomeContent() {
                       ? plaidHref
                       : stepId === "debts"
                         ? `/onboarding/debts?returnTo=app&savings=${monthlySavings}&projected=${projected30Y}`
-                        : stepId === "assets"
-                          ? `/onboarding/assets?returnTo=app&savings=${monthlySavings}&projected=${projected30Y}`
-                          : stepId === "payroll"
+                        : stepId === "payroll"
                             ? `/onboarding/payroll?returnTo=app&savings=${monthlySavings}&projected=${projected30Y}`
                             : stepId === "savings-allocation"
                               ? `/onboarding/savings-allocation?savings=${monthlySavings}&projected=${projected30Y}`
@@ -559,10 +517,14 @@ function HomeContent() {
 
         if (insightPopupStep === "connect" && savingsInsight) {
           const adjustPlanHref = `/app/adjust-plan?income=${MONTHLY_INCOME}&targetSavings=${savingsInsight.recommendedSavings}&currentSavings=${savingsInsight.currentSavings}`;
+          const closeModal = () => {
+            setInsightPopupStep(null);
+            router.replace(`/app?savings=${monthlySavings}&projected=${projected30Y}`);
+          };
           return (
             <div
               className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
-              onClick={() => setInsightPopupStep(null)}
+              onClick={closeModal}
               role="dialog"
               aria-modal="true"
               aria-labelledby="savings-insight-title"
@@ -573,7 +535,7 @@ function HomeContent() {
               >
                 <button
                   type="button"
-                  onClick={() => setInsightPopupStep(null)}
+                  onClick={closeModal}
                   className="absolute right-4 top-4 rounded-lg p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-300"
                   aria-label="Close"
                 >
@@ -584,7 +546,7 @@ function HomeContent() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setInsightPopupStep(null)}
+                  onClick={closeModal}
                   className="mt-4 w-full py-2 text-sm font-medium text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
                 >
                   Got it
@@ -598,7 +560,6 @@ function HomeContent() {
         const stepLabels: Record<StepId, { title: string }> = {
           connect: { title: "See your real spending" },
           debts: { title: "Understand your debt impact" },
-          assets: { title: "Track your net worth" },
           payroll: { title: "Include payroll savings" },
           "savings-allocation": { title: "Optimize your savings plan" },
         };

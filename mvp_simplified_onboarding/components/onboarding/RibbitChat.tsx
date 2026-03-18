@@ -22,22 +22,22 @@ const DEFAULT_MESSAGE =
 
 const markdownComponents: Parameters<typeof ReactMarkdown>[0]["components"] = {
   p: ({ children, ...props }) => (
-    <p className="mb-2 last:mb-0 leading-relaxed" {...props}>
+    <p className="mb-3 last:mb-0 leading-relaxed" {...props}>
       {children}
     </p>
   ),
   strong: ({ children, ...props }) => (
-    <strong className="font-semibold" {...props}>
+    <strong className="font-semibold text-inherit" {...props}>
       {children}
     </strong>
   ),
   ul: ({ children, ...props }) => (
-    <ul className="my-2 pl-5 list-disc space-y-1" {...props}>
+    <ul className="my-3 pl-5 list-disc space-y-1.5" {...props}>
       {children}
     </ul>
   ),
   ol: ({ children, ...props }) => (
-    <ol className="my-2 pl-5 list-decimal space-y-1" {...props}>
+    <ol className="my-3 pl-5 list-decimal space-y-1.5" {...props}>
       {children}
     </ol>
   ),
@@ -45,6 +45,11 @@ const markdownComponents: Parameters<typeof ReactMarkdown>[0]["components"] = {
     <li className="leading-relaxed" {...props}>
       {children}
     </li>
+  ),
+  h3: ({ children, ...props }) => (
+    <h3 className="mt-3 mb-1.5 text-sm font-semibold first:mt-0" {...props}>
+      {children}
+    </h3>
   ),
   a: ({ href, children }) => {
     if (href?.startsWith("/")) {
