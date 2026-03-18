@@ -6,7 +6,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -46,7 +46,7 @@ const US_STATES = [
   "Wisconsin", "Wyoming",
 ];
 
-export default function ConnectPage() {
+function ConnectPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = searchParams.get("returnTo");
@@ -242,5 +242,13 @@ export default function ConnectPage() {
         </Button>
       </form>
     </div>
+  );
+}
+
+export default function ConnectPage() {
+  return (
+    <Suspense fallback={<div className="w-full max-w-xl mx-auto px-4 py-8 animate-pulse" />}>
+      <ConnectPageContent />
+    </Suspense>
   );
 }

@@ -6,7 +6,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { PlanSmarterHeader } from "@/components/onboarding/PlanSmarterHeader";
@@ -45,7 +45,7 @@ function parseNum(s: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-export default function DebtsPage() {
+function DebtsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = searchParams.get("returnTo");
@@ -460,5 +460,13 @@ export default function DebtsPage() {
         </Button>
       </form>
     </div>
+  );
+}
+
+export default function DebtsPage() {
+  return (
+    <Suspense fallback={<div className="w-full max-w-xl mx-auto px-4 py-8 animate-pulse" />}>
+      <DebtsPageContent />
+    </Suspense>
   );
 }

@@ -6,7 +6,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PlanSmarterHeader } from "@/components/onboarding/PlanSmarterHeader";
 import { Loader2 } from "lucide-react";
@@ -18,7 +18,7 @@ const MOCK_BANKS = [
   { id: "citi", name: "Citi", logo: "🏦" },
 ];
 
-export default function PlaidMockPage() {
+function PlaidMockPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = searchParams.get("returnTo");
@@ -106,5 +106,13 @@ export default function PlaidMockPage() {
         <span aria-hidden>🔒</span> Bank-level security · We never move your money
       </p>
     </div>
+  );
+}
+
+export default function PlaidMockPage() {
+  return (
+    <Suspense fallback={<div className="w-full max-w-xl mx-auto px-4 py-8 animate-pulse" />}>
+      <PlaidMockPageContent />
+    </Suspense>
   );
 }

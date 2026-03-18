@@ -6,7 +6,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { PlanSmarterHeader } from "@/components/onboarding/PlanSmarterHeader";
@@ -22,7 +22,7 @@ const FREQUENCY_OPTIONS = [
 const inputBase =
   "w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500";
 
-export default function PayrollPage() {
+function PayrollPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = searchParams.get("returnTo");
@@ -450,5 +450,13 @@ export default function PayrollPage() {
         </Button>
       </form>
     </div>
+  );
+}
+
+export default function PayrollPage() {
+  return (
+    <Suspense fallback={<div className="w-full max-w-xl mx-auto px-4 py-8 animate-pulse" />}>
+      <PayrollPageContent />
+    </Suspense>
   );
 }
