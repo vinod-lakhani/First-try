@@ -180,11 +180,11 @@ function IncomeContent() {
       {/* Anchor Card - bar as hero */}
       <div className="mb-8 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
         <p className="text-base font-semibold text-slate-900 dark:text-white mb-2">
-          Based on your income of {formatMoney(income)}/month
+          Your estimated take-home: {formatMoney(income)}/month
         </p>
         {searchParams?.get("annualIncome") && (
           <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
-            Estimated take-home from your annual income (after taxes)
+            Estimated from your annual income (after taxes and deductions)
           </p>
         )}
         <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Recommended split</p>
@@ -268,9 +268,13 @@ function IncomeContent() {
       </div>
 
       {/* Adjust if needed - Customize your numbers */}
-      <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-3">Adjust if needed</p>
-      <div className="mb-6 rounded-lg border border-slate-100 bg-slate-50/50 p-4 dark:border-slate-700 dark:bg-slate-800/50">
-        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Customize your numbers</p>
+      <div className="mb-6 rounded-xl border-2 border-primary/20 bg-white p-5 dark:border-primary/30 dark:bg-slate-800">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-1">
+          Adjust if needed
+        </h2>
+        <p className="text-sm text-slate-600 dark:text-slate-400 mb-5">
+          Customize your numbers to match your reality
+        </p>
         <div className="mb-6 flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Income / month</p>

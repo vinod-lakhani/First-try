@@ -7,7 +7,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { OnboardingProgress } from "@/components/onboarding/OnboardingProgress";
@@ -48,6 +48,10 @@ const US_STATES = [
 
 export default function ConnectPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnTo = searchParams.get("returnTo");
+  const savingsParam = searchParams.get("savings");
+  const projectedParam = searchParams.get("projected");
   const [ageRange, setAgeRange] = useState("25-34");
   const [employmentType, setEmploymentType] = useState("Full-time");
   const [dependents, setDependents] = useState("0");
@@ -60,8 +64,17 @@ export default function ConnectPage() {
     e.preventDefault();
     const parsed = parseInt(annualIncome.replace(/[^0-9]/g, ""), 10);
     const annual = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-    const params = annual ? `?annualIncome=${annual}` : "";
-    router.push(`/onboarding/income${params}`);
+    const savings = savingsParam || "1362";
+    const projected = projectedParam || "2000000";
+
+    if (returnTo === "app") {
+      const q = new URLSearchParams({ connected: "1", savings, projected });
+      if (annual) q.set("annualIncome", String(annual));
+      router.push(`/app?${q.toString()}`);
+    } else {
+      const params = annual ? `?annualIncome=${annual}` : "";
+      router.push(`/onboarding/income${params}`);
+    }
   };
 
   const inputBase =

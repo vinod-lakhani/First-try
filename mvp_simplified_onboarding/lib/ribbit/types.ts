@@ -3,11 +3,23 @@
  */
 
 export type BaseRibbitContext = {
-  screen: "income" | "savings" | "plan";
+  screen: "income" | "savings" | "plan" | "adjust-plan" | "savings-allocation";
   userName?: string;
   onboardingStage: "welcome" | "connect" | "income" | "savings" | "plan";
   hasLinkedAccounts: boolean;
   source: "estimated_from_income" | "linked_accounts" | "mixed";
+};
+
+export type AdjustPlanScreenContext = BaseRibbitContext & {
+  screen: "adjust-plan";
+  monthlyIncome: number;
+  past3MonthsAvgSavings: number;
+  past3MonthsSavingsRate: number;
+  currentPlanSavings: number;
+  currentPlanSavingsRate: number;
+  recommendedSavings: number;
+  recommendedSavingsRate: number;
+  improveNetWorth30Y: number;
 };
 
 export type IncomeScreenContext = BaseRibbitContext & {
@@ -52,7 +64,26 @@ export type PlanScreenContext = BaseRibbitContext & {
   projectionAssumptionsLabel: string;
 };
 
+export type PriorityBucket = {
+  id: string;
+  label: string;
+  amount: number;
+  layer: "pre-tax" | "protection" | "wealth" | "flex";
+  status?: "complete" | "attention" | "growth";
+};
+
+export type SavingsAllocationScreenContext = BaseRibbitContext & {
+  screen: "savings-allocation";
+  monthlySavings: number;
+  buckets: PriorityBucket[];
+  hasDebt: boolean;
+  has401k: boolean;
+  efFunded: boolean;
+};
+
 export type RibbitScreenContext =
   | IncomeScreenContext
   | SavingsScreenContext
-  | PlanScreenContext;
+  | PlanScreenContext
+  | AdjustPlanScreenContext
+  | SavingsAllocationScreenContext;
