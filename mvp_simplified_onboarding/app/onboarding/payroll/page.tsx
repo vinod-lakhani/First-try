@@ -65,7 +65,7 @@ function PayrollPageContent() {
 
   const appBackHref = `/app?savings=${savings}&projected=${projected}`;
 
-  const { payroll401k, payrollHsa, employee401k, employer401k, employerHsa, totalPayrollSavings } = (() => {
+  const { payroll401k, payrollHsa, employee401k, employer401k, employerHsa, employeeHsa, totalPayrollSavings } = (() => {
     const gross = DEFAULT_MONTHLY_GROSS;
     let p401k = 0;
     let emp401k = 0;
