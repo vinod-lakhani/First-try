@@ -12,7 +12,7 @@
  * Retirement Focus Split (medium/default): ~60% retirement, ~40% brokerage
  */
 
-export type BucketId = "401k" | "hsa" | "ef" | "debt" | "roth" | "brokerage" | "shortterm";
+export type BucketId = "401k" | "hsa" | "ef" | "debt" | "roth" | "trad" | "brokerage" | "shortterm";
 
 export type AllocationInput = {
   monthlySavings: number;
@@ -125,9 +125,11 @@ export function computeSavingsStackAllocation(input: AllocationInput): Record<Bu
   const debt = Math.min(debtAllocation, Math.max(0, remaining));
   remaining -= debt;
 
-  // Step 5 & 6: Retirement + Brokerage from remaining
-  const roth = Math.round(remaining * split.retirement);
-  const brokerage = Math.max(0, remaining - roth);
+  // Step 5 & 6: Retirement (Roth + Traditional) + Brokerage from remaining
+  const retirementTotal = Math.round(remaining * split.retirement);
+  const roth = retirementTotal;
+  const trad = 0;
+  const brokerage = Math.max(0, remaining - retirementTotal);
 
   return {
     "401k": match401k,
@@ -135,6 +137,7 @@ export function computeSavingsStackAllocation(input: AllocationInput): Record<Bu
     ef,
     debt,
     roth,
+    trad,
     brokerage,
     shortterm: 0,
   };

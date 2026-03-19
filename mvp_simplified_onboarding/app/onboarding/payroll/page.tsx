@@ -65,7 +65,7 @@ function PayrollPageContent() {
 
   const appBackHref = `/app?savings=${savings}&projected=${projected}`;
 
-  const { payroll401k, payrollHsa, employee401k, totalPayrollSavings } = (() => {
+  const { payroll401k, payrollHsa, employee401k, employer401k, employerHsa, totalPayrollSavings } = (() => {
     const gross = DEFAULT_MONTHLY_GROSS;
     let p401k = 0;
     let emp401k = 0;
@@ -101,10 +101,16 @@ function PayrollPageContent() {
       pHsa += monthlyHsa;
     }
 
+    const employer401k = Math.round(p401k - emp401k);
+    const employerHsa = employerOffersHsa ? Math.round(parseNum(employerHsaContrib)) : 0;
+    const employeeHsa = Math.round(pHsa - employerHsa);
     return {
       payroll401k: Math.round(p401k),
       payrollHsa: Math.round(pHsa),
       employee401k: Math.round(emp401k),
+      employer401k,
+      employerHsa,
+      employeeHsa,
       totalPayrollSavings: Math.round(p401k + pHsa),
     };
   })();
@@ -141,8 +147,12 @@ function PayrollPageContent() {
           if (mu > 0) q.set("matchUpToPct", String(mu));
         }
         q.set("employee401k", String(employee401k));
+        q.set("employer401k", String(employer401k));
       }
-      if (employerOffersHsa || contributingHsa) q.set("hasHsa", "1");
+      if (employerOffersHsa || contributingHsa) {
+        q.set("hasHsa", "1");
+        q.set("employerHsa", String(employerHsa));
+      }
       q.set("annualIncome", String(12 * DEFAULT_MONTHLY_GROSS));
       q.set("returnTo", "app");
       router.push(`/onboarding/savings-allocation?${q.toString()}`);

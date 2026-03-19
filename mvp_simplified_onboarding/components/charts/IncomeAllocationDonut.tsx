@@ -57,7 +57,7 @@ export function IncomeAllocationDonut({
         const chart = new Chart(ctx, {
           type: "doughnut",
           data: {
-            labels: ["Needs", "Wants", "Savings"],
+            labels: ["Needs", "Wants", "Post-Tax Savings"],
             datasets: [
               {
                 data: [needs, wants, savings],

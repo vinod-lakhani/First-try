@@ -34,6 +34,7 @@ const DEFAULT_BUCKETS: { id: BucketId; label: string; layer: PriorityBucket["lay
   { id: "ef", label: "Emergency fund", layer: "protection", status: "attention" },
   { id: "debt", label: "High-interest debt", layer: "protection", status: "attention" },
   { id: "roth", label: "Roth IRA", layer: "wealth", status: "growth" },
+  { id: "trad", label: "Traditional IRA", layer: "wealth", status: "growth" },
   { id: "brokerage", label: "Brokerage", layer: "wealth", status: "growth" },
   { id: "shortterm", label: "Short-term goals", layer: "flex" },
 ];
@@ -71,6 +72,10 @@ function SavingsAllocationContent() {
   const suggestedDebtPayoff = suggestedDebtPayoffParam ? parseFloat(suggestedDebtPayoffParam) || 0 : 0;
   const payroll401k = payroll401kParam ? parseFloat(payroll401kParam) || 0 : 0;
   const payrollHsa = payrollHsaParam ? parseFloat(payrollHsaParam) || 0 : 0;
+  const employer401kParam = searchParams.get("employer401k");
+  const employerHsaParam = searchParams.get("employerHsa");
+  const employer401k = employer401kParam ? parseFloat(employer401kParam) || 0 : 0;
+  const employerHsa = employerHsaParam ? parseFloat(employerHsaParam) || 0 : 0;
   const fromDebts = searchParams.get("fromDebts") === "1";
   const fromPayroll = searchParams.get("fromPayroll") === "1";
   const has401k = searchParams.get("has401k") === "1";
@@ -81,7 +86,7 @@ function SavingsAllocationContent() {
   const annualIncome = annualIncomeParam ? parseFloat(annualIncomeParam) || 96_000 : 96_000;
   const employee401k = searchParams.get("employee401k") ? parseFloat(searchParams.get("employee401k")!) || 0 : 0;
 
-  const allocatableBuckets: BucketId[] = ["ef", "debt", "roth", "brokerage", "shortterm"];
+  const allocatableBuckets: BucketId[] = ["ef", "debt", "roth", "trad", "brokerage", "shortterm"];
 
   const recommendations = useMemo(
     () =>
@@ -301,68 +306,126 @@ function SavingsAllocationContent() {
         ))}
       </div>
 
-      {/* Priority stack */}
+      {/* Priority stack — Pre-Tax + Post-Tax */}
       <div className="mb-6 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
         <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-4">
           Your priority stack
         </p>
-        <div className="space-y-4">
-          {bucketsForDisplay.map((bucket, idx) => {
-            const readOnly = isReadOnlyBucket(bucket.id as BucketId);
-            return (
-              <div
-                key={bucket.id}
-                className="flex items-center justify-between gap-4 py-2 border-b border-slate-100 dark:border-slate-700 last:border-0"
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-sm font-medium text-slate-500 dark:text-slate-400 w-5">
-                    {idx + 1}.
-                  </span>
-                  <span className="text-sm font-medium text-slate-900 dark:text-white">
-                    {bucket.label}
-                  </span>
-                  {readOnly && bucket.amount > 0 && (
-                    <span className="text-xs text-slate-500 dark:text-slate-400">(from payroll)</span>
-                  )}
-                  {statusIcon(bucket.status) && (
-                    <span className="text-base" aria-hidden>
-                      {statusIcon(bucket.status)}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {readOnly ? (
-                    <span className="w-16 text-right text-sm font-semibold text-slate-900 dark:text-white">
+
+        {/* Pre-Tax (payroll) */}
+        <div className="mb-6">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">
+            Pre-Tax (payroll)
+          </h3>
+          <div className="space-y-3 rounded-lg bg-slate-50/80 dark:bg-slate-800/50 p-3">
+            {bucketsForDisplay
+              .filter((b) => b.layer === "pre-tax")
+              .map((bucket) => {
+                const readOnly = isReadOnlyBucket(bucket.id as BucketId);
+                const showEmployerBreakdown =
+                  bucket.id === "401k" && employer401k > 0 && allocations["401k"] > 0
+                    ? { employee: Math.max(0, allocations["401k"] - employer401k), employer: employer401k }
+                    : bucket.id === "hsa" && employerHsa > 0 && allocations.hsa > 0
+                      ? { employee: Math.max(0, allocations.hsa - employerHsa), employer: employerHsa }
+                      : null;
+                return (
+                  <div
+                    key={bucket.id}
+                    className="flex items-center justify-between gap-4 py-2 border-b border-slate-200/60 dark:border-slate-600/60 last:border-0 last:pb-0"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-slate-900 dark:text-white">
+                          {bucket.label}
+                        </span>
+                        {readOnly && bucket.amount > 0 && (
+                          <span className="text-xs text-slate-500 dark:text-slate-400">(from payroll)</span>
+                        )}
+                        {statusIcon(bucket.status) && (
+                          <span className="text-base" aria-hidden>{statusIcon(bucket.status)}</span>
+                        )}
+                      </div>
+                      {showEmployerBreakdown && (
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                          Employee {formatMoney(showEmployerBreakdown.employee)} + Employer {formatMoney(showEmployerBreakdown.employer)}
+                        </p>
+                      )}
+                    </div>
+                    <span className="w-16 text-right text-sm font-semibold text-slate-900 dark:text-white shrink-0">
                       {formatMoney(bucket.amount)}
                     </span>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => adjustBucket(bucket.id as BucketId, -STEP)}
-                        className="flex h-8 w-8 items-center justify-center rounded border border-slate-200 bg-white text-slate-500 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700"
-                        aria-label={`Decrease ${bucket.label}`}
-                      >
-                        <Minus className="h-3 w-3" />
-                      </button>
-                      <span className="w-16 text-right text-sm font-semibold text-slate-900 dark:text-white">
-                        {formatMoney(bucket.amount)}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => adjustBucket(bucket.id as BucketId, STEP)}
-                        className="flex h-8 w-8 items-center justify-center rounded border border-slate-200 bg-white text-slate-500 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700"
-                        aria-label={`Increase ${bucket.label}`}
-                      >
-                        <Plus className="h-3 w-3" />
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+                  </div>
+                );
+              })}
+            {(allocations["401k"] === 0 && allocations.hsa === 0) && (
+              <p className="text-xs text-slate-500 dark:text-slate-400 py-2">
+                No payroll deductions yet. Add your payroll details to include 401k and HSA.
+              </p>
+            )}
+          </div>
         </div>
+
+        {/* Post-Tax */}
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">
+            Post-Tax
+          </h3>
+          <div className="space-y-4">
+            {bucketsForDisplay
+              .filter((b) => b.layer !== "pre-tax")
+              .map((bucket, idx) => {
+                const readOnly = isReadOnlyBucket(bucket.id as BucketId);
+                return (
+                  <div
+                    key={bucket.id}
+                    className="flex items-center justify-between gap-4 py-2 border-b border-slate-100 dark:border-slate-700 last:border-0"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm font-medium text-slate-500 dark:text-slate-400 w-5">
+                        {idx + 1}.
+                      </span>
+                      <span className="text-sm font-medium text-slate-900 dark:text-white">
+                        {bucket.label}
+                      </span>
+                      {statusIcon(bucket.status) && (
+                        <span className="text-base" aria-hidden>{statusIcon(bucket.status)}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {readOnly ? (
+                        <span className="w-16 text-right text-sm font-semibold text-slate-900 dark:text-white">
+                          {formatMoney(bucket.amount)}
+                        </span>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => adjustBucket(bucket.id as BucketId, -STEP)}
+                            className="flex h-8 w-8 items-center justify-center rounded border border-slate-200 bg-white text-slate-500 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700"
+                            aria-label={`Decrease ${bucket.label}`}
+                          >
+                            <Minus className="h-3 w-3" />
+                          </button>
+                          <span className="w-16 text-right text-sm font-semibold text-slate-900 dark:text-white">
+                            {formatMoney(bucket.amount)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => adjustBucket(bucket.id as BucketId, STEP)}
+                            className="flex h-8 w-8 items-center justify-center rounded border border-slate-200 bg-white text-slate-500 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700"
+                            aria-label={`Increase ${bucket.label}`}
+                          >
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+
         {Math.abs(remainder) > 1 && (
           <p className="text-xs text-amber-600 dark:text-amber-400 mt-3">
             {remainder > 0

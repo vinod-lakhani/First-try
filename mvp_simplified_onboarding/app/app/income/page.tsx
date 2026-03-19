@@ -6,6 +6,7 @@ import { Pencil } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DistributionSection } from "@/components/income/DistributionSection";
+import { SavingsBarsSection } from "@/components/income/SavingsBarsSection";
 import { IncomeAllocationDonut } from "@/components/charts/IncomeAllocationDonut";
 import { RibbitChat } from "@/components/onboarding/RibbitChat";
 import type { IncomeScreenContext } from "@/lib/ribbit/types";
@@ -37,10 +38,18 @@ const MOCK_WANTS_BREAKDOWN = [
   { label: "Shopping", amount: 350 },
   { label: "Subscriptions", amount: 250 },
 ];
-const MOCK_SAVINGS_BREAKDOWN = [
+const MOCK_PRE_TAX_ITEMS = [
+  { label: "Employer 401K", amount: 100 },
+  { label: "Employee 401K", amount: 200 },
+  { label: "Employer HSA", amount: 30 },
+  { label: "Employee HSA", amount: 70 },
+];
+const MOCK_POST_TAX_ITEMS = [
   { label: "Emergency Fund", amount: 450 },
-  { label: "401(k)", amount: 350 },
-  { label: "Brokerage", amount: 362 },
+  { label: "Roth IRA", amount: 200 },
+  { label: "Traditional IRA", amount: 0 },
+  { label: "Brokerage", amount: 262 },
+  { label: "Short-term Goals", amount: 50 },
 ];
 
 /** Generic chips for Ribbit sheet when opened via floating button */
@@ -116,7 +125,7 @@ export default function IncomePage() {
               <div className="flex items-center gap-2">
                 <span className="h-3 w-3 rounded-full bg-green-600" aria-hidden />
                 <span>
-                  <span className="font-medium">Savings</span> {formatCurrency(MOCK_SAVINGS)} ({Math.round(savingsPct)}%)
+                  <span className="font-medium">Post-Tax Savings</span> {formatCurrency(MOCK_SAVINGS)} ({Math.round(savingsPct)}%)
                 </span>
               </div>
             </div>
@@ -201,14 +210,10 @@ export default function IncomePage() {
             <CardTitle className="text-lg font-semibold text-slate-900 dark:text-white">Savings</CardTitle>
           </CardHeader>
           <CardContent>
-            <DistributionSection
-              title=""
-              total={MOCK_SAVINGS}
-              items={MOCK_SAVINGS_BREAKDOWN}
-              colorTheme="green"
-              sectionType="savings"
-              totalIncome={MOCK_MONTHLY_TAKE_HOME}
-              onChipClick={handleRibbitChipClick}
+            <SavingsBarsSection
+              totalSavings={MOCK_SAVINGS}
+              preTaxItems={MOCK_PRE_TAX_ITEMS}
+              postTaxItems={MOCK_POST_TAX_ITEMS.filter((i) => i.amount > 0)}
             />
             <Link
               href={`/onboarding/savings-allocation?savings=${MOCK_SAVINGS}&projected=2000000&returnTo=income`}
