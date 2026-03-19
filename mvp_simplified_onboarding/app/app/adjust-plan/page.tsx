@@ -9,12 +9,13 @@
 import { Suspense, useState, useMemo, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Minus, Plus, ArrowLeft } from "lucide-react";
+import { Minus, Plus, ArrowLeft, X } from "lucide-react";
 import { RibbitIcon } from "@/components/onboarding/RibbitIcon";
 import { RibbitChat } from "@/components/onboarding/RibbitChat";
 import type { AdjustPlanScreenContext } from "@/lib/ribbit/types";
 import { Button } from "@/components/ui/button";
 import { projectNetWorth } from "@/lib/sim/projectNetWorth";
+import { NetWorthComparisonChart } from "@/components/charts/NetWorthComparisonChart";
 
 const STEP = 50;
 const DEFAULT_INCOME = 6810;
@@ -118,6 +119,10 @@ function AdjustPlanContent() {
 
   const [ribbitOpen, setRibbitOpen] = useState(false);
   const [ribbitInitialQuestion, setRibbitInitialQuestion] = useState<string | null>(null);
+  const [chartModalOpen, setChartModalOpen] = useState(false);
+
+  const { labels: nwLabels, netWorth: currentNW } = projectNetWorth(past3MonthsSavings, 30);
+  const { netWorth: recommendedNW } = projectNetWorth(recommendedSavings, 30);
 
   const adjustPlanChips = useMemo(
     () => [
@@ -253,12 +258,58 @@ function AdjustPlanContent() {
         </div>
       </div>
 
-      {/* Improve net worth by $X */}
-      <div className="mb-6 rounded-xl border-2 border-primary/20 bg-primary/5 p-4 dark:border-primary/30 dark:bg-primary/10">
+      {/* Improve net worth by $X — clickable to open chart */}
+      <button
+        type="button"
+        onClick={() => setChartModalOpen(true)}
+        className="mb-6 w-full rounded-xl border-2 border-primary/20 bg-primary/5 p-4 text-left transition-colors hover:border-primary/30 hover:bg-primary/10 dark:border-primary/30 dark:bg-primary/10 dark:hover:border-primary/40 dark:hover:bg-primary/20"
+      >
         <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
           Improve net worth by {improvementAmount >= 1e6 ? `$${(improvementAmount / 1e6).toFixed(1)}M` : improvementAmount >= 1e3 ? `$${(improvementAmount / 1e3).toFixed(0)}K` : `$${improvementAmount}`} in 30 years
         </p>
-      </div>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Tap to see chart</p>
+      </button>
+
+      {/* Net worth comparison chart modal */}
+      {chartModalOpen && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setChartModalOpen(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="net-worth-chart-title"
+        >
+          <div
+            className="relative w-full max-w-md rounded-2xl border-2 border-primary/30 bg-white p-6 shadow-2xl dark:border-primary/40 dark:bg-slate-800"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setChartModalOpen(false)}
+              className="absolute right-4 top-4 rounded-lg p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-300"
+              aria-label="Close"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <h2 id="net-worth-chart-title" className="pr-8 text-lg font-bold text-slate-900 dark:text-white mb-4">
+              Net worth over 30 years
+            </h2>
+            <NetWorthComparisonChart
+              labels={nwLabels}
+              currentNetWorth={currentNW}
+              recommendedNetWorth={recommendedNW}
+              height={260}
+            />
+            <button
+              type="button"
+              onClick={() => setChartModalOpen(false)}
+              className="mt-4 w-full py-2 text-sm font-medium text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Allocation bar */}
       <div className="mb-6 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
