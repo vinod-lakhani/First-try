@@ -18,13 +18,15 @@ const sizeMap = {
 export function RibbitIcon({ size = "md", className = "" }: RibbitIconProps) {
   const px = sizeMap[size];
   return (
-    <Image
-      src="/images/ribbit.png"
-      alt=""
-      width={px}
-      height={px}
-      className={`inline-block shrink-0 ${className}`}
-      aria-hidden
-    />
+    <span className="inline-flex shrink-0" style={{ width: px, height: px }}>
+      <Image
+        src="/images/ribbit.png"
+        alt=""
+        width={px}
+        height={px}
+        className={`object-contain ${className}`}
+        aria-hidden
+      />
+    </span>
   );
 }
