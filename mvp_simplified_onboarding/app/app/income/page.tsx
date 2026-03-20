@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { Suspense, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Pencil } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ import { SavingsBarsSection } from "@/components/income/SavingsBarsSection";
 import { IncomeAllocationDonut } from "@/components/charts/IncomeAllocationDonut";
 import { RibbitChat } from "@/components/onboarding/RibbitChat";
 import type { IncomeScreenContext } from "@/lib/ribbit/types";
+import { estimateMonthlyTakeHome } from "@/lib/income/estimateTakeHome";
 
 function formatCurrency(n: number) {
   return new Intl.NumberFormat("en-US", {
@@ -19,12 +21,10 @@ function formatCurrency(n: number) {
   }).format(n);
 }
 
-// Mock data - 50/30/20 allocation
-const MOCK_MONTHLY_TAKE_HOME = 6810;
-const MOCK_GROSS_INCOME = 8500;
-const MOCK_NEEDS = 3405;
-const MOCK_WANTS = 2043;
-const MOCK_SAVINGS = 1362;
+// Default pay details - 50/30/20 allocation
+const DEFAULT_GROSS = 8500;
+const DEFAULT_TAX = 1200;
+const DEFAULT_PRE_TAX_DEDUCTIONS = 490;
 const MOCK_NEEDS_BREAKDOWN = [
   { label: "Rent", amount: 1850 },
   { label: "Utilities", amount: 320 },
@@ -59,18 +59,56 @@ const RIBBIT_SHEET_CHIPS = [
   { label: "What if my rent is higher?", question: "What if my rent is higher?" },
 ];
 
-export default function IncomePage() {
+function getInitialPayDetails(searchParams: ReturnType<typeof useSearchParams> | null) {
+  const annual = searchParams?.get("annualIncome");
+  const parsed = annual ? parseInt(annual, 10) : NaN;
+  if (Number.isFinite(parsed) && parsed > 0) {
+    const monthlyGross = Math.round(parsed / 12);
+    const takeHome = estimateMonthlyTakeHome(parsed);
+    const withheld = monthlyGross - takeHome;
+    // Rough split: ~71% tax, ~29% pre-tax deductions (typical)
+    const tax = Math.round(withheld * 0.71);
+    const preTaxDeductions = Math.round(withheld * 0.29);
+    return { gross: monthlyGross, tax, preTaxDeductions };
+  }
+  return { gross: DEFAULT_GROSS, tax: DEFAULT_TAX, preTaxDeductions: DEFAULT_PRE_TAX_DEDUCTIONS };
+}
+
+function IncomeContent() {
+  const searchParams = useSearchParams();
+  const initialPay = useMemo(() => getInitialPayDetails(searchParams), [searchParams]);
+
+  const [grossIncome, setGrossIncome] = useState(initialPay.gross);
+  const [tax, setTax] = useState(initialPay.tax);
+  const [preTaxDeductions, setPreTaxDeductions] = useState(initialPay.preTaxDeductions);
+  const [editPayModalOpen, setEditPayModalOpen] = useState(false);
   const [ribbitOpen, setRibbitOpen] = useState(false);
   const [ribbitInitialQuestion, setRibbitInitialQuestion] = useState<string | null>(null);
 
-  const handleRibbitChipClick = (question: string) => {
+  const takeHome = Math.max(0, grossIncome - tax - preTaxDeductions);
+  const withheld = grossIncome - takeHome;
+
+  // 50/30/20 allocation based on take-home
+  const needs = Math.round(takeHome * 0.5);
+  const wants = Math.round(takeHome * 0.3);
+  const savings = Math.round(takeHome * 0.2);
+
+  const handleRibbitChipClick = useCallback((question: string) => {
     setRibbitInitialQuestion(question);
     setRibbitOpen(true);
-  };
+  }, []);
 
-  const needsPct = (MOCK_NEEDS / MOCK_MONTHLY_TAKE_HOME) * 100;
-  const wantsPct = (MOCK_WANTS / MOCK_MONTHLY_TAKE_HOME) * 100;
-  const savingsPct = (MOCK_SAVINGS / MOCK_MONTHLY_TAKE_HOME) * 100;
+  const handleSavePayDetails = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      setEditPayModalOpen(false);
+    },
+    []
+  );
+
+  const needsPct = takeHome > 0 ? (needs / takeHome) * 100 : 50;
+  const wantsPct = takeHome > 0 ? (wants / takeHome) * 100 : 30;
+  const savingsPct = takeHome > 0 ? (savings / takeHome) * 100 : 20;
 
   const ribbitScreenContext: IncomeScreenContext = useMemo(
     () => ({
@@ -78,16 +116,16 @@ export default function IncomePage() {
       onboardingStage: "income",
       hasLinkedAccounts: false,
       source: "estimated_from_income",
-      monthlyIncome: MOCK_MONTHLY_TAKE_HOME,
-      needsAmount: MOCK_NEEDS,
+      monthlyIncome: takeHome,
+      needsAmount: needs,
       needsPct: Math.round(needsPct * 10) / 10,
-      wantsAmount: MOCK_WANTS,
+      wantsAmount: wants,
       wantsPct: Math.round(wantsPct * 10) / 10,
-      savingsAmount: MOCK_SAVINGS,
+      savingsAmount: savings,
       savingsPct: Math.round(savingsPct * 10) / 10,
       modelName: "50/30/20",
     }),
-    [needsPct, wantsPct, savingsPct]
+    [takeHome, needs, wants, savings, needsPct, wantsPct, savingsPct]
   );
 
   return (
@@ -98,39 +136,39 @@ export default function IncomePage() {
           <CardHeader>
             <CardTitle className="text-xl">Income Allocation</CardTitle>
             <p className="text-sm text-slate-600 dark:text-slate-400">
-              Based on {formatCurrency(MOCK_MONTHLY_TAKE_HOME)}/month take-home
+              Based on {formatCurrency(takeHome)}/month take-home
             </p>
           </CardHeader>
           <CardContent>
             <IncomeAllocationDonut
-              needs={MOCK_NEEDS}
-              wants={MOCK_WANTS}
-              savings={MOCK_SAVINGS}
-              total={MOCK_MONTHLY_TAKE_HOME}
+              needs={needs}
+              wants={wants}
+              savings={savings}
+              total={takeHome}
               size={200}
             />
             <div className="mt-4 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm">
               <div className="flex items-center gap-2">
                 <span className="h-3 w-3 rounded-full bg-orange-500" aria-hidden />
                 <span>
-                  <span className="font-medium">Needs</span> {formatCurrency(MOCK_NEEDS)} ({Math.round(needsPct)}%)
+                  <span className="font-medium">Needs</span> {formatCurrency(needs)} ({Math.round(needsPct)}%)
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="h-3 w-3 rounded-full bg-blue-500" aria-hidden />
                 <span>
-                  <span className="font-medium">Wants</span> {formatCurrency(MOCK_WANTS)} ({Math.round(wantsPct)}%)
+                  <span className="font-medium">Wants</span> {formatCurrency(wants)} ({Math.round(wantsPct)}%)
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="h-3 w-3 rounded-full bg-green-600" aria-hidden />
                 <span>
-                  <span className="font-medium">Post-Tax Savings</span> {formatCurrency(MOCK_SAVINGS)} ({Math.round(savingsPct)}%)
+                  <span className="font-medium">Post-Tax Savings</span> {formatCurrency(savings)} ({Math.round(savingsPct)}%)
                 </span>
               </div>
             </div>
             <Link
-              href={`/app/adjust-plan?income=${MOCK_MONTHLY_TAKE_HOME}&targetSavings=${MOCK_SAVINGS}&currentSavings=${MOCK_SAVINGS}&returnTo=income`}
+              href={`/app/adjust-plan?income=${takeHome}&targetSavings=${savings}&currentSavings=${savings}&returnTo=income`}
               className="mt-4 flex w-full items-center justify-center gap-2"
             >
               <Button variant="outline" size="sm" className="w-full">
@@ -141,29 +179,63 @@ export default function IncomePage() {
           </CardContent>
         </Card>
 
-        {/* Take Home Pay Estimation */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-xl">Take Home Pay Estimation</CardTitle>
+        {/* Take-home pay card - matches design: header, two columns, details, Edit link */}
+        <Card className="overflow-hidden">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-xl font-bold text-slate-900 dark:text-white">
+              Take-home pay
+            </CardTitle>
+            <p className="text-sm text-slate-500 dark:text-slate-400 font-normal">
+              Monthly estimate
+            </p>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-slate-600 dark:text-slate-400">Take Home Pay /month</p>
-                <p className="text-lg font-semibold">{formatCurrency(MOCK_MONTHLY_TAKE_HOME)}</p>
+          <CardContent className="space-y-0">
+            {/* Two-column summary */}
+            <div className="flex border-t border-slate-200 dark:border-slate-700">
+              <div className="flex-1 py-4 pr-4 border-r border-slate-200 dark:border-slate-700">
+                <p className="text-sm text-slate-500 dark:text-slate-400">Gross income</p>
+                <p className="text-xl font-bold text-slate-900 dark:text-white">
+                  {formatCurrency(grossIncome)}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">per month</p>
               </div>
-              <div>
-                <p className="text-sm text-slate-600 dark:text-slate-400">Gross Income /month</p>
-                <p className="text-lg font-semibold">{formatCurrency(MOCK_GROSS_INCOME)}</p>
+              <div className="flex-1 py-4 pl-4">
+                <p className="text-sm text-slate-500 dark:text-slate-400">Take-home</p>
+                <p className="text-xl font-bold text-slate-900 dark:text-white">
+                  {formatCurrency(takeHome)}
+                </p>
+                <p className="text-xs">
+                  <span className="text-red-700 dark:text-red-400 font-medium">
+                    {formatCurrency(-withheld)}
+                  </span>
+                  <span className="text-slate-500 dark:text-slate-400"> withheld</span>
+                </p>
               </div>
-              <div>
-                <p className="text-sm text-slate-600 dark:text-slate-400">Tax /month</p>
-                <p className="text-lg font-semibold">-{formatCurrency(1200)}</p>
+            </div>
+            {/* Details rows */}
+            <div className="border-t border-slate-200 dark:border-slate-700 divide-y divide-slate-200 dark:divide-slate-700">
+              <div className="flex justify-between items-center py-3">
+                <span className="text-sm text-slate-900 dark:text-white">Tax (federal + state)</span>
+                <span className="text-sm font-medium text-red-700 dark:text-red-400">
+                  {formatCurrency(-tax)}
+                </span>
               </div>
-              <div>
-                <p className="text-sm text-slate-600 dark:text-slate-400">Deductions /month</p>
-                <p className="text-lg font-semibold">-{formatCurrency(490)}</p>
+              <div className="flex justify-between items-center py-3">
+                <span className="text-sm text-slate-900 dark:text-white">Pre-tax deductions</span>
+                <span className="text-sm font-medium text-red-700 dark:text-red-400">
+                  {formatCurrency(-preTaxDeductions)}
+                </span>
               </div>
+            </div>
+            {/* Edit link */}
+            <div className="border-t border-slate-200 dark:border-slate-700 pt-3 pb-1">
+              <button
+                type="button"
+                onClick={() => setEditPayModalOpen(true)}
+                className="w-full text-center text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+              >
+                Edit pay details
+              </button>
             </div>
           </CardContent>
         </Card>
@@ -176,11 +248,14 @@ export default function IncomePage() {
           <CardContent>
             <DistributionSection
               title=""
-              total={MOCK_NEEDS}
-              items={MOCK_NEEDS_BREAKDOWN}
+              total={needs}
+              items={MOCK_NEEDS_BREAKDOWN.map((item) => ({
+                ...item,
+                amount: Math.round((item.amount / 3405) * needs),
+              }))}
               colorTheme="orange"
               sectionType="needs"
-              totalIncome={MOCK_MONTHLY_TAKE_HOME}
+              totalIncome={takeHome}
               onChipClick={handleRibbitChipClick}
             />
           </CardContent>
@@ -194,11 +269,14 @@ export default function IncomePage() {
           <CardContent>
             <DistributionSection
               title=""
-              total={MOCK_WANTS}
-              items={MOCK_WANTS_BREAKDOWN}
+              total={wants}
+              items={MOCK_WANTS_BREAKDOWN.map((item) => ({
+                ...item,
+                amount: Math.round((item.amount / 2043) * wants),
+              }))}
               colorTheme="blue"
               sectionType="wants"
-              totalIncome={MOCK_MONTHLY_TAKE_HOME}
+              totalIncome={takeHome}
               onChipClick={handleRibbitChipClick}
             />
           </CardContent>
@@ -211,12 +289,18 @@ export default function IncomePage() {
           </CardHeader>
           <CardContent>
             <SavingsBarsSection
-              totalSavings={MOCK_SAVINGS}
-              preTaxItems={MOCK_PRE_TAX_ITEMS}
-              postTaxItems={MOCK_POST_TAX_ITEMS.filter((i) => i.amount > 0)}
+              totalSavings={savings}
+              preTaxItems={MOCK_PRE_TAX_ITEMS.map((item) => ({
+                ...item,
+                amount: Math.round((item.amount / 1362) * savings),
+              }))}
+              postTaxItems={MOCK_POST_TAX_ITEMS.filter((i) => i.amount > 0).map((item) => ({
+                ...item,
+                amount: Math.round((item.amount / 1362) * savings),
+              }))}
             />
             <Link
-              href={`/onboarding/savings-allocation?savings=${MOCK_SAVINGS}&projected=2000000&returnTo=income`}
+              href={`/onboarding/savings-allocation?savings=${savings}&projected=2000000&returnTo=income`}
               className="mt-4 flex w-full items-center justify-center gap-2"
             >
               <Button variant="outline" size="sm" className="w-full">
@@ -228,6 +312,82 @@ export default function IncomePage() {
         </Card>
       </div>
 
+      {/* Edit pay details modal */}
+      {editPayModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-pay-modal-title"
+        >
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-800">
+            <h2 id="edit-pay-modal-title" className="text-xl font-bold text-slate-900 dark:text-white mb-4">
+              Edit pay details
+            </h2>
+            <form onSubmit={handleSavePayDetails} className="space-y-4">
+              <div>
+                <label htmlFor="gross" className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Gross income (monthly)
+                </label>
+                <input
+                  id="gross"
+                  type="number"
+                  min={0}
+                  step={100}
+                  value={grossIncome}
+                  onChange={(e) => setGrossIncome(Math.max(0, parseFloat(e.target.value) || 0))}
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                />
+              </div>
+              <div>
+                <label htmlFor="tax" className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Tax (federal + state)
+                </label>
+                <input
+                  id="tax"
+                  type="number"
+                  min={0}
+                  step={50}
+                  value={tax}
+                  onChange={(e) => setTax(Math.max(0, parseFloat(e.target.value) || 0))}
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                />
+              </div>
+              <div>
+                <label htmlFor="preTax" className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Pre-tax deductions (401k, HSA, etc.)
+                </label>
+                <input
+                  id="preTax"
+                  type="number"
+                  min={0}
+                  step={50}
+                  value={preTaxDeductions}
+                  onChange={(e) => setPreTaxDeductions(Math.max(0, parseFloat(e.target.value) || 0))}
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                />
+              </div>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Take-home: {formatCurrency(Math.max(0, grossIncome - tax - preTaxDeductions))}/month
+              </p>
+              <div className="flex gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setEditPayModalOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" className="flex-1">
+                  Save
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <RibbitChat
         screenContext={ribbitScreenContext}
         chips={RIBBIT_SHEET_CHIPS}
@@ -237,5 +397,13 @@ export default function IncomePage() {
         onInitialQuestionSent={() => setRibbitInitialQuestion(null)}
       />
     </div>
+  );
+}
+
+export default function IncomePage() {
+  return (
+    <Suspense fallback={<div className="mx-auto max-w-xl px-4 py-6 animate-pulse text-slate-500">Loading...</div>}>
+      <IncomeContent />
+    </Suspense>
   );
 }
