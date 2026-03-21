@@ -227,12 +227,17 @@ export function RibbitChat({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="fixed bottom-6 z-[100] flex items-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
-          style={{ right: "max(1rem, calc(50vw - 16rem + 1rem))" }}
+          className="fixed bottom-6 z-[100] rounded-full shadow-lg transition-transform hover:scale-105 overflow-hidden"
+          style={{ right: "max(1rem, calc(50vw - 16rem + 1rem))", width: 64, height: 64 }}
           aria-label="Need help? Ask Ribbit"
         >
-          <Image src="/images/ribbit.png" alt="" width={20} height={20} className="shrink-0" aria-hidden />
-          <span>Need help?</span>
+          <Image
+            src="/images/ribbit-floating.png"
+            alt=""
+            width={64}
+            height={64}
+            className="object-contain w-full h-full"
+          />
         </button>
       )}
 
