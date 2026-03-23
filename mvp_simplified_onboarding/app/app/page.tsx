@@ -17,6 +17,12 @@ import {
   STEPS,
   type StepId,
 } from "@/lib/app/completedSteps";
+import {
+  HOME_CHIPS,
+  MONTHLY_PULSE_CHIPS,
+  NET_WORTH_CHIPS,
+  toRibbitChips,
+} from "@/lib/ribbit/chips";
 import { X, ChevronDown, ChevronUp, Lock } from "lucide-react";
 import { MonthlyPulseCard } from "@/components/home/MonthlyPulseCard";
 import { NetWorthTile } from "@/components/home/NetWorthTile";
@@ -219,7 +225,14 @@ function HomeContent() {
   return (
     <div className="mx-auto max-w-xl px-4 py-8">
       {/* 0. MONTHLY PULSE — Show as soon as user connects Plaid */}
-      {completedSteps.includes("connect") && <MonthlyPulseCard />}
+      {completedSteps.includes("connect") && (
+        <MonthlyPulseCard
+          onChipClick={(q) => {
+            setRibbitInitialQuestion(q);
+            setRibbitOpen(true);
+          }}
+        />
+      )}
 
       {/* 1. HERO — Header */}
       <div className="mb-6">
@@ -238,6 +251,10 @@ function HomeContent() {
         netWorth={netWorth}
         expanded={chartExpanded}
         onToggle={() => setChartExpanded((v) => !v)}
+        onChipClick={(q) => {
+          setRibbitInitialQuestion(q);
+          setRibbitOpen(true);
+        }}
       />
 
       {/* 3. RIBBIT TILE — Updates based on next step */}
@@ -654,11 +671,18 @@ function HomeContent() {
         }}
         initialQuestion={ribbitInitialQuestion}
         onInitialQuestionSent={() => setRibbitInitialQuestion(null)}
-        chips={[
-          { label: "What should I do next?", question: "What's my most impactful next step?" },
-          { label: "Is this realistic?", question: "Is this realistic?" },
-          { label: "How do I reach this faster?", question: "How do I reach this faster?" },
-        ]}
+        chips={(() => {
+          const planComplete = nextStep === null;
+          const hasMonthlyPulse = completedSteps.includes("connect");
+          const chips = planComplete
+            ? [
+                ...toRibbitChips(HOME_CHIPS),
+                ...(hasMonthlyPulse ? toRibbitChips(MONTHLY_PULSE_CHIPS) : []),
+                ...toRibbitChips(NET_WORTH_CHIPS),
+              ]
+            : toRibbitChips(HOME_CHIPS.slice(0, 3)); // Before complete: direction-focused
+          return chips;
+        })()}
       />
     </div>
   );

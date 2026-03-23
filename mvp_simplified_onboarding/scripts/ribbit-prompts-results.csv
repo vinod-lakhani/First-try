@@ -1,0 +1,162 @@
+"Page / route","Chip","Prompt","Actual Response","Expected Response"
+"/app (Home - Plan 100%)","What should I do next?","Given my current plan and financial position what is the single highest impact action I should take right now","","One clear action only, tied to biggest gap or opportunity, quantified if possible. E.g. Increase savings by $250 or redirect X to capture employer match"
+"/app (Home - Plan 100%)","Am I on track?","Based on my current behavior and plan am I on track to hit my targets","","Yes / No / Slightly off. One reason why. E.g. You're slightly behind due to lower savings rate last month"
+"/app (Home - Plan 100%)","What matters most right now?","Out of everything in my financial plan what is the most important thing I should focus on right now","","Prioritization, filters noise. E.g. Stabilizing your savings rate matters more than investing right now"
+"/app (Home - Plan 100%)","Can I optimize this further?","If I wanted to improve my trajectory what is the most efficient change I could make","","One optimization lever. E.g. Increasing savings by 3% moves your timeline forward by ~2 years"
+"/app (Monthly Pulse)","What changed this month?","What are the biggest changes between my target and actuals this month","","1–2 key deltas. E.g. Spending is up $180 mainly from dining"
+"/app (Monthly Pulse)","Where am I off track?","Where am I deviating the most from my plan and how significant is it","","Largest gap, quantified. E.g. Savings is 6% below target or $220 short"
+"/app (Monthly Pulse)","What should I adjust?","What is the single most effective adjustment I can make based on this month","","One behavior change. E.g. Reduce dining by $75 to get back on track"
+"/app (Monthly Pulse)","Is this a one-off or a pattern?","Is this behavior consistent with my past months or a one time change","","Pattern vs anomaly. E.g. This is the third month of elevated spending"
+"/app (Net Worth)","What's driving this change?","What are the main factors driving the change in my net worth over this period","","Income vs savings vs market. E.g. Growth driven mostly by increased savings not market returns"
+"/app (Net Worth)","Am I moving fast enough?","Based on my current trajectory am I progressing at a strong pace toward my goals","","Directional judgment. E.g. Progress is steady but could accelerate with higher savings"
+"/app (Net Worth)","What would accelerate this?","What is the most effective way to increase my net worth growth rate","","Single lever. E.g. savings / debt / income"
+"/app (Net Worth)","What's holding me back?","What is the biggest constraint slowing my net worth growth","","Bottleneck. E.g. High discretionary spending limiting savings rate"
+"/app (Net Worth)","Is this sustainable?","Is my current net worth growth trend sustainable based on my behavior","","Stability vs volatility, grounded answer"
+"/app/income","Why 50/30/20?","Why is 50/30/20 a good starting point—and where does it break down for someone like me?","The **50/30/20** rule is a simple way to divide your income into three categories:
+
+- **50% ($3,405)** for needs (essential expenses like rent and groceries)
+- **30% ($2,043)** for wants (non-essentials like dining out and entertainment)
+- **20% ($1,362)** for savings (future goals and emergencies)
+
+This breakdown offers a balanced approach to managing your money. However, it may not fit everyone perfectly. 
+
+For instance, if your rent is significantly higher than average, you might need to adjust the ""needs"" category, which could affect your ""wants"" and ""savings."" Think of this as a flexible starting point to help you find what works best for your unique situation.","Explains simplicity + limitation. Positions as baseline, not rule"
+"/app/income","Is this realistic for me?","Based on my numbers, how well does this framework actually fit my situation?","Your **$6,810** monthly income is broken down using the **50/30/20** rule, which is a simple way to manage your budget:
+
+- **50% ($3,405)** for needs (essentials like rent, groceries, and bills)
+- **30% ($2,043)** for wants (non-essentials like dining out and entertainment)
+- **20% ($1,362)** for savings (future goals and emergencies)
+
+This framework is a starting point. If your rent or other essentials are higher, you may need to adjust the percentages. It's all about finding a balance that works for you!","Personalized yes/no + adjustment suggestion"
+"/app/income","What if my rent is higher?","If my fixed costs (like rent) are above ideal, how should I rebalance the rest?","If your fixed costs are higher than the ideal **50%** for needs (which is **$3,405** based on your **$6,810** monthly income), you'll need to adjust your wants and savings categories.
+
+Here's a simple way to think about it:
+
+- If needs take up more than **50%**, consider reducing your wants (**30% or $2,043**) first, since those are more flexible.
+- If necessary, you can also adjust savings (**20% or $1,362**) to accommodate higher fixed costs.
+
+It's all about finding a balance that works for you while still prioritizing essential expenses.","Tradeoff logic: reduce wants vs savings, not both blindly"
+"/app/adjust-plan","Why are you recommending this?","What changed in my behavior that makes this new recommendation better than my current plan?","Your past three months show an average savings of **$1,100** per month, with a savings rate of **16.2%**. 
+
+We recommend increasing your savings to **$1,500** per month, which is a **22%** savings rate. This aligns better with your actual spending patterns and can improve your net worth by **$250,000** over 30 years.
+
+This adjustment reflects a modest increase based on your real financial behavior, ensuring you can comfortably save more while still meeting your needs.","Compares past 3 months vs target, highlights gap clearly"
+"/app/adjust-plan","What would I need to cut back on?","If I actually commit to this plan, where does the money realistically come from?","To meet the recommended savings of **$1,500** (22% savings rate), you'll need to adjust your spending based on your past 3 months' average savings of **$1,100** (16.2% savings rate).
+
+To cover the additional **$400** needed, consider cutting back on:
+
+- **$200** from dining out or entertainment
+- **$100** from subscriptions or memberships
+- **$100** from shopping or non-essential purchases
+
+These adjustments can help you reach your goal without feeling overwhelmed.","Specific categories + dollar amounts"
+"/app/adjust-plan","Is X% realistic?","How big is the gap between where I am and this target—and is it reasonable to close it?","You're currently saving **$1,100** per month, while the recommended amount is **$1,500**. This creates a gap of **$400**.
+
+Your past savings rate of **16.2%** suggests that increasing to the recommended **22%** is achievable. The suggested increase is modest and aligns with your actual spending patterns, making this target reasonable to close.","Gap framing + timeline (e.g., ""$250/month increase needed"")"
+"/onboarding/savings","Why this split?","What does this allocation say about my priorities—and is that the right balance?","Your **$800** monthly savings is split to prioritize safety, long-term growth, and flexibility:
+
+- **40% ($320)** — Cash buffer for emergencies, ensuring you have funds available when needed.
+- **40% ($320)** — Retirement savings, taking advantage of tax benefits for your future.
+- **20% ($160)** — Investments for flexibility, allowing you access to funds when opportunities arise.
+
+This allocation emphasizes building a solid foundation first, which is crucial to avoid needing to pull money out during market downturns. It's a great starting point, but feel free to adjust as your situation evolves.","Explains tradeoff: safety vs growth vs long-term"
+"/onboarding/savings","Should I invest more?","At my current stage, am I under-investing or appropriately balanced?","Your current allocation of **$800** is a solid starting point. It's split to balance safety, growth, and flexibility:
+
+- **40% ($320)** — Cash for emergencies
+- **40% ($320)** — Retirement savings (tax-advantaged)
+- **20% ($160)** — Investments for flexibility
+
+This approach prioritizes safety first, which helps you avoid financial stress, while also contributing to long-term growth. As you progress, you can adjust these percentages based on your comfort with investing and any debt considerations you may have.","Clear stance + condition (e.g., only after EF/debt)"
+"/onboarding/savings","What if I have debt?","When does paying off debt beat investing—and how does that apply to me?","Focusing on debt repayment can be crucial, especially if the interest rates are higher than potential investment returns. However, since you haven't provided any specific debt amounts or interest rates, let's keep it simple.
+
+Your **$800** monthly savings is currently split into three buckets for a balanced approach:
+
+- **40% ($320)** — Cash buffer for emergencies
+- **40% ($320)** — Retirement (tax-advantaged)
+- **20% ($160)** — Investments for flexibility
+
+Building an emergency cash buffer first helps you avoid pulling from investments during tough times. If you have high-interest debt, consider prioritizing that before maximizing investments.","Interest rate comparison + decision rule"
+"/onboarding/savings-allocation","Why is this the order?","Why does this system prioritize in this order—and what would break if I changed it?","I prioritize guaranteed returns and protection first. Here's the breakdown:
+
+- **Emergency Fund**: **$450/mo** helps protect you from unexpected expenses. 
+- **401k Match**: **$200/mo** captures employer contributions, giving you immediate growth.
+- **HSA**: **$100/mo** offers pre-tax benefits for healthcare expenses.
+
+If you change this order, you might miss guaranteed returns and increase financial risk. For example, investing more before having a solid emergency fund could lead you back into debt if unexpected costs arise.","Strong logic: guaranteed return → protection → growth"
+"/onboarding/savings-allocation","Should I pay off debt first?","At what interest rate does debt become my top priority over investing?","Since you have **$0** in debt right now, it's not a concern for your current plan. 
+
+However, if you do have high-interest debt in the future, generally, any interest rate above **6-8%** would make paying off that debt a higher priority than investing. This is because the guaranteed return from eliminating debt often outweighs potential investment gains.","Threshold-based answer (e.g., >7–8%)"
+"/onboarding/savings-allocation","Do I need an emergency fund first?","What risk am I taking if I skip an emergency fund and invest instead?","If you skip building an emergency fund and choose to invest instead, you're increasing your risk of going into debt if unexpected expenses arise. 
+
+Even a small buffer helps protect you against financial setbacks, making your overall plan more stable. Without that safety net, you might need to rely on high-interest debt, which can negate any investment gains.","Concrete downside scenario"
+"/onboarding/savings-allocation","Can I invest more instead?","What am I giving up if I tilt more toward investing right now?","If you invest more right now, you may miss out on crucial protections and guaranteed returns. 
+
+Your current allocation prioritizes:
+
+- **$450/mo** for an Emergency Fund, which shields you from unexpected expenses. 
+- **$200/mo** to capture your 401k match, providing free money for retirement.
+
+By not fully funding these areas first, you increase your risk and could face higher costs later if an emergency arises or you miss out on employer contributions.","Tradeoff framing (liquidity vs upside)"
+"/app/income (DistributionSection - Dominance)","Why is this high?","What behavior or constraint is driving this category so high in my spending?","Your estimated spending categories are based on the **50/30/20** rule, which divides your income into three buckets:
+
+- **Needs**: **$3,405** (50%) for essential expenses like housing, utilities, and groceries.
+- **Wants**: **$2,043** (30%) for non-essentials, like dining out and entertainment.
+- **Savings**: **$1,362** (20%) for future goals.
+
+If your needs seem high, it may be due to high rent or essential bills. This breakdown is a starting plan, so you can adjust as you see fit based on your actual expenses.","Root cause (rent, lifestyle, subscriptions)"
+"/app/income (DistributionSection - Dominance)","What can I realistically change?","What is one realistic change here that would meaningfully improve my allocation?","Your current allocation follows the **50/30/20** rule, which is a balanced starting plan. Here's a breakdown of how your **$6,810** monthly income is divided:
+
+- **Needs (50%)**: **$3,405** for essentials like housing and bills
+- **Wants (30%)**: **$2,043** for discretionary spending
+- **Savings (20%)**: **$1,362** for future goals
+
+If your rent is higher than what's typical, consider adjusting the **wants** category to free up more for **needs** or **savings**. This tradeoff can create a stronger financial foundation while still allowing for some flexibility in your budget.","One actionable step, not generic"
+"/app/income (DistributionSection - Dominance)","Is this a problem?","At what point does this level of spending become a problem?","This spending plan is based on the **50/30/20 rule**, which allocates your income for different purposes:
+
+- **50% ($3,405)** for needs (essentials like rent and groceries)
+- **30% ($2,043)** for wants (discretionary spending like dining out and entertainment)
+- **20% ($1,362)** for savings (building your future)
+
+If your expenses exceed these amounts, especially in the needs category, it may indicate a problem. For example, if your rent is much higher than **$3,405**, you might need to adjust your spending in wants or savings. This plan is a starting point, so it's important to keep track of your actual expenses to ensure you stay within your means.","Threshold framing"
+"/app/income (DistributionSection - Imbalance Low)","How far off am I?","How far am I from a healthy savings rate—and what does that gap mean over time?","Your current savings allocation is **$1,362**, which is **20%** of your monthly income of **$6,810**. 
+
+For a healthy savings rate, many suggest aiming for at least **20%**, so you're right on track! If you were to increase your savings, even by a small amount, it could significantly impact your financial future. 
+
+For example, saving just an additional **$100** each month could grow to over **$36,000** in 30 years, assuming a modest return. This gap can mean the difference between just getting by and having a comfortable financial cushion.","% gap + long-term impact"
+"/app/income (DistributionSection - Imbalance Low)","What should I aim for?","What is a realistic next target for me—not ideal, but achievable?","Let's look at your estimated monthly income of **$6,810** and the 50/30/20 breakdown:
+
+- **Needs**: **$3,405** (50%) for essentials like housing and groceries
+- **Wants**: **$2,043** (30%) for discretionary spending
+- **Savings**: **$1,362** (20%) to build your financial cushion
+
+A realistic target could be to first ensure your needs are comfortably covered. If your rent or other essentials are higher than the **$3,405**, prioritize adjusting this category. 
+
+Once that's stable, you can aim to gradually increase your savings or wants, even if it's just a small percentage. This way, you're making steady progress without overwhelming yourself.","Step-up target (not max)"
+"/app/income (DistributionSection - Imbalance Low)","How do I increase it?","What is the easiest way for me to increase my savings without breaking my lifestyle?","You can start by adjusting your **30% ($2,043)** allocated for wants. 
+
+Here are a few areas to consider:
+
+- Identify discretionary spending you can reduce, like dining out or entertainment.
+- Consider setting a small savings goal within your current wants budget to gradually boost your savings.
+  
+This way, you can enhance your savings without making drastic lifestyle changes. Remember, this plan is a starting point, so you can always refine it as you go!","Low-friction suggestion"
+"/app/income (DistributionSection - Imbalance Healthy)","Can I save more?","Am I at a point where increasing savings meaningfully changes my outcome?","Right now, your monthly income of **$6,810** is split into three categories using the **50/30/20** rule:
+
+- **Needs (50%)**: **$3,405** for essential expenses like housing and bills
+- **Wants (30%)**: **$2,043** for discretionary spending
+- **Savings (20%)**: **$1,362** set aside for future goals
+
+Increasing your savings could help build a stronger financial cushion or allow for more investments. However, it's important to consider if your current needs and wants are adequately met before making adjustments. This breakdown is a starting point, and you can tweak it based on your personal circumstances.","Diminishing returns logic"
+"/app/income (DistributionSection - Imbalance Healthy)","Should I invest instead?","Is keeping this in cash costing me growth?","Your current plan suggests allocating **$1,362** (20%) to savings. 
+
+- If this is kept in cash, it may not grow as much as investments could over time. 
+- However, having cash on hand is crucial for emergencies and expenses, which is important for financial stability.
+
+This starting plan balances safety and growth, but you can adjust the amounts based on your comfort level with risk and your current expenses.","Opportunity cost framing"
+"/app/income (DistributionSection - Imbalance Healthy)","What does this enable?","What does this level of saving actually unlock for me long-term?","With a saving allocation of **$1,362** per month, you're setting a strong foundation for your financial future. 
+
+- This amount can build an emergency fund for unexpected expenses.
+- It can contribute to retirement savings, helping you achieve long-term financial security.
+- Over time, these savings can grow through investments, potentially increasing your wealth.
+
+This plan is a great starting point, but remember, you can adjust it based on your needs and goals as they evolve.","Future outcome (freedom, timeline)"

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { MONTHLY_PULSE_CHIPS, toRibbitChips } from "@/lib/ribbit/chips";
 
 function formatCurrency(n: number) {
   return new Intl.NumberFormat("en-US", {
@@ -41,8 +42,13 @@ const MOCK_SAVINGS_BREAKDOWN = [
   { label: "Brokerage", amount: 362 },
 ];
 
-export function MonthlyPulseCard() {
+type MonthlyPulseCardProps = {
+  onChipClick?: (question: string) => void;
+};
+
+export function MonthlyPulseCard({ onChipClick }: MonthlyPulseCardProps) {
   const [savingsExpanded, setSavingsExpanded] = useState(false);
+  const allChips = toRibbitChips(MONTHLY_PULSE_CHIPS);
 
   const needsPct = (MOCK_NEEDS / MOCK_MONTHLY_INCOME) * 100;
   const wantsPct = (MOCK_WANTS / MOCK_MONTHLY_INCOME) * 100;
@@ -137,6 +143,21 @@ export function MonthlyPulseCard() {
             )}
           </div>
         </div>
+
+        {onChipClick && allChips.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {allChips.map((chip) => (
+              <button
+                key={chip.question}
+                type="button"
+                onClick={() => onChipClick(chip.question)}
+                className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700"
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         <Link
           href="/app/income"

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import dynamic from "next/dynamic";
+import { NET_WORTH_CHIPS, toRibbitChips } from "@/lib/ribbit/chips";
 
 const NetWorthChart = dynamic(
   () => import("@/components/charts/NetWorthChart").then((m) => ({ default: m.NetWorthChart })),
@@ -22,7 +23,10 @@ type NetWorthTileProps = {
   /** When provided with expanded, parent controls the state */
   expanded?: boolean;
   onToggle?: () => void;
+  onChipClick?: (question: string) => void;
 };
+
+const netWorthChips = toRibbitChips(NET_WORTH_CHIPS);
 
 export function NetWorthTile({
   projectedWithSteps,
@@ -30,6 +34,7 @@ export function NetWorthTile({
   netWorth,
   expanded: controlledExpanded,
   onToggle,
+  onChipClick,
 }: NetWorthTileProps) {
   const [internalExpanded, setInternalExpanded] = useState(false);
   const isControlled = controlledExpanded !== undefined && onToggle;
@@ -70,6 +75,20 @@ export function NetWorthTile({
       {expanded && (
         <div className="px-5 pb-5 pt-4 border-t border-slate-200 dark:border-slate-600" style={{ minHeight: 240 }}>
           <NetWorthChart labels={labels} netWorth={netWorth} height={220} />
+          {onChipClick && netWorthChips.length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {netWorthChips.map((chip) => (
+                <button
+                  key={chip.question}
+                  type="button"
+                  onClick={() => onChipClick(chip.question)}
+                  className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700"
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
