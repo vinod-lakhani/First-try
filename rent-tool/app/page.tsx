@@ -735,7 +735,7 @@ function CallEndedState({ onDone }: { onDone: () => void }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function RentToolPage() {
-  const [mode, setMode] = useState<'chat' | 'voice'>('chat');
+  const [mode, setMode] = useState<'chat' | 'voice'>('voice');
   const [messages, setMessages] = useState<Message[]>([
     { id: 'init', text: RIBBIT_OPENING_CHAT, isUser: false, timestamp: new Date() },
   ]);
