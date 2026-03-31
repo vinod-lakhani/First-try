@@ -894,11 +894,11 @@ export default function RentToolPage() {
       <header className="shrink-0 border-b bg-white dark:bg-slate-900">
         <div className="mx-auto flex h-14 max-w-2xl items-center gap-3 px-4">
           <Link
-            href="/resources"
+            href="/"
             className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
-            <span>Resources</span>
+            <span>Home</span>
           </Link>
 
           <div className="mx-1 h-4 w-px bg-slate-200 dark:bg-slate-700" />
