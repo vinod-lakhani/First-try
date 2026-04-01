@@ -263,13 +263,131 @@ const MATCH_PRESETS = [
 
 const CONTRIB_PRESETS = [0, 2, 3, 4, 5, 6, 8, 10, 12];
 
-const STACK_STEPS = [
-  { n: 1, icon: '🛡️', name: 'Emergency Fund', why: '1-month buffer first — your financial safety net before anything else.', status: 'ready' },
-  { n: 2, icon: '🎯', name: 'Capture Employer Match', why: "Free money. 100% instant return. Always Leap #1 if you're not capturing it.", status: 'active' },
-  { n: 3, icon: '💳', name: 'Pay Off High-APR Debt', why: "Eliminating 15–25% interest is a guaranteed return you can't beat in the market.", status: 'locked' },
-  { n: 4, icon: '📈', name: 'Retirement vs Brokerage Split', why: 'Based on your retirement focus, we optimize the split for tax efficiency.', status: 'locked' },
-  { n: 5, icon: '🌱', name: 'Brokerage Investing', why: 'After the foundation is set, grow long-term wealth in taxable accounts.', status: 'locked' },
-];
+// ─── Full Leap Stack Builder ───────────────────────────────────────────────────
+
+interface StackItem {
+  id: string;
+  icon: string;
+  title: string;
+  subtitle: string;
+  status: 'done' | 'active' | 'next' | 'locked';
+  impact: string;
+  detail: string;
+  actionText?: string;
+  locked?: boolean;
+}
+
+function buildFullStack(i: LeapInputs, primary: LeapResult): StackItem[] {
+  const items: StackItem[] = [];
+  const mthTakeHome = primary.monthlyTakeHome;
+  const efTarget = Math.round(mthTakeHome * 0.65 * 3);
+
+  // ── 1. Emergency Fund ──────────────────────────────────────────────────────
+  const efDone = i.hasEmergencyFund === 'yes';
+  const efActive = primary.type === 'emergency_fund';
+  items.push({
+    id: 'ef',
+    icon: '🛡️',
+    title: 'Emergency Fund',
+    subtitle: '3 months of expenses as your safety net',
+    status: efDone ? 'done' : efActive ? 'active' : 'next',
+    impact: efDone ? 'Complete ✓' : `~${fmtK(primary.efTargetAmount ?? efTarget)} target`,
+    detail: "Before any investing, you need a buffer. One unexpected expense without it forces high-interest debt — which destroys wealth 3× faster than investing builds it. This isn't sexy, but it's the foundation everything else sits on.",
+    actionText: efDone ? undefined : `Save ~${fmt(Math.round(mthTakeHome * 0.15))}/mo to reach it`,
+  });
+
+  // ── 2. Capture Employer Match ─────────────────────────────────────────────
+  if (i.has401k !== false) {
+    const matchCaptured = !i.hasMatch || i.currentPct >= i.matchCap;
+    const matchActive = primary.type === 'capture_match';
+    const freePerYear = i.hasMatch ? Math.round(i.salary * i.matchCap / 100 * i.matchRate / 100) : 0;
+    items.push({
+      id: 'match',
+      icon: '🎯',
+      title: 'Capture Employer Match',
+      subtitle: i.hasMatch ? `${i.matchRate}% match up to ${i.matchCap}% — free money` : 'No employer match available',
+      status: !i.hasMatch ? 'done' : matchCaptured ? 'done' : matchActive ? 'active' : 'next',
+      impact: !i.hasMatch ? 'N/A — no match' : matchCaptured ? 'Complete ✓' : `${fmt(freePerYear)}/yr free`,
+      detail: !i.hasMatch
+        ? "Your employer doesn't offer a match — so this step doesn't apply to you. Your priority is building the foundation and then directing money toward retirement and growth."
+        : matchCaptured
+        ? `You're already capturing your full employer match. That's ${fmtK(primary.delta30yr > 0 ? 0 : (runPath(i.salary, i.matchCap, i.matchCap, i.matchRate, true)[YEARS] ?? 0))} in free compounding over your career.`
+        : `Your employer is setting aside ${fmt(freePerYear)} a year for you. You just need to contribute ${i.matchCap}% to unlock it. This is a 100% instant return before compounding even starts.`,
+      actionText: matchCaptured || !i.hasMatch ? undefined : `Increase to ${i.matchCap}% in your 401k portal`,
+    });
+  }
+
+  // ── 3. Pay Off High-APR Debt ──────────────────────────────────────────────
+  const debtDone = i.hasDebt === false;
+  const debtActive = primary.type === 'debt_payoff';
+  const hasDebtInfo = i.hasDebt !== undefined;
+  items.push({
+    id: 'debt',
+    icon: '💳',
+    title: 'Pay Off High-APR Debt',
+    subtitle: 'Eliminate 15–25% interest — guaranteed return',
+    status: debtDone ? 'done' : debtActive ? 'active' : hasDebtInfo ? 'next' : 'next',
+    impact: debtDone ? 'No high-APR debt ✓' : debtActive && i.debtApr ? `${i.debtApr}% guaranteed return` : 'Beats the market',
+    detail: i.hasDebt === false
+      ? "You don't carry high-interest debt — that means more of your income is available to compound. This is a bigger advantage than most people realize."
+      : `Paying off ${i.debtApr ?? 15}% debt gives you a guaranteed ${i.debtApr ?? 15}% return with zero risk. The stock market averages ~7% real. Until this is gone, every investment dollar is fighting uphill.`,
+    actionText: i.hasDebt ? 'Redirect extra dollars to highest-APR balance first' : undefined,
+    locked: !hasDebtInfo && !debtActive,
+  });
+
+  // ── 4. Max Out 401k / Roth IRA ────────────────────────────────────────────
+  const retirementActive = primary.type === 'increase' || primary.type === 'start_401k';
+  const retirementDone = primary.type === 'at_cap';
+  const retDelta = (() => {
+    if (retirementActive) return primary.delta30yr;
+    if (i.has401k === false) {
+      const rothAnnual = Math.min(7000, Math.round(i.salary * 0.10));
+      return runPath(i.salary, (rothAnnual / i.salary) * 100, 0, 0, false)[YEARS] ?? 0;
+    }
+    const capPct = i.salary > 0 ? (K401_CAP / i.salary) * 100 : 15;
+    const opt = runPath(i.salary, capPct, i.matchCap, i.matchRate, i.hasMatch);
+    const base = runPath(i.salary, i.currentPct, i.matchCap, i.matchRate, i.hasMatch);
+    return (opt[YEARS] ?? 0) - (base[YEARS] ?? 0);
+  })();
+  items.push({
+    id: 'retirement',
+    icon: '📈',
+    title: i.has401k === false ? 'Open & Max Roth IRA' : 'Max Out 401(k)',
+    subtitle: i.has401k === false ? `$7,000/yr limit — tax-free growth` : `Up to ${fmt(K401_CAP)}/yr — pre-tax compounding`,
+    status: retirementDone ? 'done' : retirementActive ? 'active' : 'next',
+    impact: retDelta > 0 ? `+${fmtK(retDelta)} over 30 yrs` : 'Already maxed ✓',
+    detail: i.has401k === false
+      ? `No 401k? A Roth IRA is your best retirement vehicle. Contribute up to $7,000/yr — it grows completely tax-free. Open one at Fidelity or Vanguard in under 10 minutes.`
+      : `After capturing any match, push your contribution toward the ${fmt(K401_CAP)} IRS limit. Pre-tax contributions cut your actual paycheck cost nearly in half — a ${fmt(Math.round(i.salary * 0.25 / 12))} salary means a much smaller real cost per paycheck.`,
+    actionText: retirementDone ? undefined : i.has401k === false ? 'Open Roth IRA at Fidelity / Vanguard' : `Increase 401k to max (${+(K401_CAP / i.salary * 100).toFixed(1)}% of salary)`,
+  });
+
+  // ── 5. HSA (if eligible — locked, needs full plan) ────────────────────────
+  items.push({
+    id: 'hsa',
+    icon: '🏥',
+    title: 'HSA Optimization',
+    subtitle: 'Triple tax advantage — if you have a high-deductible plan',
+    status: 'locked',
+    impact: 'Up to $4,300/yr tax-free',
+    detail: "If you're on a high-deductible health plan, an HSA is the only account that's triple tax-advantaged: contributions pre-tax, growth tax-free, withdrawals tax-free for medical. We calculate your exact target in your full WeLeap plan.",
+    locked: true,
+  });
+
+  // ── 6. Brokerage / Growth Split ────────────────────────────────────────────
+  items.push({
+    id: 'brokerage',
+    icon: '🌱',
+    title: 'Brokerage & Growth Investing',
+    subtitle: 'Long-term wealth beyond retirement accounts',
+    status: 'locked',
+    impact: 'Personalized split',
+    detail: 'After tax-advantaged accounts are maximized, excess savings go into a taxable brokerage account. WeLeap calculates the ideal retirement vs. brokerage split based on your timeline and tax situation.',
+    locked: true,
+  });
+
+  return items;
+}
 
 // ─── Animated Counter ─────────────────────────────────────────────────────────
 
@@ -588,6 +706,7 @@ export default function LeapToolPage() {
   const [debtApr, setDebtApr] = useState<number>(19);
   const [showChart, setShowChart] = useState(false);
   const [showDelay, setShowDelay] = useState(false);
+  const [expandedStackId, setExpandedStackId] = useState<string | null>(null);
   const [email, setEmail] = useState('');
   const [emailDone, setEmailDone] = useState(false);
   const [signupLoading, setSignupLoading] = useState(false);
@@ -1397,40 +1516,157 @@ export default function LeapToolPage() {
               </div>
             )}
 
-            {/* Leap Stack */}
-            <div className={`bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-700 ${visibleCards.has(4) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-              <div className="p-6 pb-4">
-                <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2 mb-1">
-                  <span className="bg-[#3F6B42]/10 w-8 h-8 rounded-lg flex items-center justify-center">🗺️</span>
-                  Your full Leap Stack
-                </h3>
-                <p className="text-sm text-gray-500">The right order for every dollar beyond your Leap.</p>
-              </div>
-              <div className="px-6 pb-4 space-y-2">
-                {STACK_STEPS.map((step) => {
-                  const isCurrent = step.n === 2 && isRetirementLeap;
-                  const isCompleted = (step.n === 2 && isAtCap) || step.n === 1;
-                  const isLocked = step.status === 'locked';
-                  return (
-                    <div key={step.n} className={`flex items-start gap-3 p-3 rounded-xl ${isCurrent ? 'bg-[#3F6B42]/8 border border-[#3F6B42]/20' : 'bg-gray-50 border border-gray-100'}`}>
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-base shrink-0 ${isLocked ? 'grayscale opacity-40' : ''}`}>{isCompleted ? '✅' : step.icon}</div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`text-sm font-semibold ${isLocked ? 'text-gray-400' : 'text-gray-800'}`}>{step.name}</span>
-                          {isCurrent && <span className="text-xs bg-[#3F6B42] text-white px-2 py-0.5 rounded-full">Your Leap</span>}
-                          {isLocked && <span className="text-xs bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full flex items-center gap-1"><Lock className="w-2.5 h-2.5" />Unlock in full plan</span>}
-                        </div>
-                        <p className={`text-xs mt-0.5 leading-relaxed ${isLocked ? 'text-gray-400' : 'text-gray-500'}`}>{step.why}</p>
+            {/* ── Full Leap Stack ── */}
+            {leap && (() => {
+              const inputs: LeapInputs = {
+                salary: salaryNum, state,
+                has401k: effectiveHas401k,
+                hasMatch: effectiveHasMatch,
+                matchCap: effectiveHasMatch ? matchPreset.matchCap : 0,
+                matchRate: effectiveHasMatch ? matchPreset.matchRate : 0,
+                currentPct,
+                hasEmergencyFund: hasEmergencyFund ?? undefined,
+                hasDebt: hasDebt ?? undefined,
+                debtApr: hasDebt ? debtApr : undefined,
+              };
+              const stack = buildFullStack(inputs, leap);
+              const activeItem = stack.find(s => s.status === 'active');
+              const nextItems = stack.filter(s => s.status === 'next');
+              const nextItem = nextItems[0];
+
+              return (
+                <div className={`transition-all duration-700 ${visibleCards.has(4) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+                  {/* Bridge from #1 leap to the stack */}
+                  <div className="text-center py-2">
+                    <p className="text-sm text-gray-500 font-medium">That's your Leap #1. Here's the complete picture.</p>
+                    <div className="mt-1 text-xs text-gray-400">Tap any leap to understand it — work through them in order</div>
+                  </div>
+
+                  <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                    <div className="p-5 pb-3 border-b border-gray-100 flex items-center justify-between">
+                      <div>
+                        <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                          <span>🗺️</span> Your full Leap Stack
+                        </h3>
+                        <p className="text-xs text-gray-500 mt-0.5">6 moves, in the right order — your complete wealth-building roadmap</p>
+                      </div>
+                      <div className="text-xs text-gray-400 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1">
+                        {stack.filter(s => s.status === 'done').length}/{stack.length} done
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-              <div className="mx-6 mb-6 bg-gradient-to-r from-[#3F6B42]/5 to-[#3F6B42]/10 border border-[#3F6B42]/20 rounded-xl p-4">
-                <div className="flex items-center gap-2 mb-1"><Sparkles className="w-4 h-4 text-[#3F6B42]" /><span className="text-sm font-semibold text-[#3F6B42]">WeLeap builds your full plan</span></div>
-                <p className="text-xs text-gray-600 leading-relaxed">Debt payoff priority, HSA optimization, brokerage split — all calculated for your situation.</p>
-              </div>
-            </div>
+
+                    <div className="divide-y divide-gray-50">
+                      {stack.map((item, idx) => {
+                        const isExpanded = expandedStackId === item.id || (expandedStackId === null && item.status === 'active');
+                        const statusColors = {
+                          done:   'bg-emerald-50  border-emerald-200  text-emerald-700',
+                          active: 'bg-[#3F6B42]/8 border-[#3F6B42]/30 text-[#3F6B42]',
+                          next:   'bg-white        border-gray-200      text-gray-700',
+                          locked: 'bg-gray-50      border-gray-100      text-gray-400',
+                        };
+                        const badgeColors = {
+                          done:   'bg-emerald-100 text-emerald-700',
+                          active: 'bg-[#3F6B42]   text-white',
+                          next:   'bg-gray-100    text-gray-500',
+                          locked: 'bg-gray-100    text-gray-400',
+                        };
+                        const badgeLabels = {
+                          done:   'Complete ✓',
+                          active: 'Your Leap now',
+                          next:   `Leap #${idx + 1}`,
+                          locked: 'Unlock with WeLeap',
+                        };
+
+                        return (
+                          <div key={item.id}>
+                            <button
+                              onClick={() => !item.locked && setExpandedStackId(isExpanded ? null : item.id)}
+                              className={`w-full p-4 flex items-start gap-3 text-left transition-colors ${item.locked ? 'cursor-default opacity-60' : 'hover:bg-gray-50 cursor-pointer'}`}
+                            >
+                              <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0 border ${statusColors[item.status]}`}>
+                                {item.status === 'done' ? '✅' : item.icon}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className={`text-sm font-semibold ${item.locked ? 'text-gray-400' : 'text-gray-900'}`}>{item.title}</span>
+                                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${badgeColors[item.status]}`}>
+                                    {item.locked ? <span className="flex items-center gap-1"><Lock className="w-2.5 h-2.5" />{badgeLabels[item.status]}</span> : badgeLabels[item.status]}
+                                  </span>
+                                </div>
+                                <p className={`text-xs mt-0.5 ${item.locked ? 'text-gray-400' : 'text-gray-500'}`}>{item.subtitle}</p>
+                                {!item.locked && (
+                                  <p className={`text-xs font-semibold mt-1 ${item.status === 'active' ? 'text-[#3F6B42]' : item.status === 'done' ? 'text-emerald-600' : 'text-gray-600'}`}>
+                                    {item.impact}
+                                  </p>
+                                )}
+                              </div>
+                              {!item.locked && (
+                                <div className="shrink-0 mt-0.5">
+                                  {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                                </div>
+                              )}
+                            </button>
+
+                            {/* Expanded detail */}
+                            {isExpanded && !item.locked && (
+                              <div className="px-4 pb-4 ml-12">
+                                <p className="text-sm text-gray-600 leading-relaxed mb-3">{item.detail}</p>
+                                {item.actionText && (
+                                  <div className="bg-[#3F6B42]/5 border border-[#3F6B42]/20 rounded-xl px-4 py-2.5 flex items-center gap-2">
+                                    <ArrowRight className="w-3.5 h-3.5 text-[#3F6B42] shrink-0" />
+                                    <span className="text-xs font-semibold text-[#3F6B42]">{item.actionText}</span>
+                                  </div>
+                                )}
+                                {/* Navigate to next */}
+                                {item.status === 'active' && nextItem && (
+                                  <button
+                                    onClick={() => setExpandedStackId(nextItem.id)}
+                                    className="mt-3 w-full flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 text-white font-semibold text-sm px-4 py-2.5 rounded-xl transition-colors"
+                                  >
+                                    See Leap #{idx + 2}: {nextItem.title} <ArrowRight className="w-4 h-4" />
+                                  </button>
+                                )}
+                                {item.status === 'next' && (
+                                  <div className="mt-3 flex gap-2">
+                                    {idx > 0 && (
+                                      <button
+                                        onClick={() => setExpandedStackId(stack[idx - 1]?.id ?? null)}
+                                        className="flex-1 flex items-center justify-center gap-1.5 border border-gray-200 text-gray-600 font-medium text-xs px-3 py-2 rounded-xl hover:bg-gray-50 transition-colors"
+                                      >
+                                        ← Back
+                                      </button>
+                                    )}
+                                    {stack[idx + 1] && !stack[idx + 1].locked && (
+                                      <button
+                                        onClick={() => setExpandedStackId(stack[idx + 1].id)}
+                                        className="flex-1 flex items-center justify-center gap-1.5 bg-gray-900 hover:bg-gray-800 text-white font-medium text-xs px-3 py-2 rounded-xl transition-colors"
+                                      >
+                                        Next: {stack[idx + 1].title} <ArrowRight className="w-3 h-3" />
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Locked leaps CTA */}
+                    <div className="p-5 bg-gradient-to-r from-[#3F6B42]/5 to-[#3F6B42]/10 border-t border-[#3F6B42]/20">
+                      <div className="flex items-start gap-3">
+                        <Sparkles className="w-4 h-4 text-[#3F6B42] mt-0.5 shrink-0" />
+                        <div>
+                          <p className="text-sm font-semibold text-[#3F6B42]">WeLeap builds your complete plan</p>
+                          <p className="text-xs text-gray-600 mt-0.5 leading-relaxed">HSA optimization, brokerage split, debt payoff priority — all calculated for your exact numbers.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Ask Leap Chat */}
             <div className={`bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-700 ${visibleCards.has(4) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
