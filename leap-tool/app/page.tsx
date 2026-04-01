@@ -62,43 +62,106 @@ function runPath(salary: number, pct: number, matchCap: number, matchRate: numbe
 interface LeapInputs {
   salary: number; state: string; hasMatch: boolean;
   matchCap: number; matchRate: number; currentPct: number;
+  // Extended fields collected when no clear 401k match leap exists
+  hasEmergencyFund?: 'yes' | 'partial' | 'no';
+  hasDebt?: boolean;
+  debtApr?: number; // approximate APR e.g. 19
+  has401k?: boolean; // false = no 401k at all
 }
 
 interface LeapResult {
-  type: 'capture_match' | 'increase' | 'at_cap';
+  type: 'capture_match' | 'increase' | 'at_cap' | 'emergency_fund' | 'debt_payoff' | 'start_401k';
   label: string; tagline: string; optimizedPct: number;
   baselinePath: number[]; optimizedPath: number[];
   delta30yr: number; costOfDelay12mo: number;
   annualContribIncrease: number; perPaycheckCost: number;
   monthlyTakeHome: number; narration: string;
+  // Extra fields for non-401k leaps
+  efTargetAmount?: number;        // emergency_fund: 3-month target
+  debtApr?: number;               // debt_payoff: the APR
+  annualInterestCost?: number;    // debt_payoff: estimated yearly interest
+  noMore401k?: boolean;           // true when 401k not available
 }
 
 function calcLeap(i: LeapInputs): LeapResult {
-  const { salary, state, hasMatch, matchCap, matchRate, currentPct } = i;
+  const { salary, state, hasMatch, matchCap, matchRate, currentPct,
+          hasEmergencyFund, hasDebt, debtApr, has401k } = i;
+  const taxRate = estimateTaxRate(salary, state);
+  const monthlyTakeHome = Math.round((salary * (1 - taxRate)) / 12);
   const capPct = salary > 0 ? (K401_CAP / salary) * 100 : 15;
-  let type: LeapResult['type'], optimizedPct: number, label: string, tagline: string;
 
+  // ── Priority 1: Uncaptured employer match (free money — always #1) ──────────
   if (hasMatch && currentPct < matchCap) {
-    type = 'capture_match';
-    optimizedPct = Math.min(matchCap, capPct);
-    label = 'Capture your full employer match';
-    tagline = `Move from ${currentPct}% → ${+optimizedPct.toFixed(1)}% and unlock free money your employer is already setting aside.`;
-  } else if ((salary * currentPct / 100) >= K401_CAP || currentPct >= capPct) {
-    type = 'at_cap'; optimizedPct = currentPct;
-    label = '401(k) is maxed';
-    tagline = "You're already hitting the IRS limit — that puts you ahead of 95% of people your age.";
-  } else {
-    type = 'increase'; optimizedPct = Math.min(capPct, 100);
-    label = 'Max out your 401(k)';
-    tagline = `Move from ${currentPct}% → ${+optimizedPct.toFixed(1)}% and compound the difference for 30 years.`;
+    const type = 'capture_match';
+    const optimizedPct = Math.min(matchCap, capPct);
+    const label = 'Capture your full employer match';
+    const tagline = `Move from ${currentPct}% → ${+optimizedPct.toFixed(1)}% and unlock free money your employer is already setting aside.`;
+    return buildRetirementResult({ type, label, tagline, optimizedPct, salary, state, hasMatch, matchCap, matchRate, currentPct, monthlyTakeHome });
   }
 
+  // ── Priority 2: 401(k) already maxed ─────────────────────────────────────
+  if (has401k !== false && ((salary * currentPct / 100) >= K401_CAP || currentPct >= capPct)) {
+    const optimizedPct = currentPct;
+    const baselinePath = runPath(salary, currentPct, matchCap, matchRate, hasMatch);
+    const narration = `Your 401k is already maxed out — you're hitting the full ${fmt(K401_CAP)} IRS limit. That's genuinely impressive and puts you ahead of 95% of people your age. Your next Leap lives in the full WeLeap plan.`;
+    return { type: 'at_cap', label: '401(k) is maxed', tagline: "You're already hitting the IRS limit — that puts you ahead of 95% of people your age.", optimizedPct, baselinePath, optimizedPath: baselinePath, delta30yr: 0, costOfDelay12mo: 0, annualContribIncrease: 0, perPaycheckCost: 0, monthlyTakeHome, narration };
+  }
+
+  // ── Priority 3: No emergency fund — must build safety net first ───────────
+  if (hasEmergencyFund === 'no' || hasEmergencyFund === 'partial') {
+    const essentialsEstimate = Math.round(monthlyTakeHome * 0.65);
+    const monthsNeeded = hasEmergencyFund === 'partial' ? 2 : 3;
+    const efTargetAmount = essentialsEstimate * monthsNeeded;
+    const monthlySavings = Math.round(monthlyTakeHome * 0.15); // ~15% savings rate
+    const monthsToGoal = monthlySavings > 0 ? Math.ceil(efTargetAmount / monthlySavings) : 18;
+    const label = hasEmergencyFund === 'partial' ? 'Top up your emergency fund' : 'Build a 3-month emergency fund';
+    const tagline = `Before investing more, having ${monthsNeeded} months of expenses saved (≈${fmt(efTargetAmount)}) protects everything else you build.`;
+    const narration = `Your number one Leap right now is ${label.toLowerCase()}. On your income, that's roughly ${fmtK(efTargetAmount)}. Without it, any unexpected expense forces you into high-interest debt — which destroys wealth faster than investing builds it. At a modest savings rate you can hit that target in about ${monthsToGoal} months.`;
+    const flatPath = Array.from({ length: YEARS + 1 }, () => 0);
+    return { type: 'emergency_fund', label, tagline, optimizedPct: 0, baselinePath: flatPath, optimizedPath: flatPath, delta30yr: 0, costOfDelay12mo: 0, annualContribIncrease: 0, perPaycheckCost: 0, monthlyTakeHome, narration, efTargetAmount };
+  }
+
+  // ── Priority 4: High-APR debt — guaranteed return beats the market ────────
+  if (hasDebt && debtApr && debtApr >= 10) {
+    const annualInterestCost = Math.round(salary * 0.05 * (debtApr / 100)); // rough estimate
+    const label = 'Pay off high-interest debt';
+    const tagline = `Paying down ${debtApr}% debt is a guaranteed ${debtApr}% return — better than almost any investment.`;
+    const narration = `Your biggest Leap right now is tackling that ${debtApr}% debt. Every dollar you put toward it earns you a guaranteed ${debtApr}% return — that beats the stock market's average and with zero risk. Eliminating it first unlocks real investing power.`;
+    const flatPath = Array.from({ length: YEARS + 1 }, () => 0);
+    return { type: 'debt_payoff', label, tagline, optimizedPct: 0, baselinePath: flatPath, optimizedPath: flatPath, delta30yr: 0, costOfDelay12mo: 0, annualContribIncrease: 0, perPaycheckCost: 0, monthlyTakeHome, narration, debtApr, annualInterestCost };
+  }
+
+  // ── Priority 5: No 401k — start one / open Roth IRA ─────────────────────
+  if (has401k === false) {
+    const rothContrib = Math.min(7000, Math.round(salary * 0.10));
+    const rothPath = runPath(salary, (rothContrib / salary) * 100, 0, 0, false);
+    const delta = (rothPath[YEARS] ?? 0);
+    const label = 'Open a Roth IRA';
+    const tagline = `No 401k? A Roth IRA is your next best move — tax-free growth for decades.`;
+    const narration = `Since you don't have a 401k, your best Leap is opening a Roth IRA. Contributing ${fmt(rothContrib)} a year — about ${fmt(Math.round(rothContrib / 12))} a month — could grow to ${fmtK(delta)} tax-free over 30 years. You can open one in minutes at Fidelity or Vanguard.`;
+    const flatPath = Array.from({ length: YEARS + 1 }, () => 0);
+    return { type: 'start_401k', label, tagline, optimizedPct: (rothContrib / salary) * 100, baselinePath: flatPath, optimizedPath: rothPath, delta30yr: delta, costOfDelay12mo: 0, annualContribIncrease: rothContrib, perPaycheckCost: Math.round(rothContrib / 26), monthlyTakeHome, narration, noMore401k: true };
+  }
+
+  // ── Priority 6: Increase 401(k) toward IRS cap ────────────────────────────
+  const type = 'increase';
+  const optimizedPct = Math.min(capPct, 100);
+  const label = 'Max out your 401(k)';
+  const tagline = `Move from ${currentPct}% → ${+optimizedPct.toFixed(1)}% and compound the difference for 30 years.`;
+  return buildRetirementResult({ type, label, tagline, optimizedPct, salary, state, hasMatch, matchCap, matchRate, currentPct, monthlyTakeHome });
+}
+
+// ─── Helper: build a standard retirement-path result ────────────────────────
+function buildRetirementResult({ type, label, tagline, optimizedPct, salary, state, hasMatch, matchCap, matchRate, currentPct, monthlyTakeHome }: {
+  type: 'capture_match' | 'increase'; label: string; tagline: string; optimizedPct: number;
+  salary: number; state: string; hasMatch: boolean; matchCap: number; matchRate: number;
+  currentPct: number; monthlyTakeHome: number;
+}): LeapResult {
   const baselinePath = runPath(salary, currentPct, matchCap, matchRate, hasMatch);
   const optimizedPath = runPath(salary, optimizedPct, matchCap, matchRate, hasMatch);
   const optimizedEnd = optimizedPath[YEARS] ?? 0;
   const delta30yr = optimizedEnd - (baselinePath[YEARS] ?? 0);
 
-  // Cost of delay
   const r = REAL_RETURN / MONTHS;
   const empBaseAnnual = Math.min((salary * currentPct) / 100, K401_CAP);
   const basePctForMatch = salary > 0 ? (empBaseAnnual / salary) * 100 : 0;
@@ -110,23 +173,18 @@ function calcLeap(i: LeapInputs): LeapResult {
   const remaining = YEARS * MONTHS - 12;
   const costOfDelay12mo = Math.max(0, Math.round(optimizedEnd - (nwDelay * Math.pow(1 + r, remaining) + fvMonthly(totalOpt, r, remaining))));
 
-  // Annual increase
   const empCurAnnual = Math.min((salary * currentPct) / 100, K401_CAP);
   const curPctForMatch = salary > 0 ? (empCurAnnual / salary) * 100 : 0;
   const matchCurAnnual = hasMatch ? salary * Math.min((curPctForMatch * matchRate) / 100, matchCap) / 100 : 0;
   const matchOptAnnual = hasMatch ? salary * Math.min((optPctForMatch * matchRate) / 100, matchCap) / 100 : 0;
   const annualContribIncrease = Math.round((empOptAnnual - empCurAnnual) + (matchOptAnnual - matchCurAnnual));
   const perPaycheckCost = Math.round((empOptAnnual - empCurAnnual) / 26);
-  const taxRate = estimateTaxRate(salary, state);
-  const monthlyTakeHome = Math.round((salary * (1 - taxRate)) / 12);
 
-  const narration = type === 'at_cap'
-    ? `Your 401k is already maxed out — you're hitting the full ${fmt(K401_CAP)} IRS limit. That's genuinely impressive. Your next Leap is in the full WeLeap plan.`
-    : `${label} adds ${fmtK(delta30yr)} to your retirement over 30 years. ${
-        hasMatch && type === 'capture_match'
-          ? `Your employer is setting aside up to ${fmt(salary * matchCap / 100 * matchRate / 100)} a year — you just need to contribute ${+optimizedPct.toFixed(1)}% to collect it.`
-          : `It costs you about ${fmt(perPaycheckCost)} extra per paycheck — but pre-tax contributions cut the real cost almost in half.`
-      }${costOfDelay12mo > 0 ? ` Every month you wait costs about ${fmtK(Math.round(costOfDelay12mo / 12))}.` : ''}`;
+  const narration = `${label} adds ${fmtK(delta30yr)} to your retirement over 30 years. ${
+    hasMatch && type === 'capture_match'
+      ? `Your employer is setting aside up to ${fmt(salary * matchCap / 100 * matchRate / 100)} a year — you just need to contribute ${+optimizedPct.toFixed(1)}% to collect it.`
+      : `It costs you about ${fmt(perPaycheckCost)} extra per paycheck — but pre-tax contributions cut the real cost almost in half.`
+  }${costOfDelay12mo > 0 ? ` Every month you wait costs about ${fmtK(Math.round(costOfDelay12mo / 12))}.` : ''}`;
 
   return { type, label, tagline, optimizedPct, baselinePath, optimizedPath, delta30yr, costOfDelay12mo, annualContribIncrease, perPaycheckCost, monthlyTakeHome, narration };
 }
@@ -423,7 +481,7 @@ function RealtimeLeapSession({ onStateChange, onAiText, onUserText, onAiSpeaking
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         const sdpRes = await fetch(
-          'https://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview',
+          'https://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview-2024-12-17',
           {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/sdp' },
@@ -516,20 +574,31 @@ type Phase = 'hook' | 'salary' | 'setup' | 'reveal';
 
 export default function LeapToolPage() {
   const [phase, setPhase] = useState<Phase>('hook');
-  const [animateReveal, setAnimateReveal] = useState(false);
+  const [visibleCards, setVisibleCards] = useState<Set<number>>(new Set());
 
   // Form state
   const [salary, setSalary] = useState('');
   const [state, setState] = useState('');
+  const [has401k, setHas401k] = useState<boolean | null>(null);
   const [hasMatch, setHasMatch] = useState<boolean | null>(null);
   const [matchPresetIdx, setMatchPresetIdx] = useState(0);
   const [currentPct, setCurrentPct] = useState<number>(3);
+  const [hasEmergencyFund, setHasEmergencyFund] = useState<'yes' | 'partial' | 'no' | null>(null);
+  const [hasDebt, setHasDebt] = useState<boolean | null>(null);
+  const [debtApr, setDebtApr] = useState<number>(19);
   const [showChart, setShowChart] = useState(false);
   const [showDelay, setShowDelay] = useState(false);
   const [email, setEmail] = useState('');
   const [emailDone, setEmailDone] = useState(false);
   const [signupLoading, setSignupLoading] = useState(false);
   const [emailError, setEmailError] = useState('');
+
+  // Chat state
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<Array<{ id: string; text: string; isUser: boolean }>>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatStreaming, setChatStreaming] = useState(false);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
 
   // Voice state
   const [voiceActive, setVoiceActive] = useState(false);
@@ -541,9 +610,20 @@ export default function LeapToolPage() {
   const salaryNum = parseFloat(salary.replace(/,/g, '')) || 0;
   const matchPreset = MATCH_PRESETS[matchPresetIdx];
   const effectiveHasMatch = hasMatch === true;
+  const effectiveHas401k = has401k !== false;
 
-  const leap: LeapResult | null = salaryNum > 0 && state && hasMatch !== null
-    ? calcLeap({ salary: salaryNum, state, hasMatch: effectiveHasMatch, matchCap: effectiveHasMatch ? matchPreset.matchCap : 5, matchRate: effectiveHasMatch ? matchPreset.matchRate : 100, currentPct })
+  const leap: LeapResult | null = salaryNum > 0 && state && has401k !== null
+    ? calcLeap({
+        salary: salaryNum, state,
+        has401k: effectiveHas401k,
+        hasMatch: effectiveHas401k ? effectiveHasMatch : false,
+        matchCap: effectiveHasMatch ? matchPreset.matchCap : 5,
+        matchRate: effectiveHasMatch ? matchPreset.matchRate : 100,
+        currentPct: effectiveHas401k ? currentPct : 0,
+        hasEmergencyFund: hasEmergencyFund ?? undefined,
+        hasDebt: hasDebt ?? undefined,
+        debtApr: hasDebt ? debtApr : undefined,
+      })
     : null;
 
   const chartData = leap ? Array.from({ length: YEARS + 1 }, (_, y) => ({
@@ -554,10 +634,19 @@ export default function LeapToolPage() {
 
   useEffect(() => {
     if (phase === 'reveal') {
-      const t = setTimeout(() => setAnimateReveal(true), 100);
-      return () => clearTimeout(t);
+      // Staggered card reveal timers (card indices 0–5)
+      const cardDelays = [0, 500, 1000, 1500, 2100, 2700];
+      const timers = cardDelays.map((delay, idx) =>
+        setTimeout(() => {
+          setVisibleCards((prev) => new Set([...prev, idx]));
+        }, delay)
+      );
+
+      return () => {
+        timers.forEach(clearTimeout);
+      };
     } else {
-      setAnimateReveal(false);
+      setVisibleCards(new Set());
     }
   }, [phase]);
 
@@ -567,22 +656,26 @@ export default function LeapToolPage() {
   }, [salaryNum, state]);
 
   const handleCalculate = useCallback(() => {
-    if (hasMatch === null) return;
+    if (has401k === null) return;
     setPhase('reveal');
     setShowChart(false);
     setShowDelay(false);
-  }, [hasMatch]);
+  }, [has401k]);
 
   // Voice: tool call fired — update state and show reveal immediately
   const handleVoiceInputs = useCallback((inputs: LeapInputs) => {
     setSalary(String(inputs.salary));
     setState(inputs.state);
+    setHas401k(inputs.has401k ?? true);
     setHasMatch(inputs.hasMatch);
     setCurrentPct(inputs.currentPct);
     if (inputs.hasMatch) {
       const idx = MATCH_PRESETS.findIndex(p => p.matchCap === inputs.matchCap && p.matchRate === inputs.matchRate);
       setMatchPresetIdx(idx >= 0 ? idx : 0);
     }
+    if (inputs.hasEmergencyFund) setHasEmergencyFund(inputs.hasEmergencyFund);
+    if (inputs.hasDebt !== undefined) setHasDebt(inputs.hasDebt);
+    if (inputs.debtApr) setDebtApr(inputs.debtApr);
     setPhase('reveal');
     setShowChart(false);
     setShowDelay(false);
@@ -602,14 +695,99 @@ export default function LeapToolPage() {
     } finally { setSignupLoading(false); }
   }, [email, leap, salaryNum, state]);
 
+  const handleChatSend = useCallback(async () => {
+    if (!chatInput.trim() || chatStreaming || !leap) return;
+    const userMsg = { id: Date.now().toString(), text: chatInput.trim(), isUser: true };
+    const updatedMessages = [...chatMessages, userMsg];
+    setChatMessages(updatedMessages);
+    setChatInput('');
+    setChatStreaming(true);
+
+    // Build situation context string for the system prompt
+    const situationContext = JSON.stringify({
+      salary: salaryNum,
+      state,
+      leapType: leap.type,
+      leapLabel: leap.label,
+      currentPct,
+      optimizedPct: leap.optimizedPct,
+      delta30yr: leap.delta30yr,
+      costOfDelay12mo: leap.costOfDelay12mo,
+      annualContribIncrease: leap.annualContribIncrease,
+      perPaycheckCost: leap.perPaycheckCost,
+      monthlyTakeHome: leap.monthlyTakeHome,
+      hasMatch: effectiveHasMatch,
+    });
+
+    const aiMsgId = (Date.now() + 1).toString();
+    setChatMessages((prev) => [...prev, { id: aiMsgId, text: '', isUser: false }]);
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: updatedMessages,
+          context: 'leap-chat',
+          situationContext,
+        }),
+      });
+
+      if (!res.ok || !res.body) throw new Error('Chat request failed');
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const parts = buf.split('\n\n');
+        buf = parts.pop() ?? '';
+        for (const part of parts) {
+          const line = part.split('\n').find((l) => l.startsWith('data: '));
+          if (!line) continue;
+          const raw = line.slice(6).trim();
+          if (raw === '[DONE]') continue;
+          try {
+            const obj = JSON.parse(raw);
+            const chunk: string | undefined = obj.text;
+            if (typeof chunk === 'string' && chunk.length > 0) {
+              setChatMessages((prev) =>
+                prev.map((m) => m.id === aiMsgId ? { ...m, text: m.text + chunk } : m)
+              );
+            }
+          } catch { /* skip malformed */ }
+        }
+      }
+    } catch (err) {
+      console.error('Chat error:', err);
+      setChatMessages((prev) =>
+        prev.map((m) => m.id === aiMsgId ? { ...m, text: "Sorry, something went wrong. Please try again." } : m)
+      );
+    } finally {
+      setChatStreaming(false);
+    }
+  }, [chatInput, chatMessages, chatStreaming, leap, salaryNum, state, currentPct, effectiveHasMatch]);
+
   const formatSalaryDisplay = (raw: string) => {
     const n = parseFloat(raw.replace(/,/g, ''));
     return n ? Math.round(n).toLocaleString('en-US') : raw;
   };
 
+  // Auto-scroll chat to bottom when new messages arrive
+  useEffect(() => {
+    if (chatBottomRef.current) {
+      chatBottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatMessages]);
+
   const taxRate = state ? estimateTaxRate(salaryNum, state) : null;
   const monthlyTakeHome = salaryNum > 0 && taxRate !== null ? Math.round((salaryNum * (1 - taxRate)) / 12) : null;
   const isAtCap = leap?.type === 'at_cap';
+  const isRetirementLeap = leap?.type === 'capture_match' || leap?.type === 'increase';
+  const isFoundationLeap = leap?.type === 'emergency_fund' || leap?.type === 'debt_payoff' || leap?.type === 'start_401k';
 
   // ── Single return — keeps RealtimeLeapSession in a stable tree position ──────
   return (
@@ -768,73 +946,144 @@ export default function LeapToolPage() {
             <StepPill current={2} total={3} />
           </header>
           <main className="flex-1 flex items-center justify-center px-6 py-12">
-            <div className="w-full max-w-md space-y-6">
+            <div className="w-full max-w-md space-y-5">
               <div>
-                <h2 className="text-3xl font-bold text-gray-900 mb-2">Your 401(k) setup</h2>
-                <p className="text-gray-500">Two quick questions — this is where the biggest Leaps hide.</p>
+                <h2 className="text-3xl font-bold text-gray-900 mb-2">Your financial setup</h2>
+                <p className="text-gray-500">A few quick questions — this is where the biggest Leaps hide.</p>
               </div>
+
+              {/* Q1: Do you have a 401k? */}
               <div className="bg-white rounded-2xl border border-gray-200 p-5">
                 <div className="flex items-start gap-3 mb-4">
-                  <div className="bg-[#3F6B42]/10 rounded-lg p-2">🎯</div>
+                  <div className="bg-[#3F6B42]/10 rounded-lg p-2">🏦</div>
                   <div>
-                    <h3 className="font-semibold text-gray-900">Does your employer offer a 401(k) match?</h3>
-                    <p className="text-sm text-gray-500 mt-0.5">This is literally free money — the #1 missed Leap.</p>
+                    <h3 className="font-semibold text-gray-900">Do you have access to a 401(k) at work?</h3>
+                    <p className="text-sm text-gray-500 mt-0.5">This tells us which Leaps are available to you.</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  {[{ val: true, label: '✅ Yes' }, { val: false, label: '❌ No / Not sure' }].map(({ val, label }) => (
-                    <button key={String(val)} onClick={() => setHasMatch(val)}
-                      className={`py-3 px-4 rounded-xl border-2 font-medium text-sm transition-all ${hasMatch === val ? 'border-[#3F6B42] bg-[#3F6B42]/10 text-[#3F6B42]' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                  {[{ val: true, label: '✅ Yes' }, { val: false, label: '❌ No / Self-employed' }].map(({ val, label }) => (
+                    <button key={String(val)} onClick={() => { setHas401k(val); if (!val) { setHasMatch(false); setCurrentPct(0); } }}
+                      className={`py-3 px-4 rounded-xl border-2 font-medium text-sm transition-all ${has401k === val ? 'border-[#3F6B42] bg-[#3F6B42]/10 text-[#3F6B42]' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
                       {label}
                     </button>
                   ))}
                 </div>
-                {hasMatch === true && (
-                  <div className="mt-4 space-y-2">
-                    <p className="text-sm font-medium text-gray-700">What's their match?</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {MATCH_PRESETS.map((p, i) => (
-                        <button key={p.label} onClick={() => setMatchPresetIdx(i)}
-                          className={`py-2 px-3 rounded-lg border text-xs font-medium transition-all ${matchPresetIdx === i ? 'border-[#3F6B42] bg-[#3F6B42]/10 text-[#3F6B42]' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
-                          {p.label}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-2">
-                      <p className="text-xs text-amber-700">
-                        <strong>💡 On {fmt(salaryNum)}, that's up to {fmt(salaryNum * matchPreset.matchCap / 100 * matchPreset.matchRate / 100)} free per year.</strong>
-                      </p>
-                    </div>
-                  </div>
-                )}
               </div>
 
-              <div className="bg-white rounded-2xl border border-gray-200 p-5">
-                <div className="flex items-start gap-3 mb-4">
-                  <div className="bg-[#3F6B42]/10 rounded-lg p-2">📊</div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">What % are you contributing now?</h3>
-                    <p className="text-sm text-gray-500 mt-0.5">Your current 401(k) % from each paycheck.</p>
+              {/* Q2: Match (only if has 401k) */}
+              {has401k === true && (
+                <div className="bg-white rounded-2xl border border-gray-200 p-5">
+                  <div className="flex items-start gap-3 mb-4">
+                    <div className="bg-[#3F6B42]/10 rounded-lg p-2">🎯</div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">Does your employer offer a match?</h3>
+                      <p className="text-sm text-gray-500 mt-0.5">This is literally free money — the #1 missed Leap.</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[{ val: true, label: '✅ Yes' }, { val: false, label: '❌ No / Not sure' }].map(({ val, label }) => (
+                      <button key={String(val)} onClick={() => setHasMatch(val)}
+                        className={`py-3 px-4 rounded-xl border-2 font-medium text-sm transition-all ${hasMatch === val ? 'border-[#3F6B42] bg-[#3F6B42]/10 text-[#3F6B42]' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {hasMatch === true && (
+                    <div className="mt-4 space-y-2">
+                      <p className="text-sm font-medium text-gray-700">What's their match?</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {MATCH_PRESETS.map((p, i) => (
+                          <button key={p.label} onClick={() => setMatchPresetIdx(i)}
+                            className={`py-2 px-3 rounded-lg border text-xs font-medium transition-all ${matchPresetIdx === i ? 'border-[#3F6B42] bg-[#3F6B42]/10 text-[#3F6B42]' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                            {p.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-2">
+                        <p className="text-xs text-amber-700">
+                          <strong>💡 On {fmt(salaryNum)}, that's up to {fmt(salaryNum * matchPreset.matchCap / 100 * matchPreset.matchRate / 100)} free per year.</strong>
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {has401k === true && hasMatch !== null && (
+                    <div className="mt-4">
+                      <p className="text-sm font-medium text-gray-700 mb-2">What % are you contributing now?</p>
+                      <div className="flex flex-wrap gap-2">
+                        {CONTRIB_PRESETS.map((p) => (
+                          <button key={p} onClick={() => setCurrentPct(p)}
+                            className={`py-2 px-4 rounded-xl border-2 font-semibold text-sm transition-all ${currentPct === p ? 'border-[#3F6B42] bg-[#3F6B42] text-white' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                            {p === 12 ? '12%+' : `${p}%`}
+                          </button>
+                        ))}
+                      </div>
+                      {salaryNum > 0 && currentPct > 0 && (
+                        <p className="text-xs text-gray-400 mt-2">{currentPct}% = {fmt(Math.min(salaryNum * currentPct / 100, K401_CAP))}/yr ({fmt(Math.min(salaryNum * currentPct / 100, K401_CAP) / 26)}/paycheck)</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Q3: Emergency fund (shown when no clear 401k match leap) */}
+              {(has401k === false || (has401k === true && hasMatch === false)) && (
+                <div className="bg-white rounded-2xl border border-gray-200 p-5">
+                  <div className="flex items-start gap-3 mb-4">
+                    <div className="bg-blue-50 rounded-lg p-2">🛡️</div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">Do you have an emergency fund?</h3>
+                      <p className="text-sm text-gray-500 mt-0.5">3 months of expenses is the foundation of any plan.</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[{ val: 'yes' as const, label: '✅ Yes, 3+ mo' }, { val: 'partial' as const, label: '⚡ Almost' }, { val: 'no' as const, label: '❌ Not yet' }].map(({ val, label }) => (
+                      <button key={val} onClick={() => setHasEmergencyFund(val)}
+                        className={`py-2.5 px-2 rounded-xl border-2 font-medium text-xs transition-all ${hasEmergencyFund === val ? 'border-[#3F6B42] bg-[#3F6B42]/10 text-[#3F6B42]' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                        {label}
+                      </button>
+                    ))}
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {CONTRIB_PRESETS.map((p) => (
-                    <button key={p} onClick={() => setCurrentPct(p)}
-                      className={`py-2 px-4 rounded-xl border-2 font-semibold text-sm transition-all ${currentPct === p ? 'border-[#3F6B42] bg-[#3F6B42] text-white' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
-                      {p === 12 ? '12%+' : `${p}%`}
-                    </button>
-                  ))}
-                </div>
-                {salaryNum > 0 && (
-                  <p className="text-xs text-gray-400 mt-3">
-                    {currentPct}% = {fmt(Math.min(salaryNum * currentPct / 100, K401_CAP))}/yr{currentPct > 0 && ` (${fmt(Math.min(salaryNum * currentPct / 100, K401_CAP) / 26)}/paycheck)`}
-                  </p>
-                )}
-              </div>
+              )}
 
-              <button onClick={handleCalculate} disabled={hasMatch === null}
+              {/* Q4: High-APR debt (shown when EF is covered) */}
+              {(has401k === false || (has401k === true && hasMatch === false)) && hasEmergencyFund === 'yes' && (
+                <div className="bg-white rounded-2xl border border-gray-200 p-5">
+                  <div className="flex items-start gap-3 mb-4">
+                    <div className="bg-orange-50 rounded-lg p-2">💳</div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">Do you carry credit card or high-interest debt?</h3>
+                      <p className="text-sm text-gray-500 mt-0.5">15%+ APR debt beats most investment returns.</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    {[{ val: true, label: '💳 Yes' }, { val: false, label: '✅ No debt' }].map(({ val, label }) => (
+                      <button key={String(val)} onClick={() => setHasDebt(val)}
+                        className={`py-3 px-4 rounded-xl border-2 font-medium text-sm transition-all ${hasDebt === val ? 'border-orange-400 bg-orange-50 text-orange-700' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {hasDebt === true && (
+                    <div>
+                      <p className="text-sm font-medium text-gray-700 mb-2">Approximate interest rate?</p>
+                      <div className="flex gap-2 flex-wrap">
+                        {[{ label: '10–14%', val: 12 }, { label: '15–19%', val: 17 }, { label: '20%+', val: 22 }].map(({ label, val }) => (
+                          <button key={val} onClick={() => setDebtApr(val)}
+                            className={`py-2 px-4 rounded-xl border-2 font-semibold text-sm transition-all ${debtApr === val ? 'border-orange-400 bg-orange-400 text-white' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <button onClick={handleCalculate} disabled={has401k === null || (has401k === true && hasMatch === null)}
                 className="w-full flex items-center justify-center gap-2 bg-[#3F6B42] hover:bg-[#4d8050] disabled:bg-gray-200 disabled:text-gray-400 text-white font-semibold text-lg py-4 rounded-2xl transition-all duration-200 shadow-md shadow-[#3F6B42]/20">
-                <Zap className="w-5 h-5" /> Calculate my Leap
+                <Zap className="w-5 h-5" /> Find my Leap
               </button>
             </div>
           </main>
@@ -863,37 +1112,190 @@ export default function LeapToolPage() {
                 <span className="font-bold text-[#7fc27e]">WeLeap</span>
               </div>
 
-              <div className={`transition-all duration-700 ${animateReveal ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
-                {isAtCap ? (
+              <div className={`transition-all duration-700 ${visibleCards.has(0) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
+
+                {/* ── At cap ── */}
+                {isAtCap && (
                   <>
                     <div className="text-5xl mb-4">🏆</div>
                     <h1 className="text-3xl font-bold mb-3">Your 401(k) is maxed out</h1>
                     <p className="text-gray-300 text-lg leading-relaxed">You're already hitting the {fmt(K401_CAP)} IRS limit — that puts you ahead of 95% of people your age.</p>
+                    <p className="text-gray-300 text-base mt-3 leading-relaxed italic">Your next Leap lives in your full WeLeap plan below.</p>
                   </>
-                ) : (
+                )}
+
+                {/* ── Emergency fund ── */}
+                {leap.type === 'emergency_fund' && (
+                  <>
+                    <div className="inline-flex items-center gap-2 text-blue-300 text-sm bg-blue-900/30 px-3 py-1.5 rounded-full mb-4">
+                      <Zap className="w-3.5 h-3.5" /> Your #1 foundation move
+                    </div>
+                    <h1 className="text-4xl md:text-5xl font-bold mb-2">{leap.label}</h1>
+                    <p className="text-gray-300 text-lg mb-6 leading-relaxed">{leap.tagline}</p>
+                    <div className="bg-white/10 backdrop-blur border border-white/20 rounded-2xl p-6">
+                      <p className="text-sm text-gray-400 mb-1 uppercase tracking-wide">Target emergency fund</p>
+                      <div className="text-5xl md:text-6xl font-bold text-blue-300">
+                        {visibleCards.has(0) && <AnimatedNumber target={leap.efTargetAmount ?? 0} duration={2000} />}
+                      </div>
+                      <p className="text-gray-400 text-sm mt-2">Estimated 3 months of expenses — your financial safety net before anything else.</p>
+                    </div>
+                  </>
+                )}
+
+                {/* ── Debt payoff ── */}
+                {leap.type === 'debt_payoff' && (
+                  <>
+                    <div className="inline-flex items-center gap-2 text-orange-300 text-sm bg-orange-900/30 px-3 py-1.5 rounded-full mb-4">
+                      <Zap className="w-3.5 h-3.5" /> Your #1 money move
+                    </div>
+                    <h1 className="text-4xl md:text-5xl font-bold mb-2">{leap.label}</h1>
+                    <p className="text-gray-300 text-lg mb-6 leading-relaxed">{leap.tagline}</p>
+                    <div className="bg-white/10 backdrop-blur border border-white/20 rounded-2xl p-6">
+                      <p className="text-sm text-gray-400 mb-1 uppercase tracking-wide">Guaranteed annual return</p>
+                      <div className="text-5xl md:text-6xl font-bold text-orange-300">{leap.debtApr}%</div>
+                      <p className="text-gray-400 text-sm mt-2">Paying off {leap.debtApr}% debt gives you a risk-free return that beats almost any investment.</p>
+                    </div>
+                  </>
+                )}
+
+                {/* ── Start 401k / Roth IRA ── */}
+                {leap.type === 'start_401k' && (
                   <>
                     <div className="inline-flex items-center gap-2 text-[#7fc27e] text-sm bg-[#3F6B42]/30 px-3 py-1.5 rounded-full mb-4">
                       <TrendingUp className="w-3.5 h-3.5" /> Your #1 money move
                     </div>
                     <h1 className="text-4xl md:text-5xl font-bold mb-2">{leap.label}</h1>
-                    <p className="text-gray-300 text-lg mb-8 leading-relaxed">{leap.tagline}</p>
+                    <p className="text-gray-300 text-lg mb-6 leading-relaxed">{leap.tagline}</p>
+                    <div className="bg-white/10 backdrop-blur border border-white/20 rounded-2xl p-6">
+                      <p className="text-sm text-gray-400 mb-1 uppercase tracking-wide">30-year tax-free growth</p>
+                      <div className="text-5xl md:text-6xl font-bold text-[#7fc27e]">
+                        {visibleCards.has(0) && <AnimatedNumber target={leap.delta30yr} duration={2400} />}
+                      </div>
+                      <p className="text-gray-400 text-sm mt-2">Estimated Roth IRA value at retirement — completely tax-free.</p>
+                    </div>
+                  </>
+                )}
+
+                {/* ── Standard retirement leaps ── */}
+                {isRetirementLeap && (
+                  <>
+                    <div className="inline-flex items-center gap-2 text-[#7fc27e] text-sm bg-[#3F6B42]/30 px-3 py-1.5 rounded-full mb-4">
+                      <TrendingUp className="w-3.5 h-3.5" /> Your #1 money move
+                    </div>
+                    <h1 className="text-4xl md:text-5xl font-bold mb-2">{leap.label}</h1>
+                    <p className="text-gray-300 text-lg mb-3 leading-relaxed">{leap.tagline}</p>
+                    {leap.type === 'capture_match' && (
+                      <p className="text-gray-300 text-base mb-6 leading-relaxed italic">Your employer has money set aside for you. You just need to claim it.</p>
+                    )}
+                    {leap.type === 'increase' && (
+                      <p className="text-gray-300 text-base mb-6 leading-relaxed italic">Every paycheck you're leaving compound growth on the table.</p>
+                    )}
                     <div className="bg-white/10 backdrop-blur border border-white/20 rounded-2xl p-6">
                       <p className="text-sm text-gray-400 mb-1 uppercase tracking-wide">30-year wealth difference</p>
-                      <div className="text-5xl md:text-6xl font-bold text-[#7fc27e]">
-                        {animateReveal && <AnimatedNumber target={leap.delta30yr} />}
+                      <div className={`text-5xl md:text-6xl font-bold text-[#7fc27e] ${visibleCards.has(0) && !visibleCards.has(1) ? 'animate-pulse' : ''}`}>
+                        {visibleCards.has(0) && <AnimatedNumber target={leap.delta30yr} duration={2400} />}
                       </div>
                       <p className="text-gray-400 text-sm mt-2">The gap between your current path and your Leap path — compounded at 7% real return.</p>
                     </div>
                   </>
                 )}
+
               </div>
             </div>
           </div>
 
           <div className="max-w-2xl mx-auto px-6 py-8 space-y-5">
-            {/* Cost per paycheck */}
-            {!isAtCap && (
-              <div className={`bg-white rounded-2xl border border-gray-200 p-6 shadow-sm transition-all duration-700 delay-200 ${animateReveal ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+
+            {/* ── Emergency fund detail card ── */}
+            {leap.type === 'emergency_fund' && leap.efTargetAmount && (
+              <div className={`bg-white rounded-2xl border border-blue-100 p-6 shadow-sm transition-all duration-700 ${visibleCards.has(1) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+                <h3 className="font-bold text-gray-900 text-lg mb-4 flex items-center gap-2">
+                  <span className="bg-blue-50 w-8 h-8 rounded-lg flex items-center justify-center">🛡️</span>
+                  Why this comes first
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                    <span className="text-gray-600 text-sm">Estimated monthly take-home</span>
+                    <span className="font-semibold">{fmt(leap.monthlyTakeHome)}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                    <span className="text-gray-600 text-sm">Estimated monthly essentials (~65%)</span>
+                    <span className="font-semibold">{fmt(Math.round(leap.monthlyTakeHome * 0.65))}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-gray-600 text-sm font-medium">3-month target</span>
+                    <span className="font-bold text-blue-600">{fmt(leap.efTargetAmount)}</span>
+                  </div>
+                </div>
+                <div className="mt-4 bg-blue-50 border border-blue-100 rounded-xl p-3">
+                  <p className="text-xs text-blue-700 leading-relaxed">
+                    <strong>💡 Why first?</strong> Without an emergency fund, one unexpected expense forces you into 20%+ credit card debt — which destroys wealth 3× faster than investing builds it.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* ── Debt payoff detail card ── */}
+            {leap.type === 'debt_payoff' && (
+              <div className={`bg-white rounded-2xl border border-orange-100 p-6 shadow-sm transition-all duration-700 ${visibleCards.has(1) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+                <h3 className="font-bold text-gray-900 text-lg mb-4 flex items-center gap-2">
+                  <span className="bg-orange-50 w-8 h-8 rounded-lg flex items-center justify-center">💳</span>
+                  The math on your debt
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                    <span className="text-gray-600 text-sm">Your interest rate</span>
+                    <span className="font-semibold text-orange-600">{leap.debtApr}% APR</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                    <span className="text-gray-600 text-sm">Stock market avg. return</span>
+                    <span className="font-semibold">~7% real</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-gray-600 text-sm font-medium">Your guaranteed return</span>
+                    <span className="font-bold text-orange-600">{leap.debtApr}% risk-free</span>
+                  </div>
+                </div>
+                <div className="mt-4 bg-orange-50 border border-orange-100 rounded-xl p-3">
+                  <p className="text-xs text-orange-700 leading-relaxed">
+                    <strong>💡 Beats the market:</strong> Paying off {leap.debtApr}% debt is a guaranteed {leap.debtApr}% return. No investment consistently beats that. Once cleared, redirect every dollar toward building wealth.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* ── Roth IRA detail card ── */}
+            {leap.type === 'start_401k' && (
+              <div className={`bg-white rounded-2xl border border-gray-200 p-6 shadow-sm transition-all duration-700 ${visibleCards.has(1) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+                <h3 className="font-bold text-gray-900 text-lg mb-4 flex items-center gap-2">
+                  <span className="bg-[#3F6B42]/10 w-8 h-8 rounded-lg flex items-center justify-center">📈</span>
+                  Your Roth IRA plan
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                    <span className="text-gray-600 text-sm">Annual contribution</span>
+                    <span className="font-semibold">{fmt(leap.annualContribIncrease)}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                    <span className="text-gray-600 text-sm">Per paycheck cost</span>
+                    <span className="font-semibold">{fmt(leap.perPaycheckCost)}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-gray-600 text-sm font-medium">2025 IRS Roth IRA limit</span>
+                    <span className="font-bold text-[#3F6B42]">$7,000/yr</span>
+                  </div>
+                </div>
+                <div className="mt-4 bg-[#3F6B42]/5 border border-[#3F6B42]/20 rounded-xl p-3">
+                  <p className="text-xs text-[#3F6B42] leading-relaxed">
+                    <strong>💡 Open in minutes:</strong> Fidelity, Vanguard, or Schwab — search "Roth IRA", connect your bank, set up auto-invest into a target-date index fund. Done.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Cost per paycheck — retirement leaps only */}
+            {isRetirementLeap && (
+              <div className={`bg-white rounded-2xl border border-gray-200 p-6 shadow-sm transition-all duration-700 ${visibleCards.has(1) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
                 <h3 className="font-bold text-gray-900 text-lg mb-4 flex items-center gap-2">
                   <span className="bg-[#3F6B42]/10 w-8 h-8 rounded-lg flex items-center justify-center">💰</span>
                   What this Leap costs you
@@ -927,8 +1329,8 @@ export default function LeapToolPage() {
             )}
 
             {/* 30-year chart */}
-            {!isAtCap && (
-              <div className={`bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-700 delay-300 ${animateReveal ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+            {(isRetirementLeap) && (
+              <div className={`bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-700 ${visibleCards.has(2) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
                 <button onClick={() => setShowChart(!showChart)} className="w-full p-6 flex items-center justify-between hover:bg-gray-50 transition-colors">
                   <div className="flex items-center gap-3">
                     <span className="bg-[#3F6B42]/10 w-8 h-8 rounded-lg flex items-center justify-center">📈</span>
@@ -970,8 +1372,8 @@ export default function LeapToolPage() {
             )}
 
             {/* Cost of delay */}
-            {!isAtCap && leap.costOfDelay12mo > 0 && (
-              <div className={`bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-700 delay-[400ms] ${animateReveal ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+            {isRetirementLeap && leap.costOfDelay12mo > 0 && (
+              <div className={`bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-700 ${visibleCards.has(3) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
                 <button onClick={() => setShowDelay(!showDelay)} className="w-full p-6 flex items-center justify-between hover:bg-gray-50 transition-colors">
                   <div className="flex items-center gap-3">
                     <span className="bg-orange-50 w-8 h-8 rounded-lg flex items-center justify-center">⏰</span>
@@ -996,7 +1398,7 @@ export default function LeapToolPage() {
             )}
 
             {/* Leap Stack */}
-            <div className={`bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-700 delay-500 ${animateReveal ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+            <div className={`bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-700 ${visibleCards.has(4) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
               <div className="p-6 pb-4">
                 <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2 mb-1">
                   <span className="bg-[#3F6B42]/10 w-8 h-8 rounded-lg flex items-center justify-center">🗺️</span>
@@ -1006,7 +1408,7 @@ export default function LeapToolPage() {
               </div>
               <div className="px-6 pb-4 space-y-2">
                 {STACK_STEPS.map((step) => {
-                  const isCurrent = step.n === 2 && !isAtCap;
+                  const isCurrent = step.n === 2 && isRetirementLeap;
                   const isCompleted = (step.n === 2 && isAtCap) || step.n === 1;
                   const isLocked = step.status === 'locked';
                   return (
@@ -1030,8 +1432,78 @@ export default function LeapToolPage() {
               </div>
             </div>
 
+            {/* Ask Leap Chat */}
+            <div className={`bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-700 ${visibleCards.has(4) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+              <button
+                onClick={() => setChatOpen((prev) => !prev)}
+                className="w-full p-5 flex items-center justify-between hover:bg-gray-50 transition-colors text-left"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">💬</span>
+                  <div>
+                    <div className="font-bold text-gray-900">Ask Leap anything about your results</div>
+                    <div className="text-sm text-gray-500">Get answers about your specific numbers</div>
+                  </div>
+                </div>
+                {chatOpen ? <ChevronUp className="w-5 h-5 text-gray-400 shrink-0" /> : <ChevronDown className="w-5 h-5 text-gray-400 shrink-0" />}
+              </button>
+
+              <div className={`transition-all duration-500 overflow-hidden ${chatOpen ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                <div className="border-t border-gray-100">
+                  {/* Messages area */}
+                  <div className="h-64 overflow-y-auto px-4 py-4 space-y-3 bg-gray-50">
+                    {chatMessages.length === 0 && (
+                      <div className="flex items-center justify-center h-full">
+                        <p className="text-sm text-gray-400 text-center leading-relaxed">
+                          Ask anything about your numbers — why this move matters, how to actually do it, what comes next.
+                        </p>
+                      </div>
+                    )}
+                    {chatMessages.map((msg) => (
+                      <div key={msg.id} className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                          msg.isUser
+                            ? 'bg-[#3F6B42] text-white rounded-br-sm'
+                            : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm shadow-sm'
+                        }`}>
+                          {msg.text || (
+                            <span className="flex gap-1 items-center">
+                              <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:0ms]" />
+                              <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:150ms]" />
+                              <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:300ms]" />
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    <div ref={chatBottomRef} />
+                  </div>
+
+                  {/* Input area */}
+                  <div className="px-4 py-3 bg-white border-t border-gray-100 flex gap-2">
+                    <input
+                      type="text"
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleChatSend()}
+                      placeholder="Ask a question..."
+                      disabled={chatStreaming}
+                      className="flex-1 bg-gray-50 border border-gray-200 text-gray-900 placeholder-gray-400 px-4 py-2.5 rounded-xl text-sm focus:outline-none focus:border-[#3F6B42] transition-colors disabled:opacity-60"
+                    />
+                    <button
+                      onClick={handleChatSend}
+                      disabled={chatStreaming || !chatInput.trim()}
+                      className="bg-[#3F6B42] hover:bg-[#4d8050] disabled:bg-gray-200 disabled:text-gray-400 text-white font-semibold px-4 py-2.5 rounded-xl transition-colors text-sm whitespace-nowrap"
+                    >
+                      Send
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* CTA */}
-            <div className={`bg-[#0f1f10] text-white rounded-2xl overflow-hidden transition-all duration-700 delay-[600ms] ${animateReveal ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+            <div className={`bg-[#0f1f10] text-white rounded-2xl overflow-hidden transition-all duration-700 ${visibleCards.has(5) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
               <div className="relative p-6 md:p-8">
                 <div className="absolute -top-8 -right-8 w-48 h-48 bg-[#3F6B42]/20 rounded-full blur-3xl pointer-events-none" />
                 <div className="relative">
@@ -1039,7 +1511,7 @@ export default function LeapToolPage() {
                   <h3 className="text-2xl font-bold mb-2">Ready to build your complete financial plan?</h3>
                   <p className="text-gray-300 text-sm leading-relaxed mb-6">
                     WeLeap turns your Leap into a full, step-by-step Savings Stack — debt, retirement, investing — all prioritized for your situation.
-                    {!isAtCap && leap.delta30yr > 0 && <> Your Leap alone adds <strong className="text-[#7fc27e]">{fmtK(leap.delta30yr)}</strong> over 30 years. Imagine what the full plan does.</>}
+                    {isRetirementLeap && leap.delta30yr > 0 && <> Your Leap alone adds <strong className="text-[#7fc27e]">{fmtK(leap.delta30yr)}</strong> over 30 years. Imagine what the full plan does.</>}
                   </p>
                   {emailDone ? (
                     <div className="flex items-center gap-2 text-[#7fc27e] font-semibold"><CheckCircle2 className="w-5 h-5" />You're on the list — redirecting to WeLeap...</div>
