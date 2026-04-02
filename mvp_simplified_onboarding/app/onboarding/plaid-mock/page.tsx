@@ -24,6 +24,7 @@ function PlaidMockPageContent() {
   const returnTo = searchParams.get("returnTo");
   const savings = searchParams.get("savings") || "1362";
   const projected = searchParams.get("projected") || "2000000";
+  const annualIncome = searchParams.get("annualIncome");
 
   const [connecting, setConnecting] = useState(false);
   const [selectedBank, setSelectedBank] = useState<string | null>(null);
@@ -36,6 +37,7 @@ function PlaidMockPageContent() {
     await new Promise((r) => setTimeout(r, 2500));
     if (returnTo === "app") {
       const q = new URLSearchParams({ connected: "1", savings, projected });
+      if (annualIncome) q.set("annualIncome", annualIncome);
       router.push(`/app?${q.toString()}`);
     } else {
       router.push(`/onboarding/income?savings=${savings}&projected=${projected}`);

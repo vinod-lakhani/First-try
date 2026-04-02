@@ -26,8 +26,7 @@ import {
 import { X, ChevronDown, ChevronUp, Lock } from "lucide-react";
 import { MonthlyPulseCard } from "@/components/home/MonthlyPulseCard";
 import { NetWorthTile } from "@/components/home/NetWorthTile";
-import { SavingsAdjustmentInsight } from "@/components/savings/SavingsAdjustmentInsight";
-import { computeSavingsInsight } from "@/lib/postPlaid/savingsInsight";
+import { PostConnectThreeCardFlow } from "@/components/onboarding/PostConnectThreeCardFlow";
 
 function formatMoney(n: number, compact = false) {
   if (compact && n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
@@ -156,6 +155,9 @@ function HomeContent() {
   const projectedParam = searchParams.get("projected");
   const monthlySavings = savingsParam ? parseFloat(savingsParam) || 1362 : 1362;
   const projected30Y = projectedParam ? parseFloat(projectedParam) || 2000000 : 2000000;
+  const annualIncomeParam = searchParams.get("annualIncome");
+  const annualIncomeGross =
+    annualIncomeParam && !Number.isNaN(parseFloat(annualIncomeParam)) ? parseFloat(annualIncomeParam) : undefined;
   const [chartExpanded, setChartExpanded] = useState(false);
   const [ribbitOpen, setRibbitOpen] = useState(false);
   const [ribbitInitialQuestion, setRibbitInitialQuestion] = useState<string | null>(null);
@@ -220,7 +222,9 @@ function HomeContent() {
     projectionAssumptionsLabel: "steady monthly saving and long-term market growth",
   };
 
-  const plaidHref = `/onboarding/plaid-mock?returnTo=app&savings=${monthlySavings}&projected=${projected30Y}`;
+  const plaidHref = `/onboarding/plaid-mock?returnTo=app&savings=${monthlySavings}&projected=${projected30Y}${
+    annualIncomeGross != null ? `&annualIncome=${encodeURIComponent(String(annualIncomeGross))}` : ""
+  }`;
 
   return (
     <div className="mx-auto max-w-xl px-4 py-8">
@@ -529,14 +533,16 @@ function HomeContent() {
 
       {/* Insight popup — connect shows savings card; others show step-specific insight */}
       {insightPopupStep && (() => {
-        const MONTHLY_INCOME = 6810;
-        const savingsInsight = insightPopupStep === "connect" ? computeSavingsInsight(MONTHLY_INCOME) : null;
+        const appBaseParams = () => {
+          const p = new URLSearchParams({ savings: String(monthlySavings), projected: String(projected30Y) });
+          if (annualIncomeGross != null) p.set("annualIncome", String(annualIncomeGross));
+          return p.toString();
+        };
 
-        if (insightPopupStep === "connect" && savingsInsight) {
-          const adjustPlanHref = `/app/adjust-plan?income=${MONTHLY_INCOME}&targetSavings=${savingsInsight.recommendedSavings}&currentSavings=${savingsInsight.currentSavings}`;
+        if (insightPopupStep === "connect") {
           const closeModal = () => {
             setInsightPopupStep(null);
-            router.replace(`/app?savings=${monthlySavings}&projected=${projected30Y}`);
+            router.replace(`/app?${appBaseParams()}`);
           };
           return (
             <div
@@ -544,7 +550,7 @@ function HomeContent() {
               onClick={closeModal}
               role="dialog"
               aria-modal="true"
-              aria-labelledby="savings-insight-title"
+              aria-label="After you connect your bank"
             >
               <div
                 className="relative w-full max-w-md rounded-2xl border-2 border-primary/30 bg-white p-6 shadow-2xl dark:border-primary/40 dark:bg-slate-800"
@@ -558,16 +564,7 @@ function HomeContent() {
                 >
                   <X className="h-5 w-5" />
                 </button>
-                <div id="savings-insight-title">
-                  <SavingsAdjustmentInsight insight={savingsInsight} adjustPlanHref={adjustPlanHref} />
-                </div>
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="mt-4 w-full py-2 text-sm font-medium text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
-                >
-                  Got it
-                </button>
+                <PostConnectThreeCardFlow annualIncomeGross={annualIncomeGross} onComplete={closeModal} />
               </div>
             </div>
           );
