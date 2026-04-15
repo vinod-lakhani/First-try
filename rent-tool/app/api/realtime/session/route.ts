@@ -63,9 +63,10 @@ export async function POST() {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini-realtime-preview',
+        model: 'gpt-4o-mini-realtime-preview-2024-12-17',
         voice: 'shimmer',
         instructions: RIBBIT_INSTRUCTIONS,
+        temperature: 0.6, // Minimum allowed by Realtime API — tightest for consistent flow
         turn_detection: {
           type: 'server_vad',
           threshold: 0.5,

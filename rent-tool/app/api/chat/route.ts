@@ -160,7 +160,7 @@ export async function POST(request: NextRequest) {
         messages: [{ role: 'system', content: systemPrompt }, ...openAIMessages],
         stream: true,
         max_tokens: 800,
-        temperature: 0.7,
+        temperature: 0.2, // Low for consistent calculations and structured flow
       }),
     });
 

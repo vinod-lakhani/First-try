@@ -109,6 +109,7 @@ export async function POST() {
         model: 'gpt-4o-mini-realtime-preview-2024-12-17',
         voice: 'alloy',
         instructions: LEAP_VOICE_INSTRUCTIONS,
+        temperature: 0.6, // Minimum allowed by Realtime API — tightest for consistent flow
         turn_detection: {
           type: 'server_vad',
           threshold: 0.5,
